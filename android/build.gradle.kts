@@ -1,11 +1,13 @@
 allprojects {
     repositories {
-        google()
-        mavenCentral()
-        // 国内镜像源（如无法访问Google时启用）
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/central")
-        maven("https://maven.aliyun.com/repository/public")
+        // 国内镜像源（仅使用国内镜像，避免访问 dl.google.com）
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
+        maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+        // 备用镜像
+        maven { url = uri("https://repo.huaweicloud.com/repository/maven") }
+        maven { url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public") }
     }
 }
 
