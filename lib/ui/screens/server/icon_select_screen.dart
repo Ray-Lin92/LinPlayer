@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../core/providers/app_providers.dart';
 
 /// 图标选择页面
@@ -76,20 +79,72 @@ class _IconSelectScreenState extends ConsumerState<IconSelectScreen> with Single
           ),
           const SizedBox(height: 16),
           Text(
-            '从相册选择',
+            '从相册或文件选择',
             style: TextStyle(color: Theme.of(context).colorScheme.outline),
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () {
-              // TODO: 打开相册
-            },
+            onPressed: () => _pickFromGallery(),
             icon: const Icon(Icons.photo_library),
-            label: const Text('选择图片'),
+            label: const Text('从相册选择'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => _pickFromFiles(),
+            icon: const Icon(Icons.folder_open),
+            label: const Text('从文件选择'),
           ),
         ],
       ),
     );
+  }
+  
+  Future<void> _pickFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final image = await picker.pickImage(source: ImageSource.gallery);
+      
+      if (image != null) {
+        _updateServerIcon(image.path);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('选择图片失败: $e')),
+        );
+      }
+    }
+  }
+  
+  Future<void> _pickFromFiles() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+      
+      if (result != null && result.files.isNotEmpty) {
+        final path = result.files.first.path;
+        if (path != null) {
+          _updateServerIcon(path);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('选择文件失败: $e')),
+        );
+      }
+    }
+  }
+  
+  void _updateServerIcon(String imagePath) {
+    final servers = ref.read(serverListProvider);
+    final server = servers.firstWhere((s) => s.id == widget.serverId);
+    ref.read(serverListProvider.notifier).updateServer(
+      server.copyWith(iconUrl: imagePath),
+    );
+    Navigator.pop(context);
   }
   
   Widget _buildNetworkTab() {
@@ -143,30 +198,113 @@ class _IconSelectScreenState extends ConsumerState<IconSelectScreen> with Single
     );
   }
   
-  void _showAddLibraryDialog() {
-    showDialog(
+  Future<void> _showAddLibraryDialog() async {
+    final urlController = TextEditingController();
+    
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('添加图标库'),
-        content: TextField(
-          controller: _urlController,
-          decoration: const InputDecoration(
-            labelText: 'JSON URL',
-            hintText: 'https://example.com/icons.json',
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: urlController,
+              decoration: const InputDecoration(
+                labelText: '图标库名称',
+                hintText: '我的图标库',
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _urlController,
+              decoration: const InputDecoration(
+                labelText: 'JSON URL',
+                hintText: 'https://example.com/icons.json',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '支持直接粘贴JSON数组或URL',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).textTheme.bodySmall?.color,
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
           FilledButton(
-            onPressed: () {
-              // TODO: 加载并解析图标库
-              Navigator.pop(context);
+            onPressed: () async {
+              await _loadIconLibrary(urlController.text, _urlController.text);
+              if (mounted) Navigator.pop(context);
             },
             child: const Text('添加'),
           ),
         ],
       ),
     );
+  }
+  
+  Future<void> _loadIconLibrary(String name, String urlOrJson) async {
+    if (urlOrJson.isEmpty) return;
+    
+    try {
+      List<IconItem> icons = [];
+      
+      // 尝试解析JSON
+      if (urlOrJson.trim().startsWith('[') || urlOrJson.trim().startsWith('{')) {
+        // 直接是JSON文本
+        icons = _parseIconJson(urlOrJson);
+      } else if (urlOrJson.startsWith('http')) {
+        // 是URL，尝试加载
+        // TODO: 使用dio加载远程JSON
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('远程加载需要网络请求支持，请直接粘贴JSON')),
+        );
+        return;
+      }
+      
+      if (icons.isNotEmpty) {
+        setState(() {
+          _libraries.add(IconLibrary(
+            name: name.isNotEmpty ? name : '自定义图标库',
+            url: urlOrJson,
+            icons: icons,
+          ));
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('成功加载 ${icons.length} 个图标')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('加载失败: ${e.toString()}')),
+      );
+    }
+  }
+  
+  List<IconItem> _parseIconJson(String jsonText) {
+    final icons = <IconItem>[];
+    
+    // 简单正则解析，提取name和url
+    final nameRegex = RegExp(r'["]name["]\s*:\s*["]([^"]+)["]');
+    final urlRegex = RegExp(r'["]url["]\s*:\s*["](https?://[^"]+)["]');
+    
+    final names = nameRegex.allMatches(jsonText).map((m) => m.group(1)!).toList();
+    final urls = urlRegex.allMatches(jsonText).map((m) => m.group(1)!).toList();
+    
+    for (var i = 0; i < urls.length; i++) {
+      icons.add(IconItem(
+        name: i < names.length ? names[i] : '图标 ${i + 1}',
+        url: urls[i],
+      ));
+    }
+    
+    return icons;
   }
   
   void _selectIcon(IconItem icon) {

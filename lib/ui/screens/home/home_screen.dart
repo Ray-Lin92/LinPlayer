@@ -23,7 +23,18 @@ class HomeScreen extends ConsumerWidget {
           ),
           
           // 随机推荐轮播
-          const SliverToBoxAdapter(child: RandomRecommendationCarousel()),
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SectionHeader(
+                  title: '随机推荐',
+                  onMoreTap: () => _showRandomRecommendations(context, ref),
+                ),
+                const RandomRecommendationCarousel(),
+              ],
+            ),
+          ),
           
           // 继续观看
           const SliverToBoxAdapter(child: ContinueWatchingSection()),
@@ -39,16 +50,149 @@ class HomeScreen extends ConsumerWidget {
       ),
     );
   }
+
+  void _showRandomRecommendations(BuildContext context, WidgetRef ref) {
+    final recommendationsAsync = ref.read(randomRecommendationsProvider);
+    recommendationsAsync.when(
+      data: (items) {
+        if (items.isEmpty) return;
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (context) => DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            minChildSize: 0.3,
+            maxChildSize: 0.9,
+            expand: false,
+            builder: (context, scrollController) {
+              return SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            '随机推荐',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.refresh),
+                            onPressed: () {
+                              ref.invalidate(randomRecommendationsProvider);
+                              Navigator.pop(context);
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      Expanded(
+                        child: GridView.builder(
+                          controller: scrollController,
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            childAspectRatio: 0.65,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                          itemCount: items.length,
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            return MediaPoster(
+                              item: item,
+                              width: double.infinity,
+                              height: double.infinity,
+                              onTap: () {
+                                Navigator.pop(context);
+                                context.push('/detail/${item.id}');
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+      loading: () {},
+      error: (_, __) {},
+    );
+  }
 }
 
 /// 首页顶部栏
-class _HomeAppBar extends StatelessWidget {
+class _HomeAppBar extends ConsumerWidget {
   final String serverName;
   
   const _HomeAppBar({required this.serverName});
   
+  void _showLibrarySelector(BuildContext context, WidgetRef ref) {
+    final librariesAsync = ref.read(librariesProvider);
+    librariesAsync.when(
+      data: (libraries) {
+        if (libraries.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('暂无媒体库')),
+          );
+          return;
+        }
+        showModalBottomSheet(
+          context: context,
+          builder: (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    '选择媒体库',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                const Divider(height: 1),
+                ...libraries.map((library) => ListTile(
+                  leading: Icon(
+                    library.collectionType == 'movies' ? Icons.movie : Icons.tv,
+                    color: const Color(0xFF5B8DEF),
+                  ),
+                  title: Text(library.name),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/library/${library.id}');
+                  },
+                )),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('加载中...')),
+        );
+      },
+      error: (_, __) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('加载媒体库失败')),
+        );
+      },
+    );
+  }
+  
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -82,7 +226,7 @@ class _HomeAppBar extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.collections_bookmark),
               onPressed: () {
-                // 跳转到媒体库页
+                _showLibrarySelector(context, ref);
               },
             ),
             // 搜索按钮
@@ -310,7 +454,7 @@ class ContinueWatchingSection extends ConsumerWidget {
           children: [
             SectionHeader(
               title: '继续观看',
-              onMoreTap: () {},
+              onMoreTap: () => _showContinueWatchingSheet(context, ref),
             ),
             HorizontalList(
               height: 180,
@@ -326,6 +470,66 @@ class ContinueWatchingSection extends ConsumerWidget {
       },
       loading: () => const SizedBox.shrink(),
       error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  void _showContinueWatchingSheet(BuildContext context, WidgetRef ref) {
+    final resumeAsync = ref.read(resumeItemsProvider);
+    resumeAsync.when(
+      data: (items) {
+        if (items.isEmpty) return;
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (context) => DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            minChildSize: 0.3,
+            maxChildSize: 0.9,
+            expand: false,
+            builder: (context, scrollController) {
+              return SafeArea(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          const Text(
+                            '继续观看',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _ContinueWatchingCard(item: item),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+      loading: () {},
+      error: (_, __) {},
     );
   }
 }
