@@ -18,10 +18,12 @@ final nextUpProvider = FutureProvider<List<MediaItem>>((ref) async {
   return await api.home.getNextUp();
 });
 
-/// 媒体库列表
+/// 媒体库列表（已过滤被屏蔽的）
 final librariesProvider = FutureProvider<List<Library>>((ref) async {
   final api = ref.watch(apiClientProvider);
-  return await api.home.getLibraries();
+  final hiddenLibraries = ref.watch(hiddenLibrariesProvider);
+  final allLibraries = await api.home.getLibraries();
+  return allLibraries.where((lib) => !hiddenLibraries.contains(lib.id)).toList();
 });
 
 /// 最新添加（按媒体库）
@@ -108,17 +110,25 @@ final aggregateSearchProvider = StateProvider<bool>((ref) => false);
 final searchResultsProvider = FutureProvider<List<MediaItem>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   final isAggregate = ref.watch(aggregateSearchProvider);
-  
+  final hiddenLibraries = ref.watch(hiddenLibrariesProvider);
+
   if (query.isEmpty) return [];
-  
+
   final api = ref.watch(apiClientProvider);
-  
+
+  List<MediaItem> results;
   if (isAggregate) {
-    final results = await api.search.searchAggregate(query);
-    return results.values.expand((list) => list).toList();
+    final aggregateResults = await api.search.searchAggregate(query);
+    results = aggregateResults.values.expand((list) => list).toList();
+  } else {
+    results = await api.search.search(query);
   }
-  
-  return await api.search.search(query);
+
+  // 排除被屏蔽媒体库的结果（通过parentId匹配）
+  return results.where((item) {
+    if (item.parentId != null && hiddenLibraries.contains(item.parentId)) return false;
+    return true;
+  }).toList();
 });
 
 /// 搜索历史
@@ -177,5 +187,11 @@ final danmakuEnabledProvider = StateProvider<bool>((ref) => true);
 /// 字幕轨道
 final subtitleTrackProvider = StateProvider<int?>((ref) => null);
 
+/// 次字幕轨道（第二个字幕）
+final secondarySubtitleTrackProvider = StateProvider<int?>((ref) => null);
+
 /// 音频轨道
 final audioTrackProvider = StateProvider<int?>((ref) => null);
+
+/// 当前选择的媒体源
+final selectedMediaSourceProvider = StateProvider<String?>((ref) => null);

@@ -198,6 +198,50 @@ class MediaKitAdapter implements PlayerAdapter {
   }
   
   @override
+  Future<Uint8List?> screenshot() async {
+    // media_kit 没有直接提供截图API
+    return null;
+  }
+
+  @override
+  Future<void> setSubtitleDelay(double seconds) async {
+    // media_kit Player 未暴露 setProperty API
+    // 如需实现，需通过 platform channel 或 media_kit 的 configuration
+  }
+
+  @override
+  Future<void> setAudioDelay(double seconds) async {
+    // media_kit Player 未暴露 setProperty API
+  }
+
+  @override
+  Future<void> setSubtitleFont(String fontName) async {
+    // media_kit Player 未暴露 setProperty API
+  }
+
+  @override
+  Future<void> setSubtitleSize(double size) async {
+    // media_kit Player 未暴露 setProperty API
+  }
+
+  @override
+  Future<void> setSubtitlePosition(double position) async {
+    // media_kit Player 未暴露 setProperty API
+  }
+
+  @override
+  Future<void> setAspectRatio(String ratio) async {
+    // media_kit Player 未暴露 setProperty API
+    // 画面比例由 Video widget 的 fit 参数控制
+  }
+
+  @override
+  Future<void> applySuperResolution(bool enable) async {
+    // media_kit Player 未暴露 setProperty API
+    // Anime4K shader 需通过 mpv config 预配置
+  }
+
+  @override
   Future<void> dispose() async {
     _positionSub?.cancel();
     _durationSub?.cancel();

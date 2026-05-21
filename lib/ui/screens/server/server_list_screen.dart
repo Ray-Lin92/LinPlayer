@@ -16,7 +16,19 @@ class ServerListScreen extends ConsumerStatefulWidget {
 class _ServerListScreenState extends ConsumerState<ServerListScreen> {
   String _searchQuery = '';
   bool _isSearching = false;
-  
+
+  @override
+  void initState() {
+    super.initState();
+    // 延迟恢复当前服务器（等待serverListProvider加载完成）
+    Future.microtask(() async {
+      final servers = ref.read(serverListProvider);
+      if (servers.isNotEmpty) {
+        await ref.read(currentServerProvider.notifier).loadFromSaved(servers);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final allServers = ref.watch(serverListProvider);

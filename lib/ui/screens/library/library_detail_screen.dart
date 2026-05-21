@@ -99,7 +99,7 @@ class _LibraryDetailScreenState extends ConsumerState<LibraryDetailScreen> {
                   padding: const EdgeInsets.all(16),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
-                    childAspectRatio: 0.65,
+                    childAspectRatio: 0.55,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                   ),

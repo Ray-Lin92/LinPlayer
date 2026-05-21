@@ -233,6 +233,48 @@ class VideoPlayerAdapter implements PlayerAdapter {
   }
   
   @override
+  Future<Uint8List?> screenshot() async {
+    return null;
+  }
+
+  @override
+  Future<void> setSubtitleDelay(double seconds) async {
+    // video_player 不原生支持字幕同步偏移
+    // libass 可通过 LibassBridge 设置 offset（需扩展）
+  }
+
+  @override
+  Future<void> setAudioDelay(double seconds) async {
+    // video_player 不支持音频同步偏移
+  }
+
+  @override
+  Future<void> setSubtitleFont(String fontName) async {
+    // video_player 不支持自定义字幕字体
+  }
+
+  @override
+  Future<void> setSubtitleSize(double size) async {
+    // video_player 不支持字幕大小调节
+  }
+
+  @override
+  Future<void> setSubtitlePosition(double position) async {
+    // video_player 不支持字幕位置调节
+  }
+
+  @override
+  Future<void> setAspectRatio(String ratio) async {
+    // video_player 的 aspect ratio 由 VideoPlayerController.value.aspectRatio 决定
+    // 无法动态覆盖，需要在 buildVideoWidget 中通过 AspectRatio widget 包装
+  }
+
+  @override
+  Future<void> applySuperResolution(bool enable) async {
+    // video_player 不支持超分辨率
+  }
+
+  @override
   Future<void> dispose() async {
     if (_libassReady) {
       await LibassBridge.dispose();

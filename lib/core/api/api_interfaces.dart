@@ -192,7 +192,8 @@ class MediaItem {
   final String? seriesId;
   final String? seasonId;
   final String? mediaType; // 'Video', 'Audio'
-  
+  final String? parentId; // 父级ID（可能是媒体库或文件夹）
+
   MediaItem({
     required this.id,
     required this.name,
@@ -214,6 +215,7 @@ class MediaItem {
     this.seriesId,
     this.seasonId,
     this.mediaType,
+    this.parentId,
   });
   
   String? get formattedRuntime {
