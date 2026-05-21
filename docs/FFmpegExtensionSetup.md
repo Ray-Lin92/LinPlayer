@@ -109,17 +109,7 @@ GitHub Actions 会自动缓存编译好的 ffmpeg AAR 文件：
    }
    ```
 
-### 方案 C：使用 Docker 编译（适合本地开发）
-
-如果你不想配置环境，可以使用提供的 Docker 脚本：
-
-```bash
-cd android/exoplayer-ffmpeg
-docker build -t exoplayer-ffmpeg .
-docker run --rm -v $(pwd)/output:/output exoplayer-ffmpeg
-```
-
-### 方案 D：PGS/SUP Fallback（最实际）
+### 方案 C：PGS/SUP Fallback（最实际）
 
 如果不需要自行编译，LinPlayer 提供了自动 fallback 机制：
 
@@ -177,9 +167,9 @@ A:
 1. 检查 Actions 日志，看是哪个步骤失败
 2. 常见原因：
    - NDK 下载失败（网络问题）：重试即可
-   - FFmpeg 配置错误：检查 `build_ffmpeg_android.sh` 脚本
+   - FFmpeg 配置错误：检查 GitHub Actions 工作流配置
    - 内存不足：GitHub Actions 提供 7GB 内存，通常够用
-3. 如果一直失败，可以使用方案 D（切换到 MPV 内核）
+3. 如果一直失败，可以使用方案 C（切换到 MPV 内核）
 
 ### Q: GitHub Actions 编译时间太长？
 A:
@@ -190,12 +180,11 @@ A:
 ### Q: 可以在本地编译吗？
 A: 可以。本地编译步骤见方案 B。
 - Linux/macOS：直接运行脚本
-- Windows：建议使用 WSL2 或 Docker
+- Windows：建议使用 WSL2
 
 ### Q: Windows 上能编译吗？
 A: 官方脚本不支持原生 Windows。建议使用：
 - WSL2（推荐）
-- Docker
 - GitHub Actions（最省事）
 
 ### Q: APK 会增加多大？
