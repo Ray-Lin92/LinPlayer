@@ -1,142 +1,25 @@
 import 'dart:async';
-import 'dart:ffi';
-import 'dart:io';
-import 'dart:isolate';
 import 'dart:math' show max, min;
 import 'dart:typed_data';
-import 'package:ffi/ffi.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'player_adapter.dart';
 import 'app_logger.dart';
+import 'mpv_config_manager.dart';
+import 'subtitle_processor.dart';
 
-// ============================================================================
-// libmpv FFI 绑定
-// ============================================================================
-
-DynamicLibrary? _mpvLib;
-DynamicLibrary _loadMpvLib() {
-  try {
-    if (Platform.isAndroid || Platform.isLinux) {
-      return DynamicLibrary.open('libmpv.so');
-    } else if (Platform.isMacOS || Platform.isIOS) {
-      return DynamicLibrary.open('libmpv.dylib');
-    } else if (Platform.isWindows) {
-      return DynamicLibrary.open('mpv-1.dll');
-    }
-  } catch (e) {
-    AppLogger().e('MpvAdapter', '加载 libmpv 动态库失败: $e');
-    rethrow;
-  }
-  throw UnsupportedError('Unsupported platform for libmpv: ${Platform.operatingSystem}');
-}
-
-DynamicLibrary get _mpvLibInstance {
-  _mpvLib ??= _loadMpvLib();
-  return _mpvLib!;
-}
-
-// mpv_handle 不透明指针
-typedef MpvHandle = Pointer<Void>;
-
-// mpv_create
-typedef MpvCreateC = MpvHandle Function();
-typedef MpvCreate = MpvHandle Function();
-
-// mpv_initialize
-typedef MpvInitializeC = Int32 Function(MpvHandle ctx);
-typedef MpvInitialize = int Function(MpvHandle ctx);
-
-// mpv_terminate_destroy
-typedef MpvTerminateDestroyC = Void Function(MpvHandle ctx);
-typedef MpvTerminateDestroy = void Function(MpvHandle ctx);
-
-// mpv_command_string
-typedef MpvCommandStringC = Int32 Function(MpvHandle ctx, Pointer<Utf8> args);
-typedef MpvCommandString = int Function(MpvHandle ctx, Pointer<Utf8> args);
-
-// mpv_set_property_string
-typedef MpvSetPropertyStringC = Int32 Function(MpvHandle ctx, Pointer<Utf8> name, Pointer<Utf8> data);
-typedef MpvSetPropertyString = int Function(MpvHandle ctx, Pointer<Utf8> name, Pointer<Utf8> data);
-
-// mpv_get_property_string
-typedef MpvGetPropertyStringC = Pointer<Utf8> Function(MpvHandle ctx, Pointer<Utf8> name);
-typedef MpvGetPropertyString = Pointer<Utf8> Function(MpvHandle ctx, Pointer<Utf8> name);
-
-// mpv_free
-typedef MpvFreeC = Void Function(Pointer<Void> ptr);
-typedef MpvFree = void Function(Pointer<Void> ptr);
-
-// mpv_observe_property
-typedef MpvObservePropertyC = Int32 Function(MpvHandle ctx, Uint64 replyUserdata, Pointer<Utf8> name, Int32 format);
-typedef MpvObserveProperty = int Function(MpvHandle ctx, int replyUserdata, Pointer<Utf8> name, int format);
-
-// mpv_wait_event
-typedef MpvWaitEventC = Pointer<MpvEvent> Function(MpvHandle ctx, Double timeout);
-typedef MpvWaitEvent = Pointer<MpvEvent> Function(MpvHandle ctx, double timeout);
-
-// Event format constants
-const int MPV_FORMAT_NONE = 0;
-const int MPV_FORMAT_STRING = 1;
-const int MPV_FORMAT_OSD_STRING = 2;
-const int MPV_FORMAT_FLAG = 3;
-const int MPV_FORMAT_INT64 = 4;
-const int MPV_FORMAT_DOUBLE = 5;
-
-// Event IDs
-const int MPV_EVENT_NONE = 0;
-const int MPV_EVENT_SHUTDOWN = 1;
-const int MPV_EVENT_LOG_MESSAGE = 2;
-const int MPV_EVENT_GET_PROPERTY_REPLY = 3;
-const int MPV_EVENT_SET_PROPERTY_REPLY = 4;
-const int MPV_EVENT_COMMAND_REPLY = 5;
-const int MPV_EVENT_START_FILE = 6;
-const int MPV_EVENT_END_FILE = 7;
-const int MPV_EVENT_FILE_LOADED = 8;
-const int MPV_EVENT_TRACKS_CHANGED = 9;
-const int MPV_EVENT_TRACK_SWITCHED = 10;
-const int MPV_EVENT_IDLE = 11;
-const int MPV_EVENT_PAUSE = 12;
-const int MPV_EVENT_UNPAUSE = 13;
-const int MPV_EVENT_TICK = 14;
-const int MPV_EVENT_SCRIPT_INPUT_DISPATCH = 15;
-const int MPV_EVENT_CLIENT_MESSAGE = 16;
-const int MPV_EVENT_VIDEO_RECONFIG = 17;
-const int MPV_EVENT_AUDIO_RECONFIG = 18;
-const int MPV_EVENT_SEEK = 20;
-const int MPV_EVENT_PLAYBACK_RESTART = 21;
-const int MPV_EVENT_PROPERTY_CHANGE = 22;
-
-/// mpv_event 结构体（简化版）
-base class MpvEvent extends Struct {
-  @Int32()
-  external int eventId;
-
-  @Int32()
-  external int error;
-
-  @Uint64()
-  external int replyUserdata;
-
-  external Pointer<Void> data;
-}
-
-// ============================================================================
-// MPV Player Adapter
-// ============================================================================
-
-/// MPV 原生适配器
+/// MPV 播放器适配器（v2.1 - media_kit + 高级功能）
 ///
-/// 通过 Dart FFI 直接调用 libmpv C API，
-/// 视频渲染通过 Platform Channel 交由原生侧管理（EGL/Texture）。
-///
-/// **注意**：需要自行提供 libmpv.so（Android）或 libmpv.dylib（macOS/iOS）
-/// 或 mpv-1.dll（Windows）。
+/// 基于 media_kit，通过以下方式实现高级功能：
+/// - 配置文件：字幕字体、大小、位置、音频/字幕延迟、画面比例、Anime4K
+/// - Dart 层处理：运行时字幕时间轴偏移、ASS 样式修改
 class MpvPlayerAdapter implements PlayerAdapter {
-  static const _textureChannel = MethodChannel('com.linplayer/mpv_texture');
   static final _logger = AppLogger();
+  static final _configManager = MpvConfigManager();
 
-  MpvHandle? _ctx;
-  int? _textureId;
+  Player? _player;
+  VideoController? _videoController;
 
   bool _isInitialized = false;
   bool _isPlaying = false;
@@ -148,10 +31,23 @@ class MpvPlayerAdapter implements PlayerAdapter {
   double _volume = 1.0;
   String? _errorMessage;
 
+  // 当前配置值（用于运行时下发生效）
+  double _subtitleDelay = 0.0;
+  double _audioDelay = 0.0;
+  double _subtitleScale = 1.0;
+  double _subtitlePosition = 100.0;
+  String? _subtitleFont;
+  String? _aspectRatio;
+  List<String>? _glslShaders;
+
+  // 已处理字幕文件路径（用于切换字幕时重新处理）
+  String? _lastSubtitlePath;
+
+  // 轨道信息
+  List<Map<String, dynamic>> _tracks = [];
+
   PlayerStateCallbacks? _callbacks;
-  Timer? _positionTimer;
-  Isolate? _eventIsolate;
-  ReceivePort? _eventPort;
+  final List<StreamSubscription> _subscriptions = [];
 
   @override
   bool get isInitialized => _isInitialized;
@@ -191,26 +87,17 @@ class MpvPlayerAdapter implements PlayerAdapter {
   String? get errorMessage => _errorMessage;
 
   @override
-  int? get textureId => _textureId;
+  bool get libassReady => true;
 
   @override
-  bool get libassReady => true;
+  int? get textureId => null;
+
+  /// 当前可用的轨道列表
+  List<Map<String, dynamic>> get tracks => _tracks;
 
   @override
   void setCallbacks(PlayerStateCallbacks callbacks) {
     _callbacks = callbacks;
-  }
-
-  @override
-  Future<void> loadLibassSubtitle(String path) async {
-    _logger.i('MpvAdapter', '加载字幕: $path');
-    _command('sub-add', path, 'select');
-  }
-
-  @override
-  Future<void> loadLibassSubtitleMemory(Uint8List data, {String codec = 'ass'}) async {
-    // MPV 内存字幕加载较复杂，需写入临时文件后加载
-    _logger.w('MpvAdapter', '内存字幕加载尚未实现');
   }
 
   @override
@@ -220,405 +107,426 @@ class MpvPlayerAdapter implements PlayerAdapter {
     bool dolbyVisionFix = false,
     bool useLibass = false,
   }) async {
-    _logger.i('MpvAdapter', '开始初始化 - videoUrl=$videoUrl');
+    _logger.i('MpvAdapter', '开始初始化 media_kit 内核 (v2.1)');
+    _logger.i('MpvAdapter', '视频URL: $videoUrl');
+    _logger.i('MpvAdapter', '起始位置: ${startPosition?.inMilliseconds ?? 0}ms');
+    _logger.i('MpvAdapter', 'DolbyVisionFix: $dolbyVisionFix');
+
     try {
       await dispose();
 
       _errorMessage = null;
       _isCompleted = false;
+      _tracks = [];
 
-      // 验证 libmpv 是否可用
-      try {
-        _mpvLibInstance.handle;
-        _logger.i('MpvAdapter', 'libmpv 动态库加载成功');
-      } catch (e) {
-        throw Exception('libmpv 不可用。请确保 libmpv.so 已放置到 jniLibs/arm64-v8a 目录。错误: $e');
-      }
+      // 确保配置目录存在
+      await _configManager.initialize();
 
-      // 创建 mpv 实例
-      final mpvCreate = _mpvLibInstance.lookupFunction<MpvCreateC, MpvCreate>('mpv_create');
-      _ctx = mpvCreate();
-      if (_ctx == null || _ctx!.address == 0) {
-        throw Exception('mpv_create 返回 null');
-      }
-      _logger.i('MpvAdapter', 'mpv 实例创建成功');
+      // 写入 mpv 配置文件（应用当前所有设置）
+      await _configManager.writeConfig(
+        subtitleFont: _subtitleFont,
+        subtitleScale: _subtitleScale,
+        subtitlePosition: _subtitlePosition,
+        subtitleDelay: _subtitleDelay,
+        audioDelay: _audioDelay,
+        aspectRatio: _aspectRatio,
+        glslShaders: _glslShaders,
+      );
 
-      // 配置 mpv
-      _setPropertyString('vo', 'gpu');
-      _setPropertyString('hwdec', 'auto');
-      _setPropertyString('cache', 'yes');
-      _setPropertyString('cache-secs', '30');
-      _setPropertyString('demuxer-max-bytes', '50M');
-      _setPropertyString('demuxer-max-back-bytes', '25M');
-      if (dolbyVisionFix) {
-        _setPropertyString('target-trc', 'pq');
-      }
-      _logger.d('MpvAdapter', 'mpv 基础配置完成');
+      // 创建 media_kit Player
+      _logger.i('MpvAdapter', '创建 media_kit Player...');
+      _player = Player();
+      _logger.i('MpvAdapter', 'media_kit Player 创建成功');
 
-      // 初始化 mpv
-      final mpvInitialize = _mpvLibInstance.lookupFunction<MpvInitializeC, MpvInitialize>('mpv_initialize');
-      final initResult = mpvInitialize(_ctx!);
-      if (initResult < 0) {
-        throw Exception('mpv_initialize 失败，错误码: $initResult');
-      }
-      _logger.i('MpvAdapter', 'mpv 初始化成功');
+      // 创建 VideoController
+      _logger.i('MpvAdapter', '创建 VideoController...');
+      _videoController = VideoController(_player!);
+      _logger.i('MpvAdapter', 'VideoController 创建成功');
 
-      // 通过 Platform Channel 创建 Texture（原生侧负责 EGL + FBO）
-      _logger.d('MpvAdapter', '请求创建 Texture...');
-      final textureResult = await _textureChannel.invokeMethod<Map<dynamic, dynamic>>('createMpvTexture', {
-        'width': 1920,
-        'height': 1080,
-      });
-      _textureId = textureResult?['textureId'] as int?;
-
-      if (_textureId == null) {
-        throw Exception('创建 MPV Texture 失败：原生通道返回 null。请确保 Android 原生代码已正确实现 com.linplayer/mpv_texture Channel。');
-      }
-      _logger.i('MpvAdapter', 'Texture 创建成功 - textureId=$_textureId');
-
-      // 将 mpv 渲染绑定到 Texture（通过 Platform Channel 传递 mpv 指针地址）
-      _logger.d('MpvAdapter', '绑定 mpv 到 Texture...');
-      await _textureChannel.invokeMethod('attachMpvToTexture', {
-        'mpvHandle': _ctx!.address,
-        'textureId': _textureId,
-      });
-      _logger.i('MpvAdapter', 'mpv 已绑定到 Texture');
+      // 监听状态变化
+      _setupStreamListeners();
 
       // 加载视频
       _logger.i('MpvAdapter', '加载视频: $videoUrl');
-      _command('loadfile', videoUrl);
+      await _player!.open(Media(videoUrl));
 
-      // 监听属性变化
-      _observeProperty('time-pos');
-      _observeProperty('duration');
-      _observeProperty('pause');
-      _observeProperty('core-idle');
-      _observeProperty('eof-reached');
-
-      // 启动事件循环 Isolate
-      await _startEventLoop();
-
-      // 设置初始位置
+      // 设置起始位置
       if (startPosition != null && startPosition > Duration.zero) {
-        _setPropertyDouble('time-pos', startPosition.inMilliseconds / 1000.0);
+        _logger.i('MpvAdapter', '设置起始位置: ${startPosition.inMilliseconds}ms');
+        await _player!.seek(startPosition);
       }
 
       _isInitialized = true;
-
-      // 轮询位置
-      _positionTimer = Timer.periodic(
-        const Duration(milliseconds: 200),
-        (_) => _pollPosition(),
-      );
-
       _callbacks?.onDurationChanged?.call();
-      _logger.i('MpvAdapter', '初始化完成');
+      _logger.i('MpvAdapter', 'media_kit 初始化完成');
     } catch (e, stackTrace) {
       _errorMessage = e.toString();
       _isInitialized = false;
-      _logger.eWithStack('MpvAdapter', '初始化失败', e, stackTrace);
+      _logger.eWithStack('MpvAdapter', 'media_kit 初始化失败', e, stackTrace);
       _callbacks?.onError?.call();
     }
   }
 
-  void _setPropertyString(String name, String value) {
-    if (_ctx == null) return;
-    final mpvSetPropertyString = _mpvLibInstance.lookupFunction<MpvSetPropertyStringC, MpvSetPropertyString>('mpv_set_property_string');
-    final namePtr = name.toNativeUtf8();
-    final valuePtr = value.toNativeUtf8();
-    try {
-      mpvSetPropertyString(_ctx!, namePtr, valuePtr);
-    } finally {
-      malloc.free(namePtr);
-      malloc.free(valuePtr);
-    }
+  void _setupStreamListeners() {
+    if (_player == null) return;
+
+    _subscriptions.add(_player!.stream.playing.listen((playing) {
+      _isPlaying = playing;
+      _callbacks?.onPlayingStateChanged?.call();
+    }));
+
+    _subscriptions.add(_player!.stream.position.listen((position) {
+      _position = position;
+      _callbacks?.onPositionChanged?.call();
+    }));
+
+    _subscriptions.add(_player!.stream.duration.listen((duration) {
+      _duration = duration;
+      _callbacks?.onDurationChanged?.call();
+    }));
+
+    _subscriptions.add(_player!.stream.buffering.listen((buffering) {
+      _isBuffering = buffering;
+      _callbacks?.onBufferingStateChanged?.call();
+    }));
+
+    _subscriptions.add(_player!.stream.completed.listen((completed) {
+      if (completed) {
+        _isCompleted = true;
+        _callbacks?.onCompleted?.call();
+      }
+    }));
+
+    _subscriptions.add(_player!.stream.error.listen((error) {
+      _errorMessage = error.toString();
+      _logger.e('MpvAdapter', '播放器错误: $_errorMessage');
+      _callbacks?.onError?.call();
+    }));
+
+    _subscriptions.add(_player!.stream.tracks.listen((tracks) {
+      final trackList = <Map<String, dynamic>>[];
+
+      for (final track in tracks.video) {
+        trackList.add({
+          'id': track.id,
+          'type': 'video',
+          'title': track.title ?? '',
+          'language': track.language ?? '',
+          'codec': track.codec ?? '',
+        });
+      }
+
+      for (final track in tracks.audio) {
+        trackList.add({
+          'id': track.id,
+          'type': 'audio',
+          'title': track.title ?? '',
+          'language': track.language ?? '',
+          'codec': track.codec ?? '',
+        });
+      }
+
+      for (final track in tracks.subtitle) {
+        trackList.add({
+          'id': track.id,
+          'type': 'text',
+          'title': track.title ?? '',
+          'language': track.language ?? '',
+          'codec': track.codec ?? '',
+        });
+      }
+
+      _tracks = trackList;
+      _logger.d('MpvAdapter', '轨道变更: ${_tracks.length} 条轨道');
+    }));
   }
 
-  void _setPropertyDouble(String name, double value) {
-    _command('set', name, value.toString());
-  }
+  // ========== 字幕处理 ==========
 
-  void _command(String cmd, [String? arg1, String? arg2]) {
-    if (_ctx == null) return;
-    final mpvCommandString = _mpvLibInstance.lookupFunction<MpvCommandStringC, MpvCommandString>('mpv_command_string');
-    final cmdPtr = cmd.toNativeUtf8();
+  @override
+  Future<void> loadLibassSubtitle(String path) async {
+    _logger.i('MpvAdapter', '加载字幕: $path');
+    if (_player == null) return;
+
     try {
-      if (arg1 == null) {
-        mpvCommandString(_ctx!, cmdPtr);
-      } else {
-        final arg1Ptr = arg1.toNativeUtf8();
-        try {
-          if (arg2 == null) {
-            final full = '$cmd "$arg1"';
-            final fullPtr = full.toNativeUtf8();
-            try {
-              mpvCommandString(_ctx!, fullPtr);
-            } finally {
-              malloc.free(fullPtr);
-            }
-          } else {
-            final full = '$cmd "$arg1" "$arg2"';
-            final fullPtr = full.toNativeUtf8();
-            try {
-              mpvCommandString(_ctx!, fullPtr);
-            } finally {
-              malloc.free(fullPtr);
-            }
-          }
-        } finally {
-          malloc.free(arg1Ptr);
+      _lastSubtitlePath = path;
+
+      // 检测是否为图形字幕（PGS/SUP）
+      if (SubtitleProcessor.isGraphicalSubtitle(path)) {
+        _logger.i('MpvAdapter', '检测到图形字幕 (PGS/SUP)，直接加载');
+        await _player!.setSubtitleTrack(SubtitleTrack.uri(path));
+        return;
+      }
+
+      // 处理字幕：应用当前时间轴偏移和样式
+      var processedPath = path;
+
+      // 1. 调整时间轴（字幕延迟）
+      if (_subtitleDelay != 0.0) {
+        processedPath = await SubtitleProcessor.adjustTiming(
+          processedPath,
+          _subtitleDelay,
+        );
+      }
+
+      // 2. 修改 ASS 样式（字体、大小、位置）
+      if (SubtitleProcessor.detectFormat(path) == 'ass') {
+        final marginV = _subtitlePosition != 100.0
+            ? ((100.0 - _subtitlePosition) * 10).round()
+            : null;
+        final fontSize = _subtitleScale != 1.0
+            ? (24 * _subtitleScale).round()
+            : null;
+
+        if (_subtitleFont != null || fontSize != null || marginV != null) {
+          processedPath = await SubtitleProcessor.modifyAssStyle(
+            processedPath,
+            fontName: _subtitleFont,
+            fontSize: fontSize,
+            marginV: marginV,
+          );
         }
       }
-    } finally {
-      malloc.free(cmdPtr);
-    }
-  }
 
-  void _observeProperty(String name) {
-    if (_ctx == null) return;
-    final mpvObserveProperty = _mpvLibInstance.lookupFunction<MpvObservePropertyC, MpvObserveProperty>('mpv_observe_property');
-    final namePtr = name.toNativeUtf8();
-    try {
-      mpvObserveProperty(_ctx!, 0, namePtr, MPV_FORMAT_DOUBLE);
-    } finally {
-      malloc.free(namePtr);
-    }
-  }
-
-  Future<void> _startEventLoop() async {
-    _eventPort = ReceivePort();
-    _eventIsolate = await Isolate.spawn(
-      _mpvEventLoop,
-      _MpvEventLoopArgs(
-        ctxAddress: _ctx!.address,
-        sendPort: _eventPort!.sendPort,
-      ),
-    );
-
-    _eventPort!.listen((message) {
-      if (message is Map) {
-        final eventId = message['eventId'] as int?;
-        _handleEvent(eventId, message);
-      }
-    });
-  }
-
-  void _handleEvent(int? eventId, Map<dynamic, dynamic> message) {
-    switch (eventId) {
-      case MPV_EVENT_PROPERTY_CHANGE:
-        final name = message['name'] as String?;
-        final value = message['value'] as double?;
-        if (name == 'time-pos' && value != null) {
-          _position = Duration(milliseconds: (value * 1000).round());
-          _callbacks?.onPositionChanged?.call();
-        } else if (name == 'duration' && value != null) {
-          _duration = Duration(milliseconds: (value * 1000).round());
-          _callbacks?.onDurationChanged?.call();
-        } else if (name == 'pause') {
-          _isPlaying = value != 1;
-          _callbacks?.onPlayingStateChanged?.call();
-        } else if (name == 'core-idle') {
-          _isBuffering = value == 1;
-          _callbacks?.onBufferingStateChanged?.call();
-        } else if (name == 'eof-reached') {
-          if (value == 1) {
-            _isCompleted = true;
-            _callbacks?.onCompleted?.call();
-          }
-        }
-        break;
-      case MPV_EVENT_START_FILE:
-        _isBuffering = true;
-        _callbacks?.onBufferingStateChanged?.call();
-        break;
-      case MPV_EVENT_END_FILE:
-        _isBuffering = false;
-        _callbacks?.onBufferingStateChanged?.call();
-        break;
-      case MPV_EVENT_SHUTDOWN:
-        _isInitialized = false;
-        break;
-    }
-  }
-
-  void _pollPosition() {
-    if (_ctx == null) return;
-    final mpvGetPropertyString = _mpvLibInstance.lookupFunction<MpvGetPropertyStringC, MpvGetPropertyString>('mpv_get_property_string');
-    final mpvFree = _mpvLibInstance.lookupFunction<MpvFreeC, MpvFree>('mpv_free');
-    final namePtr = 'time-pos'.toNativeUtf8();
-    try {
-      final result = mpvGetPropertyString(_ctx!, namePtr);
-      if (result.address != 0) {
-        final valueStr = result.cast<Utf8>().toDartString();
-        mpvFree(result.cast());
-        final value = double.tryParse(valueStr);
-        if (value != null) {
-          _position = Duration(milliseconds: (value * 1000).round());
-        }
-      }
-    } finally {
-      malloc.free(namePtr);
+      await _player!.setSubtitleTrack(SubtitleTrack.uri(processedPath));
+      _logger.i('MpvAdapter', '字幕加载成功: $processedPath');
+    } catch (e, stackTrace) {
+      _logger.eWithStack('MpvAdapter', '字幕加载失败', e, stackTrace);
     }
   }
 
   @override
+  Future<void> loadLibassSubtitleMemory(Uint8List data, {String codec = 'ass'}) async {
+    _logger.i('MpvAdapter', '加载内存字幕 - codec=$codec, size=${data.length} bytes');
+    if (_player == null) return;
+    try {
+      final dataStr = String.fromCharCodes(data);
+      await _player!.setSubtitleTrack(
+        SubtitleTrack.data(dataStr, title: 'subtitle', language: 'und'),
+      );
+      _logger.i('MpvAdapter', '内存字幕加载成功');
+    } catch (e, stackTrace) {
+      _logger.eWithStack('MpvAdapter', '内存字幕加载失败', e, stackTrace);
+    }
+  }
+
+  /// 加载外挂字幕（URL 或本地路径）
+  Future<void> loadSubtitle(String url) async {
+    await loadLibassSubtitle(url);
+  }
+
+  // ========== 高级功能实现 ==========
+
+  @override
+  Future<void> setSubtitleDelay(double seconds) async {
+    _subtitleDelay = seconds;
+    _logger.i('MpvAdapter', '设置字幕延迟: ${seconds}s');
+
+    // 如果有已加载的字幕，重新处理并加载
+    if (_lastSubtitlePath != null && _player != null) {
+      await loadLibassSubtitle(_lastSubtitlePath!);
+    }
+
+    // 同时更新配置文件（下次播放生效）
+    await _configManager.updateConfigValue('sub-delay', seconds.toStringAsFixed(3));
+  }
+
+  @override
+  Future<void> setAudioDelay(double seconds) async {
+    _audioDelay = seconds;
+    _logger.i('MpvAdapter', '设置音频延迟: ${seconds}s');
+    // 更新配置文件（下次播放生效）
+    await _configManager.updateConfigValue('audio-delay', seconds.toStringAsFixed(3));
+  }
+
+  @override
+  Future<void> setSubtitleFont(String fontName) async {
+    _subtitleFont = fontName;
+    _logger.i('MpvAdapter', '设置字幕字体: $fontName');
+
+    // 如果有已加载的 ASS 字幕，重新处理并加载
+    if (_lastSubtitlePath != null &&
+        SubtitleProcessor.detectFormat(_lastSubtitlePath!) == 'ass') {
+      await loadLibassSubtitle(_lastSubtitlePath!);
+    }
+
+    // 更新配置文件（下次播放生效）
+    if (fontName.isNotEmpty) {
+      await _configManager.updateConfigValue('sub-font', '"$fontName"');
+    }
+  }
+
+  @override
+  Future<void> setSubtitleSize(double size) async {
+    // size 范围 0.0-1.0，映射到 0.5-1.5 的缩放比例
+    _subtitleScale = 0.5 + size;
+    _logger.i('MpvAdapter', '设置字幕大小: scale=$_subtitleScale');
+
+    // 如果有已加载的 ASS 字幕，重新处理并加载
+    if (_lastSubtitlePath != null &&
+        SubtitleProcessor.detectFormat(_lastSubtitlePath!) == 'ass') {
+      await loadLibassSubtitle(_lastSubtitlePath!);
+    }
+
+    // 更新配置文件（下次播放生效）
+    await _configManager.updateConfigValue('sub-scale', _subtitleScale.toStringAsFixed(2));
+  }
+
+  @override
+  Future<void> setSubtitlePosition(double position) async {
+    // position 范围 0.0-1.0，映射到 100-0（mpv: 100=底部, 0=顶部）
+    _subtitlePosition = 100 - position * 100;
+    _logger.i('MpvAdapter', '设置字幕位置: pos=$_subtitlePosition');
+
+    // 如果有已加载的 ASS 字幕，重新处理并加载
+    if (_lastSubtitlePath != null &&
+        SubtitleProcessor.detectFormat(_lastSubtitlePath!) == 'ass') {
+      await loadLibassSubtitle(_lastSubtitlePath!);
+    }
+
+    // 更新配置文件（下次播放生效）
+    await _configManager.updateConfigValue('sub-pos', _subtitlePosition.toStringAsFixed(1));
+  }
+
+  @override
+  Future<void> setAspectRatio(String ratio) async {
+    _aspectRatio = ratio;
+    _logger.i('MpvAdapter', '设置画面比例: $ratio');
+    // 更新配置文件（下次播放生效）
+    String value;
+    switch (ratio) {
+      case '16:9':
+        value = '16/9';
+      case '4:3':
+        value = '4/3';
+      case '21:9':
+        value = '21/9';
+      case '全屏':
+        value = '-1';
+      case '原始':
+        value = '0';
+      default:
+        value = '-1';
+    }
+    await _configManager.updateConfigValue('video-aspect-override', value);
+  }
+
+  @override
+  Future<void> applySuperResolution(bool enable) async {
+    _logger.i('MpvAdapter', '设置超分辨率: $enable');
+    if (enable) {
+      _glslShaders = [
+        '~~/shaders/Anime4K_Clamp_Highlights.glsl',
+        '~~/shaders/Anime4K_Restore_CNN_M.glsl',
+        '~~/shaders/Anime4K_Upscale_CNN_x2_M.glsl',
+        '~~/shaders/Anime4K_AutoDownscalePre_x2.glsl',
+        '~~/shaders/Anime4K_AutoDownscalePre_x4.glsl',
+        '~~/shaders/Anime4K_Upscale_CNN_x2_S.glsl',
+      ];
+    } else {
+      _glslShaders = null;
+    }
+    // 更新配置文件（下次播放生效）
+    if (_glslShaders != null) {
+      final paths = _glslShaders!.join(':');
+      await _configManager.updateConfigValue('glsl-shaders', '"$paths"');
+    } else {
+      await _configManager.updateConfigValue('glsl-shaders', '');
+    }
+  }
+
+  // ========== 基础控制 ==========
+
+  @override
+  Widget buildVideo() {
+    if (_videoController != null) {
+      return Video(
+        controller: _videoController!,
+        fit: BoxFit.contain,
+      );
+    }
+    return const Center(
+      child: CircularProgressIndicator(),
+    );
+  }
+
+  @override
   Future<void> play() async {
-    _setPropertyString('pause', 'no');
+    if (_player == null) return;
+    _logger.d('MpvAdapter', '播放');
+    await _player!.play();
     _isCompleted = false;
   }
 
   @override
   Future<void> pause() async {
-    _setPropertyString('pause', 'yes');
+    if (_player == null) return;
+    _logger.d('MpvAdapter', '暂停');
+    await _player!.pause();
   }
 
   @override
   Future<void> seekTo(Duration position) async {
+    if (_player == null || !_isInitialized) return;
     final clamped = Duration(
       milliseconds: max(0, min(position.inMilliseconds, _duration.inMilliseconds)),
     );
-    _command('seek', '${clamped.inMilliseconds / 1000.0}', 'absolute');
+    _logger.d('MpvAdapter', '跳转: ${clamped.inMilliseconds}ms');
+    await _player!.seek(clamped);
     _isCompleted = false;
   }
 
   @override
   Future<void> setSpeed(double speed) async {
+    if (_player == null || !_isInitialized) return;
     final clamped = speed.clamp(0.25, 4.0);
-    _setPropertyString('speed', clamped.toString());
+    _logger.d('MpvAdapter', '设置速度: ${clamped}x');
+    await _player!.setRate(clamped);
     _speed = clamped;
   }
 
   @override
   Future<void> setVolume(double volume) async {
+    if (_player == null || !_isInitialized) return;
     final clamped = volume.clamp(0.0, 1.0);
-    _setPropertyString('volume', (clamped * 100).toString());
+    await _player!.setVolume(clamped * 100);
     _volume = clamped;
   }
 
   @override
   Future<Uint8List?> screenshot() async {
-    return null;
-  }
-
-  @override
-  Future<void> setSubtitleDelay(double seconds) async {
-    _setPropertyString('sub-delay', seconds.toString());
-  }
-
-  @override
-  Future<void> setAudioDelay(double seconds) async {
-    _setPropertyString('audio-delay', seconds.toString());
-  }
-
-  @override
-  Future<void> setSubtitleFont(String fontName) async {
-    _setPropertyString('sub-font', fontName);
-  }
-
-  @override
-  Future<void> setSubtitleSize(double size) async {
-    _setPropertyString('sub-scale', (0.5 + size).toString());
-  }
-
-  @override
-  Future<void> setSubtitlePosition(double position) async {
-    _setPropertyString('sub-pos', (100 - position * 100).toString());
-  }
-
-  @override
-  Future<void> setAspectRatio(String ratio) async {
-    switch (ratio) {
-      case '16:9':
-        _setPropertyString('video-aspect-override', '16/9');
-      case '4:3':
-        _setPropertyString('video-aspect-override', '4/3');
-      case '21:9':
-        _setPropertyString('video-aspect-override', '21/9');
-      case '全屏':
-        _setPropertyString('video-aspect-override', '-1');
-      case '原始':
-        _setPropertyString('video-aspect-override', '0');
-      default:
-        _setPropertyString('video-aspect-override', '-1');
-    }
-  }
-
-  @override
-  Future<void> applySuperResolution(bool enable) async {
-    if (enable) {
-      _setPropertyString('glsl-shaders', '~~/shaders/Anime4K_Clamp_Highlights.glsl:~~/shaders/Anime4K_Restore_CNN_M.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_M.glsl:~~/shaders/Anime4K_AutoDownscalePre_x2.glsl:~~/shaders/Anime4K_AutoDownscalePre_x4.glsl:~~/shaders/Anime4K_Upscale_CNN_x2_S.glsl');
-    } else {
-      _setPropertyString('glsl-shaders', '');
+    if (_player == null) return null;
+    try {
+      final image = await _player!.screenshot();
+      return image;
+    } catch (e, stackTrace) {
+      _logger.eWithStack('MpvAdapter', '截图失败', e, stackTrace);
+      return null;
     }
   }
 
   @override
   Future<void> dispose() async {
-    _positionTimer?.cancel();
-    _positionTimer = null;
+    _logger.i('MpvAdapter', '释放资源...');
 
-    _eventIsolate?.kill(priority: Isolate.immediate);
-    _eventIsolate = null;
-    _eventPort?.close();
-    _eventPort = null;
-
-    if (_textureId != null) {
-      try {
-        await _textureChannel.invokeMethod('disposeMpvTexture', {
-          'textureId': _textureId,
-        });
-      } catch (_) {}
-      _textureId = null;
+    for (final sub in _subscriptions) {
+      await sub.cancel();
     }
+    _subscriptions.clear();
 
-    if (_ctx != null) {
-      final mpvTerminateDestroy = _mpvLibInstance.lookupFunction<MpvTerminateDestroyC, MpvTerminateDestroy>('mpv_terminate_destroy');
-      mpvTerminateDestroy(_ctx!);
-      _ctx = null;
+    if (_player != null) {
+      await _player!.dispose();
+      _player = null;
     }
+    _videoController = null;
 
     _isInitialized = false;
     _isPlaying = false;
     _isBuffering = false;
     _position = Duration.zero;
     _duration = Duration.zero;
-  }
-}
-
-// ============================================================================
-// Isolate 事件循环
-// ============================================================================
-
-class _MpvEventLoopArgs {
-  final int ctxAddress;
-  final SendPort sendPort;
-
-  _MpvEventLoopArgs({required this.ctxAddress, required this.sendPort});
-}
-
-void _mpvEventLoop(_MpvEventLoopArgs args) {
-  final ctx = Pointer<Void>.fromAddress(args.ctxAddress);
-
-  while (true) {
-    try {
-      final mpvWaitEvent = _mpvLibInstance.lookupFunction<MpvWaitEventC, MpvWaitEvent>('mpv_wait_event');
-      final event = mpvWaitEvent(ctx, 0.1);
-      if (event.address == 0) continue;
-
-      final eventId = event.ref.eventId;
-      if (eventId == MPV_EVENT_NONE) continue;
-
-      final message = <String, dynamic>{'eventId': eventId};
-
-      if (eventId == MPV_EVENT_PROPERTY_CHANGE) {
-        // 解析 property change 事件
-      }
-
-      args.sendPort.send(message);
-
-      if (eventId == MPV_EVENT_SHUTDOWN) break;
-    } catch (_) {
-      break;
-    }
+    _tracks = [];
+    _lastSubtitlePath = null;
+    _logger.i('MpvAdapter', '资源已释放');
   }
 }

@@ -15,11 +15,164 @@ on:
         options:
           - debug
           - release
+      include_ffmpeg:
+        description: 'Include FFmpeg extension (for PGS/SUP subtitle support)'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  EXOPLAYER_VERSION: 1.3.1
+  FFMPEG_VERSION: n6.0
+  NDK_VERSION: r25c
 
 jobs:
+  # 预编译 FFmpeg 扩展（如果需要且缓存未命中）
+  build-ffmpeg:
+    name: Pre-build FFmpeg Extension
+    runs-on: ubuntu-latest
+    if: github.event.inputs.include_ffmpeg != 'false'
+    
+    outputs:
+      cache-hit: ${{ steps.cache-aar.outputs.cache-hit }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # 检查 AAR 是否已缓存
+      - name: Check AAR cache
+        uses: actions/cache@v4
+        id: cache-aar
+        with:
+          path: android/exoplayer-ffmpeg/libs/ffmpeg-extension.aar
+          key: ffmpeg-aar-${{ env.EXOPLAYER_VERSION }}-${{ env.FFMPEG_VERSION }}-${{ hashFiles('android/exoplayer-ffmpeg/**') }}
+      
+      # 如果缓存命中，直接跳过
+      - name: Skip if cached
+        if: steps.cache-aar.outputs.cache-hit == 'true'
+        run: |
+          echo "FFmpeg extension AAR found in cache, skipping build."
+          ls -la android/exoplayer-ffmpeg/libs/
+      
+      # 如果没有缓存，下载并编译 FFmpeg
+      - name: Setup build environment
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip git cmake ninja-build
+      
+      - name: Download Android NDK
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip -O /tmp/ndk.zip
+          unzip -q /tmp/ndk.zip -d /opt
+          echo "NDK_PATH=/opt/android-ndk-${NDK_VERSION}" >> $GITHUB_ENV
+      
+      - name: Setup Java
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      
+      - name: Download ExoPlayer and FFmpeg source
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          # 下载 ExoPlayer
+          git clone --depth 1 --branch ${{ env.EXOPLAYER_VERSION }} \
+            https://github.com/androidx/media.git /tmp/media3
+          
+          # 下载 FFmpeg
+          git clone --depth 1 --branch ${{ env.FFMPEG_VERSION }} \
+            https://git.ffmpeg.org/ffmpeg.git /tmp/media3/libraries/decoder_ffmpeg/src/main/jni/ffmpeg
+      
+      - name: Build FFmpeg for all architectures
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          cd /tmp/media3/libraries/decoder_ffmpeg/src/main/jni
+          
+          for ARCH in arm64-v8a armeabi-v7a x86_64; do
+            echo "Building for $ARCH..."
+            
+            case $ARCH in
+              arm64-v8a)
+                CPU=armv8-a
+                CROSS_PREFIX=aarch64-linux-android21-
+                ;;
+              armeabi-v7a)
+                CPU=armv7-a
+                CROSS_PREFIX=arm-linux-androideabi21-
+                ;;
+              x86_64)
+                CPU=x86-64
+                CROSS_PREFIX=x86_64-linux-android21-
+                ;;
+            esac
+            
+            TOOLCHAIN=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64
+            
+            cd ffmpeg
+            ./configure \
+              --target-os=android \
+              --arch=$ARCH \
+              --cpu=$CPU \
+              --cross-prefix=$TOOLCHAIN/bin/$CROSS_PREFIX \
+              --cc=$TOOLCHAIN/bin/${CROSS_PREFIX}clang \
+              --cxx=$TOOLCHAIN/bin/${CROSS_PREFIX}clang++ \
+              --prefix=/tmp/media3/libraries/decoder_ffmpeg/src/main/jni/ffmpeg/build/$ARCH \
+              --enable-static \
+              --disable-shared \
+              --disable-doc \
+              --disable-ffmpeg \
+              --disable-ffplay \
+              --disable-ffprobe \
+              --disable-network \
+              --enable-decoder=pgssub,dvbsub,dvdsub,ass,ssa,srt,webvtt \
+              --disable-everything \
+              --disable-avdevice \
+              --disable-avformat \
+              --disable-swresample \
+              --disable-postproc \
+              --disable-avfilter \
+              --disable-symver \
+              --extra-cflags="-O3 -fPIC" \
+              --extra-ldflags="-Wl,--no-undefined -Wl,-z,noexecstack"
+            
+            make -j$(nproc)
+            make install
+            make clean
+            cd ..
+          done
+      
+      - name: Build AAR
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          cd /tmp/media3
+          ./gradlew :libraries:decoder_ffmpeg:assembleRelease
+      
+      - name: Copy AAR to project
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p android/exoplayer-ffmpeg/libs
+          cp /tmp/media3/libraries/decoder_ffmpeg/build/outputs/aar/decoder_ffmpeg-release.aar \
+             android/exoplayer-ffmpeg/libs/ffmpeg-extension.aar
+          echo "AAR file prepared:"
+          ls -la android/exoplayer-ffmpeg/libs/
+      
+      # 保存到缓存（供后续 workflow 使用）
+      - name: Save AAR to cache
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: android/exoplayer-ffmpeg/libs/ffmpeg-extension.aar
+          key: ffmpeg-aar-${{ env.EXOPLAYER_VERSION }}-${{ env.FFMPEG_VERSION }}-${{ hashFiles('android/exoplayer-ffmpeg/**') }}
+
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
+    needs: build-ffmpeg
+    if: always() && (needs.build-ffmpeg.result == 'success' || needs.build-ffmpeg.result == 'skipped')
     
     steps:
       - name: Checkout code
@@ -34,9 +187,27 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.41.2'
           channel: 'stable'
           cache: true
+      
+      # 恢复 FFmpeg AAR 缓存
+      - name: Restore FFmpeg AAR cache
+        if: github.event.inputs.include_ffmpeg != 'false'
+        uses: actions/cache@v4
+        with:
+          path: android/exoplayer-ffmpeg/libs/ffmpeg-extension.aar
+          key: ffmpeg-aar-${{ env.EXOPLAYER_VERSION }}-${{ env.FFMPEG_VERSION }}-${{ hashFiles('android/exoplayer-ffmpeg/**') }}
+      
+      - name: Check FFmpeg AAR
+        if: github.event.inputs.include_ffmpeg != 'false'
+        run: |
+          if [ -f "android/exoplayer-ffmpeg/libs/ffmpeg-extension.aar" ]; then
+            echo "✅ FFmpeg extension AAR found"
+            ls -la android/exoplayer-ffmpeg/libs/
+          else
+            echo "⚠️ FFmpeg extension AAR not found, will build without PGS/SUP support"
+          fi
       
       - name: Get dependencies
         run: flutter pub get
@@ -67,6 +238,15 @@ jobs:
           name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+      
+      # 上传构建日志
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build/
+          retention-days: 3
 
   build-ios:
     name: Build iOS (No Sign)
@@ -79,7 +259,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.41.2'
           channel: 'stable'
           cache: true
       

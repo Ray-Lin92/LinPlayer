@@ -261,7 +261,7 @@ class _HomeAppBarState extends ConsumerState<_HomeAppBar> {
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF5B8DEF).withValues(alpha: 0.15),
+                                color: const Color(0xFF5B8DEF).withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: server.iconUrl != null
@@ -339,7 +339,7 @@ class _HomeAppBarState extends ConsumerState<_HomeAppBar> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF5B8DEF).withValues(alpha: 0.15),
+                        color: const Color(0xFF5B8DEF).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.dns, size: 18, color: Color(0xFF5B8DEF)),
@@ -446,7 +446,7 @@ class _RandomRecommendationCarouselState extends ConsumerState<RandomRecommendat
                         borderRadius: BorderRadius.circular(3),
                         color: index == _currentPage
                             ? const Color(0xFF5B8DEF)
-                            : Colors.white.withValues(alpha: 0.5),
+                            : Colors.white.withOpacity(0.5),
                       ),
                     );
                   }),
@@ -504,8 +504,8 @@ class _CarouselItem extends ConsumerWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.3),
-                    Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.95),
+                    Colors.black.withOpacity(0.3),
+                    Theme.of(context).scaffoldBackgroundColor.withOpacity(0.95),
                     Theme.of(context).scaffoldBackgroundColor,
                   ],
                   stops: const [0.0, 0.3, 0.8, 1.0],
@@ -556,7 +556,7 @@ class _CarouselItem extends ConsumerWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
+                          color: Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
@@ -732,7 +732,7 @@ class _ContinueWatchingCard extends ConsumerWidget {
                               end: Alignment.bottomCenter,
                               colors: [
                                 Colors.transparent,
-                                Colors.black.withValues(alpha: 0.6),
+                                Colors.black.withOpacity(0.6),
                               ],
                             ),
                           ),
@@ -748,7 +748,7 @@ class _ContinueWatchingCard extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(2),
                           child: LinearProgressIndicator(
                             value: item.progress,
-                            backgroundColor: Colors.white.withValues(alpha: 0.3),
+                            backgroundColor: Colors.white.withOpacity(0.3),
                             valueColor: const AlwaysStoppedAnimation(Color(0xFF5B8DEF)),
                             minHeight: 3,
                           ),
@@ -888,7 +888,7 @@ class _LibraryCard extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(12),
                   )
                 : Container(
-                    color: const Color(0xFF5B8DEF).withValues(alpha: 0.1),
+                    color: const Color(0xFF5B8DEF).withOpacity(0.1),
                     child: const Center(
                       child: Icon(
                         Icons.folder,

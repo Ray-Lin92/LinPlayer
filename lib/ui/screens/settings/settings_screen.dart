@@ -155,7 +155,7 @@ class _SettingsCard extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: const Color(0xFF5B8DEF).withValues(alpha: 0.1),
+            color: const Color(0xFF5B8DEF).withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: const Color(0xFF5B8DEF)),

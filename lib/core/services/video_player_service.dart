@@ -60,6 +60,10 @@ class VideoPlayerService extends ChangeNotifier {
   bool get isCompleted => _adapter?.isCompleted ?? false;
   double get progress => _adapter?.progress ?? 0.0;
   PlayerCoreType get coreType => _coreType;
+
+  /// 当前播放器适配器（用于内核特定操作）
+  PlayerAdapter? get adapter => _adapter;
+
   double get brightness => _currentBrightness;
 
   /// 手势起始 X 坐标（用于判断亮度/音量区域）
@@ -75,8 +79,17 @@ class VideoPlayerService extends ChangeNotifier {
     return 0;
   }
 
-  /// Flutter Texture ID（用于 Texture widget 渲染视频）
+  /// Flutter Texture ID（用于 Texture widget 渲染视频，旧架构）
   int? get textureId => _adapter?.textureId;
+
+  /// 构建视频渲染 Widget
+  ///
+  /// ExoPlayer 返回 Texture widget，media_kit 返回 Video widget
+  Widget buildVideo() {
+    return _adapter?.buildVideo() ?? const Center(
+      child: CircularProgressIndicator(),
+    );
+  }
 
   /// libass 是否已就绪
   bool get libassReady => _adapter?.libassReady ?? false;

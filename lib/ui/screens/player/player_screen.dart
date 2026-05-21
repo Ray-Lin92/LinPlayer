@@ -370,7 +370,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                       icon: const Icon(Icons.skip_next, size: 18),
                       label: const Text('跳过片头'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black.withValues(alpha: 0.7),
+                        backgroundColor: Colors.black.withOpacity(0.7),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
@@ -472,7 +472,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.7),
+          color: Colors.black.withOpacity(0.7),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -509,7 +509,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.7),
+          color: Colors.black.withOpacity(0.7),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -709,9 +709,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     activeTrackColor: const Color(0xFF5B8DEF),
-                    inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
+                    inactiveTrackColor: Colors.white.withOpacity(0.3),
                     thumbColor: const Color(0xFF5B8DEF),
-                    overlayColor: const Color(0xFF5B8DEF).withValues(alpha: 0.2),
+                    overlayColor: const Color(0xFF5B8DEF).withOpacity(0.2),
                     trackHeight: 3,
                     thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                   ),
@@ -813,7 +813,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.7),
+          color: Colors.black.withOpacity(0.7),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -993,11 +993,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
               ),
               margin: const EdgeInsets.only(right: 0),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.88),
+                color: Colors.black.withOpacity(0.88),
                 borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
+                    color: Colors.black.withOpacity(0.3),
                     blurRadius: 20,
                     offset: const Offset(-5, 0),
                   ),
@@ -1013,10 +1013,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
+                        color: Colors.black.withOpacity(0.5),
                         border: Border(
                           bottom: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: Colors.white.withOpacity(0.1),
                             width: 1,
                           ),
                         ),
@@ -1562,9 +1562,9 @@ class _DanmakuSettingsContent extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.orange.withValues(alpha: 0.1),
+            color: Colors.orange.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+            border: Border.all(color: Colors.orange.withOpacity(0.3)),
           ),
           child: Row(
             children: [
@@ -2043,7 +2043,7 @@ class _EpisodeSelectorContentState extends ConsumerState<_EpisodeSelectorContent
                 child: Container(
                   decoration: BoxDecoration(
                     color: isCurrent
-                        ? const Color(0xFF5B8DEF).withValues(alpha: 0.2)
+                        ? const Color(0xFF5B8DEF).withOpacity(0.2)
                         : Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                     border: isCurrent
@@ -2276,7 +2276,7 @@ class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Divider(
-      color: Colors.white.withValues(alpha: 0.1),
+      color: Colors.white.withOpacity(0.1),
       height: 1,
       indent: 16,
       endIndent: 16,
@@ -2301,7 +2301,7 @@ class _SettingsButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Material(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: Colors.white.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: onTap,

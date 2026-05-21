@@ -62,6 +62,17 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.3.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.3.1")
+
+    // FFmpeg 扩展（可选，用于 PGS/SUP 图形字幕支持）
+    // GitHub Actions 会自动编译并放置到此路径
+    val ffmpegAar = file("../exoplayer-ffmpeg/libs/ffmpeg-extension.aar")
+    if (ffmpegAar.exists()) {
+        implementation(files(ffmpegAar))
+        println("✅ FFmpeg extension found: ${ffmpegAar.absolutePath}")
+    } else {
+        println("⚠️ FFmpeg extension not found. PGS/SUP subtitle support disabled.")
+        println("   Build with GitHub Actions to auto-compile, or see docs/FFmpegExtensionSetup.md")
+    }
 }
 
 flutter {

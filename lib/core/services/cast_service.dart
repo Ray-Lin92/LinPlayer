@@ -116,8 +116,6 @@ class CastService extends ChangeNotifier {
     // 常见DLNA端口
     final dlnaPorts = [49152, 49153, 49154, 3900, 32469];
     
-    // 获取本机IP前缀
-    String? localIP;
     try {
       // 这里简化处理，扫描常见网段
       final subnets = ['192.168.1', '192.168.0', '10.0.0'];

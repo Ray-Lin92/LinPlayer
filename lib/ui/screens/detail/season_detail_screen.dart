@@ -5,7 +5,6 @@ import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../core/services/cast_service.dart';
-import '../../../core/services/download_service.dart';
 import '../../screens/download/download_screen.dart';
 import '../../widgets/common/media_widgets.dart';
 
@@ -244,8 +243,8 @@ class _DetailHeader extends ConsumerWidget {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  Colors.black.withValues(alpha: 0.5),
-                  Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.95),
+                  Colors.black.withOpacity(0.5),
+                  Theme.of(context).scaffoldBackgroundColor.withOpacity(0.95),
                   Theme.of(context).scaffoldBackgroundColor,
                 ],
                 stops: const [0.0, 0.3, 0.8, 1.0],
@@ -259,7 +258,7 @@ class _DetailHeader extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.all(8),
             child: CircleAvatar(
-              backgroundColor: Colors.black.withValues(alpha: 0.4),
+              backgroundColor: Colors.black.withOpacity(0.4),
               child: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => context.pop(),
@@ -338,7 +337,7 @@ class _DetailHeader extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
+                        color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
