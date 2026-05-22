@@ -222,16 +222,17 @@ jobs:
       - name: Locate AAR file
         run: |
           if [ -f "/tmp/media3/libraries/decoder_ffmpeg/build/outputs/aar/lib-decoder-ffmpeg-release.aar" ]; then
-            echo "AAR_PATH=/tmp/media3/libraries/decoder_ffmpeg/build/outputs/aar/lib-decoder-ffmpeg-release.aar" >> $GITHUB_ENV
+            AAR_PATH="/tmp/media3/libraries/decoder_ffmpeg/build/outputs/aar/lib-decoder-ffmpeg-release.aar"
             echo "Found AAR at: build/outputs/aar/"
           elif [ -f "/tmp/media3/libraries/decoder_ffmpeg/buildout/outputs/aar/lib-decoder-ffmpeg-release.aar" ]; then
-            echo "AAR_PATH=/tmp/media3/libraries/decoder_ffmpeg/buildout/outputs/aar/lib-decoder-ffmpeg-release.aar" >> $GITHUB_ENV
+            AAR_PATH="/tmp/media3/libraries/decoder_ffmpeg/buildout/outputs/aar/lib-decoder-ffmpeg-release.aar"
             echo "Found AAR at: buildout/outputs/aar/"
           else
             echo "ERROR: AAR file not found in expected locations"
             find /tmp/media3/libraries/decoder_ffmpeg -name "*.aar" 2>/dev/null || true
             exit 1
           fi
+          echo "AAR_PATH=$AAR_PATH" >> $GITHUB_ENV
           ls -la "$AAR_PATH"
       
       # 上传 AAR Artifact
