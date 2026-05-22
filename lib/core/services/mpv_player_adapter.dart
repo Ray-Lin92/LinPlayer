@@ -137,7 +137,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
       final np = _nativePlayer;
       if (np != null) {
         await np.setProperty('secondary-sub-visibility', 'yes');
-        await np.setProperty('sub-ass-override', 'force');
+        await np.setProperty('sub-ass-override', 'yes');
       }
 
       final media = Media(videoUrl);
@@ -301,6 +301,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
       if (ext == 'pgs' || ext == 'sup') {
         _logger.i('MpvAdapter', '图形字幕 (PGS/SUP)，直接加载');
         await _player!.setSubtitleTrack(SubtitleTrack.uri(path));
+        await _applySubtitleRuntimeProperties();
+        _logger.i('MpvAdapter', '图形字幕加载成功');
         return;
       }
 
@@ -340,7 +342,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
       await np.setProperty('sub-back-color',
           _subtitleBackground ? '#000000C0' : '#00000000');
       await np.setProperty('sub-delay', _subtitleDelay.toStringAsFixed(3));
-      await np.setProperty('sub-ass-override', 'force');
+      await np.setProperty('sub-ass-override', 'yes');
       if (_secondarySid != null) {
         await np.setProperty('secondary-sid', _secondarySid!);
         await np.setProperty('secondary-sub-visibility', 'yes');

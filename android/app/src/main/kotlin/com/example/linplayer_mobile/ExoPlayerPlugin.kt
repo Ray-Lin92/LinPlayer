@@ -20,6 +20,7 @@ import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.text.Cue
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -456,6 +457,10 @@ class ExoPlayerPlugin(
             instanceHandler.post {
                 eventSink?.success(mapOf("type" to type, "value" to value))
             }
+        }
+
+        override fun onCues(cueGroup: CueGroup) {
+            onCues(cueGroup.cues)
         }
 
         override fun onCues(cues: List<Cue>) {
