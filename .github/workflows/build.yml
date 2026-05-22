@@ -115,131 +115,140 @@ jobs:
           JOBS=$(nproc)
           
           COMMON_OPTIONS="
-              --target-os=android
-              --enable-static
-              --disable-shared
-              --disable-doc
-              --disable-programs
-              --disable-everything
-              --disable-avdevice
-              --disable-avformat
-              --disable-swscale
-              --disable-postproc
-              --disable-avfilter
-              --disable-symver
-              --enable-swresample
-              --extra-ldexeflags=-pie
-              --disable-v4l2-m2m
-              --disable-vulkan
-              --disable-asm
-              "
+            --target-os=android
+            --enable-static
+            --disable-shared
+            --disable-doc
+            --disable-programs
+            --disable-everything
+            --disable-avdevice
+            --disable-avformat
+            --disable-swscale
+            --disable-postproc
+            --disable-avfilter
+            --disable-symver
+            --enable-swresample
+            --extra-ldexeflags=-pie
+            --disable-v4l2-m2m
+            --disable-vulkan
+            --disable-asm
+            "
           
           for decoder in "${ENABLED_DECODERS[@]}"; do
-              COMMON_OPTIONS="${COMMON_OPTIONS} --enable-decoder=${decoder}"
+            COMMON_OPTIONS="${COMMON_OPTIONS} --enable-decoder=${decoder}"
           done
           
           TOOLCHAIN_PREFIX="${NDK_PATH}/toolchains/llvm/prebuilt/${HOST_PLATFORM}/bin"
           
-          # 编译 arm64-v8a
           cd "${FFMPEG_MODULE_PATH}/jni/ffmpeg"
+          
+          # 编译 arm64-v8a
+          echo "Building for arm64-v8a..."
           ./configure \
-              --libdir=android-libs/arm64-v8a \
-              --arch=aarch64 \
-              --cpu=armv8-a \
-              --cross-prefix="${TOOLCHAIN_PREFIX}/aarch64-linux-android${ANDROID_ABI}-" \
-              --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
-              --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
-              --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
-              --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
-              ${COMMON_OPTIONS}
-           make -j${JOBS}
-           
-           # 手动复制静态库到 CMake 期望的路径
-           mkdir -p android-libs/arm64-v8a
-           cp libavutil/libavutil.a android-libs/arm64-v8a/
-           cp libswresample/libswresample.a android-libs/arm64-v8a/
-           cp libavcodec/libavcodec.a android-libs/arm64-v8a/
-           
-           make clean
-           
-           # 编译 armeabi-v7a
-           ./configure \
-               --libdir=android-libs/armeabi-v7a \
-               --arch=arm \
-               --cpu=armv7-a \
-               --cross-prefix="${TOOLCHAIN_PREFIX}/armv7a-linux-androideabi${ANDROID_ABI}-" \
-               --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
-               --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
-               --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
-               --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
-               --extra-cflags="-march=armv7-a -mfloat-abi=softfp" \
-               --extra-ldflags="-Wl,--fix-cortex-a8" \
-               ${COMMON_OPTIONS}
-           make -j${JOBS}
-           
-           # 手动复制静态库到 CMake 期望的路径
-           mkdir -p android-libs/armeabi-v7a
-           cp libavutil/libavutil.a android-libs/armeabi-v7a/
-           cp libswresample/libswresample.a android-libs/armeabi-v7a/
-           cp libavcodec/libavcodec.a android-libs/armeabi-v7a/
-           
-             make clean
-       
-       - name: Debug NDK compilers
-         if: steps.cache-aar.outputs.cache-hit != 'true'
-         run: |
-           echo "Available x86 compilers in NDK:"
-           ls -la /opt/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin/*clang* | grep -E "(i686|x86)" || true
-       
-       - name: Check and patch ExoPlayer build.gradle
-         if: steps.cache-aar.outputs.cache-hit != 'true'
-         run: |
-           BUILD_GRADLE="/tmp/media3/libraries/decoder_ffmpeg/build.gradle"
-           echo "=== Build.gradle content ==="
-           cat "$BUILD_GRADLE"
-           echo "=== End ==="
-           
-            cat > /tmp/patch_gradle.py << 'EOF'
-            import re
-            
-            build_gradle = "/tmp/media3/libraries/decoder_ffmpeg/build.gradle"
-            
-            with open(build_gradle, 'r') as f:
-                content = f.read()
-            
-            print("Original content:")
-            print(content)
-            print("=" * 50)
-            
-            # Check if already has abiFilters
-            if 'abiFilters' in content:
-                print("Found existing abiFilters, replacing...")
-                content = re.sub(
-                    r"abiFilters\s*=\s*\[[^\]]*\]",
-                    'abiFilters = ["arm64-v8a", "armeabi-v7a"]',
-                    content
-                )
-            else:
-                print("No existing abiFilters found, appending...")
-                # decoder_ffmpeg/build.gradle doesn't have defaultConfig,
-                # it inherits from common_library_config.gradle
-                content = content.rstrip() + '\n\n// Limit ABIs to only ARM architectures\nandroid.defaultConfig.ndk.abiFilters = ["arm64-v8a", "armeabi-v7a"]\n'
-            
-            with open(build_gradle, 'w') as f:
-                f.write(content)
-            
-            print("Patched content:")
-            with open(build_gradle, 'r') as f:
-                print(f.read())
-            EOF
-            
-            python3 /tmp/patch_gradle.py
-       
-       - name: Build AAR
-         if: steps.cache-aar.outputs.cache-hit != 'true'
-         run: |
-           cd /tmp/media3
-           ./gradlew :lib-decoder-ffmpeg:assembleRelease
+            --libdir=android-libs/arm64-v8a \
+            --arch=aarch64 \
+            --cpu=armv8-a \
+            --cross-prefix="${TOOLCHAIN_PREFIX}/aarch64-linux-android${ANDROID_ABI}-" \
+            --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
+            --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
+            --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
+            --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
+            ${COMMON_OPTIONS}
+          make -j${JOBS}
+          
+          # 手动复制静态库到 CMake 期望的路径
+          mkdir -p android-libs/arm64-v8a
+          cp libavutil/libavutil.a android-libs/arm64-v8a/
+          cp libswresample/libswresample.a android-libs/arm64-v8a/
+          cp libavcodec/libavcodec.a android-libs/arm64-v8a/
+          
+          echo "FFmpeg libraries for arm64-v8a:"
+          ls -la android-libs/arm64-v8a/
+          
+          make clean
+          
+          # 编译 armeabi-v7a
+          echo "Building for armeabi-v7a..."
+          ./configure \
+            --libdir=android-libs/armeabi-v7a \
+            --arch=arm \
+            --cpu=armv7-a \
+            --cross-prefix="${TOOLCHAIN_PREFIX}/armv7a-linux-androideabi${ANDROID_ABI}-" \
+            --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
+            --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
+            --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
+            --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
+            --extra-cflags="-march=armv7-a -mfloat-abi=softfp" \
+            --extra-ldflags="-Wl,--fix-cortex-a8" \
+            ${COMMON_OPTIONS}
+          make -j${JOBS}
+          
+          # 手动复制静态库到 CMake 期望的路径
+          mkdir -p android-libs/armeabi-v7a
+          cp libavutil/libavutil.a android-libs/armeabi-v7a/
+          cp libswresample/libswresample.a android-libs/armeabi-v7a/
+          cp libavcodec/libavcodec.a android-libs/armeabi-v7a/
+          
+          echo "FFmpeg libraries for armeabi-v7a:"
+          ls -la android-libs/armeabi-v7a/
+          
+          make clean
+      
+      - name: Debug NDK compilers
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          echo "Available x86 compilers in NDK:"
+          ls -la /opt/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin/*clang* | grep -E "(i686|x86)" || true
+      
+      - name: Check and patch ExoPlayer build.gradle
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          BUILD_GRADLE="/tmp/media3/libraries/decoder_ffmpeg/build.gradle"
+          echo "=== Build.gradle content ==="
+          cat "$BUILD_GRADLE"
+          echo "=== End ==="
+          
+          cat > /tmp/patch_gradle.py << 'EOF'
+          import re
+          
+          build_gradle = "/tmp/media3/libraries/decoder_ffmpeg/build.gradle"
+          
+          with open(build_gradle, 'r') as f:
+              content = f.read()
+          
+          print("Original content:")
+          print(content)
+          print("=" * 50)
+          
+          # Check if already has abiFilters
+          if 'abiFilters' in content:
+              print("Found existing abiFilters, replacing...")
+              content = re.sub(
+                  r"abiFilters\s*=\s*\[[^\]]*\]",
+                  'abiFilters = ["arm64-v8a", "armeabi-v7a"]',
+                  content
+              )
+          else:
+              print("No existing abiFilters found, appending...")
+              # decoder_ffmpeg/build.gradle doesn't have defaultConfig,
+              # it inherits from common_library_config.gradle
+              content = content.rstrip() + '\n\n// Limit ABIs to only ARM architectures\nandroid.defaultConfig.ndk.abiFilters = ["arm64-v8a", "armeabi-v7a"]\n'
+          
+          with open(build_gradle, 'w') as f:
+              f.write(content)
+          
+          print("Patched content:")
+          with open(build_gradle, 'r') as f:
+              print(f.read())
+          EOF
+          
+          python3 /tmp/patch_gradle.py
+      
+      - name: Build AAR
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          cd /tmp/media3
+          ./gradlew :lib-decoder-ffmpeg:assembleRelease
       
       - name: Copy AAR to project
         if: steps.cache-aar.outputs.cache-hit != 'true'
@@ -293,10 +302,10 @@ jobs:
         if: github.event.inputs.include_ffmpeg != 'false'
         run: |
           if [ -f "android/exoplayer-ffmpeg/libs/ffmpeg-extension.aar" ]; then
-            echo "✅ FFmpeg extension AAR found"
+            echo "FFmpeg extension AAR found"
             ls -la android/exoplayer-ffmpeg/libs/
           else
-            echo "⚠️ FFmpeg extension AAR not found, will build without PGS/SUP support"
+            echo "FFmpeg extension AAR not found, will build without PGS/SUP support"
           fi
       
       - name: Get dependencies
