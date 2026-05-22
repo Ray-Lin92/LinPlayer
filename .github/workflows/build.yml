@@ -199,37 +199,41 @@ jobs:
            cat "$BUILD_GRADLE"
            echo "=== End ==="
            
-           cat > /tmp/patch_gradle.py << 'EOF'
-           import re
-           
-           build_gradle = "/tmp/media3/libraries/decoder_ffmpeg/build.gradle"
-           
-           with open(build_gradle, 'r') as f:
-               content = f.read()
-           
-           if 'abiFilters' in content:
-               print("Found existing abiFilters, replacing...")
-               content = re.sub(
-                   r'abiFilters\s*"[^"]*"(?:\s*,\s*"[^"]*")*',
-                   'abiFilters "arm64-v8a", "armeabi-v7a"',
-                   content
-               )
-           else:
-               print("No existing abiFilters found, adding...")
-               content = content.replace(
-                   'defaultConfig {',
-                   'defaultConfig {\n        ndk {\n            abiFilters "arm64-v8a", "armeabi-v7a"\n        }'
-               )
-           
-           with open(build_gradle, 'w') as f:
-               f.write(content)
-           
-           print("=== Patched content ===")
-           with open(build_gradle, 'r') as f:
-               print(f.read())
-           EOF
-           
-           python3 /tmp/patch_gradle.py
+            cat > /tmp/patch_gradle.py << 'EOF'
+            import re
+            
+            build_gradle = "/tmp/media3/libraries/decoder_ffmpeg/build.gradle"
+            
+            with open(build_gradle, 'r') as f:
+                content = f.read()
+            
+            print("Original content:")
+            print(content)
+            print("=" * 50)
+            
+            # Check if already has abiFilters
+            if 'abiFilters' in content:
+                print("Found existing abiFilters, replacing...")
+                content = re.sub(
+                    r"abiFilters\s*=\s*\[[^\]]*\]",
+                    'abiFilters = ["arm64-v8a", "armeabi-v7a"]',
+                    content
+                )
+            else:
+                print("No existing abiFilters found, appending...")
+                # decoder_ffmpeg/build.gradle doesn't have defaultConfig,
+                # it inherits from common_library_config.gradle
+                content = content.rstrip() + '\n\n// Limit ABIs to only ARM architectures\nandroid.defaultConfig.ndk.abiFilters = ["arm64-v8a", "armeabi-v7a"]\n'
+            
+            with open(build_gradle, 'w') as f:
+                f.write(content)
+            
+            print("Patched content:")
+            with open(build_gradle, 'r') as f:
+                print(f.read())
+            EOF
+            
+            python3 /tmp/patch_gradle.py
        
        - name: Build AAR
          if: steps.cache-aar.outputs.cache-hit != 'true'

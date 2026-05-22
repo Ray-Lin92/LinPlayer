@@ -169,33 +169,32 @@ jobs:
           with open(build_gradle, 'r') as f:
               content = f.read()
           
-          print("Original content (first 500 chars):")
-          print(content[:500])
-          print("...")
+          print("Original content:")
+          print(content)
+          print("=" * 50)
           
           # Check if already has abiFilters
           if 'abiFilters' in content:
               print("Found existing abiFilters, replacing...")
               # Replace existing abiFilters
               content = re.sub(
-                  r'abiFilters\s*"[^"]*"(?:\s*,\s*"[^"]*")*',
-                  'abiFilters "arm64-v8a", "armeabi-v7a"',
+                  r"abiFilters\s*=\s*\[[^\]]*\]",
+                  'abiFilters = ["arm64-v8a", "armeabi-v7a"]',
                   content
               )
           else:
-              print("No existing abiFilters found, adding...")
-              # Add ndk block after defaultConfig {
-              content = content.replace(
-                  'defaultConfig {',
-                  'defaultConfig {\n        ndk {\n            abiFilters "arm64-v8a", "armeabi-v7a"\n        }'
-              )
+              print("No existing abiFilters found, appending...")
+              # Append ndk configuration to the end of the file
+              # Note: decoder_ffmpeg/build.gradle doesn't have defaultConfig,
+              # it inherits from common_library_config.gradle
+              content = content.rstrip() + '\n\n// Limit ABIs to only ARM architectures\nandroid.defaultConfig.ndk.abiFilters = ["arm64-v8a", "armeabi-v7a"]\n'
           
           with open(build_gradle, 'w') as f:
               f.write(content)
           
-          print("Patched content (first 600 chars):")
+          print("Patched content:")
           with open(build_gradle, 'r') as f:
-              print(f.read()[:600])
+              print(f.read())
           EOF
           
           python3 /tmp/patch_gradle.py
