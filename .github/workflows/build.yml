@@ -183,17 +183,29 @@ jobs:
            cp libswresample/libswresample.a android-libs/armeabi-v7a/
            cp libavcodec/libavcodec.a android-libs/armeabi-v7a/
            
-           make clean
-      
-       - name: Limit ABIs to arm64-v8a and armeabi-v7a
-         if: steps.cache-aar.outputs.cache-hit != 'true'
-         run: |
-           BUILD_GRADLE="/tmp/media3/libraries/decoder_ffmpeg/build.gradle"
-           if [ -f "$BUILD_GRADLE" ]; then
-             sed -i '/defaultConfig {/a\        ndk {\n            abiFilters "arm64-v8a", "armeabi-v7a"\n        }' "$BUILD_GRADLE"
-             echo "Patched build.gradle with abiFilters"
-             grep -A 3 "abiFilters" "$BUILD_GRADLE" || true
-           fi
+            make clean
+            
+            # 编译 x86（Gradle 默认会构建此 ABI）
+            ./configure \
+                --libdir=android-libs/x86 \
+                --arch=x86 \
+                --cpu=i686 \
+                --cross-prefix="${TOOLCHAIN_PREFIX}/i686-linux-android${ANDROID_ABI}-" \
+                --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
+                --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
+                --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
+                --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
+                --extra-cflags="-march=i686 -mtune=intel -mstackrealign -mfpmath=sse -msse -msse2 -msse3 -mssse3" \
+                ${COMMON_OPTIONS}
+            make -j${JOBS}
+            
+            # 手动复制静态库到 CMake 期望的路径
+            mkdir -p android-libs/x86
+            cp libavutil/libavutil.a android-libs/x86/
+            cp libswresample/libswresample.a android-libs/x86/
+            cp libavcodec/libavcodec.a android-libs/x86/
+            
+            make clean
        
        - name: Build AAR
          if: steps.cache-aar.outputs.cache-hit != 'true'
