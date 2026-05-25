@@ -461,6 +461,7 @@ class ExoPlayerPlugin(
 
         private var lastBitmapBase64: String? = null
         private var lastBitmapHash: Int = 0
+        private var isBitmapSubtitle: Boolean = false
 
         override fun onCues(cueGroup: CueGroup) {
             onCues(cueGroup.cues)
@@ -469,10 +470,12 @@ class ExoPlayerPlugin(
         override fun onCues(cues: List<Cue>) {
             val textParts = mutableListOf<String>()
             val bitmapParts = mutableListOf<String>()
+            var hasBitmap = false
 
             for (cue in cues) {
                 val bmp = cue.bitmap
                 if (bmp != null) {
+                    hasBitmap = true
                     try {
                         val hash = bmp.hashCode()
                         if (hash == lastBitmapHash && lastBitmapBase64 != null) {
@@ -495,7 +498,7 @@ class ExoPlayerPlugin(
                         }
 
                         val stream = ByteArrayOutputStream()
-                        src.compress(Bitmap.CompressFormat.JPEG, 75, stream)
+                        src.compress(Bitmap.CompressFormat.PNG, 100, stream)
                         val bytes = stream.toByteArray()
                         src.recycle()
                         val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
@@ -511,15 +514,25 @@ class ExoPlayerPlugin(
                 }
             }
 
-            if (bitmapParts.isNotEmpty()) {
-                emitEvent("subtitleBitmap", mapOf(
-                    "images" to bitmapParts,
-                    "text" to textParts.joinToString("\n")
-                ))
-            } else if (textParts.isNotEmpty()) {
-                emitEvent("subtitle", textParts.joinToString("\n"))
+            if (hasBitmap) {
+                isBitmapSubtitle = true
+                if (bitmapParts.isNotEmpty()) {
+                    emitEvent("subtitleBitmap", mapOf(
+                        "images" to bitmapParts,
+                        "text" to textParts.joinToString("\n")
+                    ))
+                } else if (textParts.isNotEmpty()) {
+                    emitEvent("subtitle", textParts.joinToString("\n"))
+                } else {
+                    emitEvent("subtitle", "")
+                }
             } else {
-                emitEvent("subtitle", "")
+                isBitmapSubtitle = false
+                if (textParts.isNotEmpty()) {
+                    emitEvent("subtitle", textParts.joinToString("\n"))
+                } else {
+                    emitEvent("subtitle", "")
+                }
             }
         }
 

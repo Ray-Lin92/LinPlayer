@@ -33,6 +33,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
   bool _subtitleBackground = false;
   String _subtitleFont = '默认';
   String? _lastRenderedBitmapB64;
+  bool _isBitmapSubtitle = false;
 
   PlayerStateCallbacks? _callbacks;
   Timer? _positionTimer;
@@ -292,6 +293,14 @@ class ExoPlayerAdapter implements PlayerAdapter {
       case 'subtitle':
         _subtitleText = event['value'] as String? ?? '';
         subtitleNotifier.value = _subtitleText;
+        if (!_isBitmapSubtitle) {
+          bitmapNotifier.value = null;
+          _subtitleBitmapBase64 = '';
+        } else if (_subtitleText.isEmpty) {
+          _isBitmapSubtitle = false;
+          bitmapNotifier.value = null;
+          _subtitleBitmapBase64 = '';
+        }
         break;
       case 'subtitleBitmap':
         final data = event['value'] as Map?;
@@ -300,6 +309,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
           if (images != null && images.isNotEmpty) {
             _subtitleBitmapBase64 = images.first as String;
             bitmapNotifier.value = _subtitleBitmapBase64;
+            _isBitmapSubtitle = true;
           } else {
             _subtitleBitmapBase64 = '';
             bitmapNotifier.value = null;
@@ -492,7 +502,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
                         return Center(
                           child: ConstrainedBox(
                             constraints: BoxConstraints(
-                              maxWidth: 800,
+                              maxWidth: MediaQuery.of(context).size.width - 48,
                               maxHeight: 300 * (0.5 + _subtitleSize),
                             ),
                             child: Image.memory(
@@ -500,7 +510,6 @@ class ExoPlayerAdapter implements PlayerAdapter {
                               fit: BoxFit.contain,
                               gaplessPlayback: true,
                               filterQuality: FilterQuality.medium,
-                              cacheWidth: 720,
                             ),
                           ),
                         );
@@ -513,33 +522,49 @@ class ExoPlayerAdapter implements PlayerAdapter {
                       builder: (context, text, _) {
                         if (text.isEmpty) return const SizedBox.shrink();
                         final fontSize = 14.0 + (_subtitleSize * 18.0);
-                        return Container(
-                          key: ValueKey('sub_$_subtitleSettingsVersion.value'),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: _subtitleBackground
-                              ? BoxDecoration(
-                                  color: Colors.black.withOpacity(0.7),
-                                  borderRadius: BorderRadius.circular(4),
-                                )
-                              : const BoxDecoration(),
-                          child: Text(
-                            text,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: fontSize,
-                              fontFamily: (_subtitleFont.isNotEmpty && _subtitleFont != '默认') ? _subtitleFont : null,
-                              height: 1.4,
-                              decoration: TextDecoration.none,
-                              shadows: _subtitleBackground
-                                  ? []
-                                  : [
-                                      Shadow(
-                                        offset: const Offset(1, 1),
-                                        blurRadius: 2,
-                                        color: Colors.black.withOpacity(0.8),
-                                      ),
-                                    ],
+                        return Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: _subtitleBackground
+                                ? BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(4),
+                                  )
+                                : null,
+                            child: Text(
+                              text,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: fontSize,
+                                fontFamily: (_subtitleFont.isNotEmpty && _subtitleFont != '默认') ? _subtitleFont : null,
+                                height: 1.4,
+                                decoration: TextDecoration.none,
+                                shadows: _subtitleBackground
+                                    ? []
+                                    : [
+                                        Shadow(
+                                          offset: const Offset(1, 1),
+                                          blurRadius: 2,
+                                          color: Colors.black.withOpacity(0.8),
+                                        ),
+                                        Shadow(
+                                          offset: const Offset(-1, -1),
+                                          blurRadius: 2,
+                                          color: Colors.black.withOpacity(0.8),
+                                        ),
+                                        Shadow(
+                                          offset: const Offset(1, -1),
+                                          blurRadius: 2,
+                                          color: Colors.black.withOpacity(0.8),
+                                        ),
+                                        Shadow(
+                                          offset: const Offset(-1, 1),
+                                          blurRadius: 2,
+                                          color: Colors.black.withOpacity(0.8),
+                                        ),
+                                      ],
+                              ),
                             ),
                           ),
                         );
