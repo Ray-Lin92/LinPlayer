@@ -134,6 +134,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
         subtitleBackground: _subtitleBackground,
       );
 
+      // libass 默认启用以获得最佳 ASS 字幕渲染效果
+      // PGS/SUP 位图字幕通过 sub-ass=no 配置避免 libass 干扰
       _player = Player(
         configuration: const PlayerConfiguration(
           libass: true,
@@ -450,12 +452,18 @@ class MpvPlayerAdapter implements PlayerAdapter {
       final ext = _extractExtension(path);
 
       if (ext == 'pgs' || ext == 'sup') {
-        _logger.i('MpvAdapter', '图形字幕 (PGS/SUP)，直接加载');
+        _logger.i('MpvAdapter', '图形字幕 (PGS/SUP)，直接加载: $path');
         _hasBitmapSubtitle = true;
         _currentSubIsAss = false;
+        // 强制关闭 libass 以允许 MPV 原生渲染位图字幕
+        final np = _nativePlayer;
+        if (np != null) {
+          await np.setProperty('sub-ass', 'no');
+          await np.setProperty('sub-ass-override', 'no');
+        }
         await _player!.setSubtitleTrack(SubtitleTrack.uri(path));
         await _applySubtitleRuntimeProperties();
-        _logger.i('MpvAdapter', '图形字幕加载成功');
+        _logger.i('MpvAdapter', '图形字幕加载完成，等待渲染');
         return;
       }
 
@@ -494,30 +502,39 @@ class MpvPlayerAdapter implements PlayerAdapter {
     if (np == null) return;
     try {
       await np.setProperty('sub-visibility', 'yes');
-      await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
-      await np.setProperty('sub-pos', _subtitlePosition.toStringAsFixed(1));
-      if (_subtitleFont != null && _subtitleFont!.isNotEmpty && _subtitleFont != '默认') {
-        await np.setProperty('sub-font', _subtitleFont!);
-      }
       await np.setProperty('sub-delay', _subtitleDelay.toStringAsFixed(3));
 
       if (_hasBitmapSubtitle) {
+        // PGS/SUP 等位图字幕：关闭 ASS 处理，避免 libass 干扰原生渲染
         await np.setProperty('sub-ass', 'no');
         await np.setProperty('sub-ass-override', 'no');
         await np.setProperty('sub-back-color', '#00000000');
+        // 位图字幕应用用户设置的缩放，但位置固定为底部
         await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
         await np.setProperty('sub-pos', '100');
+        _logger.i('MpvAdapter', '已应用图形字幕(PGS/SUP)配置: scale=$_subtitleScale, pos=100, ass=no');
       } else if (_currentSubIsAss) {
         await np.setProperty('sub-ass', 'yes');
         await np.setProperty('sub-ass-override', 'no');
+        await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
+        await np.setProperty('sub-pos', _subtitlePosition.toStringAsFixed(1));
+        if (_subtitleFont != null && _subtitleFont!.isNotEmpty && _subtitleFont != '默认') {
+          await np.setProperty('sub-font', _subtitleFont!);
+        }
         if (_subtitleBackground) {
           await np.setProperty('sub-back-color', '#000000C0');
         } else {
           await np.setProperty('sub-back-color', '#00000000');
         }
       } else {
+        // 普通文本字幕 (SRT/VTT)
         await np.setProperty('sub-ass', 'yes');
         await np.setProperty('sub-ass-override', 'strip');
+        await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
+        await np.setProperty('sub-pos', _subtitlePosition.toStringAsFixed(1));
+        if (_subtitleFont != null && _subtitleFont!.isNotEmpty && _subtitleFont != '默认') {
+          await np.setProperty('sub-font', _subtitleFont!);
+        }
         if (_subtitleBackground) {
           await np.setProperty('sub-back-color', '#000000C0');
         } else {
