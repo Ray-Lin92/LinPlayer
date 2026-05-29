@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <dlfcn.h>
 #include <android/log.h>
 
@@ -99,22 +100,76 @@ static int load_libass_symbols(void *handle) {
     return 1;
 }
 
+// 由Java层传入的so文件路径
+static char g_libass_path[512] = {0};
+static char g_libmpv_path[512] = {0};
+
+JNIEXPORT void JNICALL
+Java_com_example_linplayer_1mobile_LibassBridge_nativeSetLibraryPaths(JNIEnv *env, jobject thiz, jstring libassPath, jstring libmpvPath) {
+    const char *assPath = env->GetStringUTFChars(libassPath, NULL);
+    const char *mpvPath = env->GetStringUTFChars(libmpvPath, NULL);
+    if (assPath) {
+        strncpy(g_libass_path, assPath, sizeof(g_libass_path) - 1);
+        g_libass_path[sizeof(g_libass_path) - 1] = '\0';
+    }
+    if (mpvPath) {
+        strncpy(g_libmpv_path, mpvPath, sizeof(g_libmpv_path) - 1);
+        g_libmpv_path[sizeof(g_libmpv_path) - 1] = '\0';
+    }
+    if (assPath) env->ReleaseStringUTFChars(libassPath, assPath);
+    if (mpvPath) env->ReleaseStringUTFChars(libmpvPath, mpvPath);
+    LOGI("Library paths set: ass=%s, mpv=%s", g_libass_path, g_libmpv_path);
+}
+
 static void init_libass() {
     if (g_ass.available) return;
 
-    // 1. 尝试加载独立的 libass.so
-    g_ass.handle = dlopen("libass.so", RTLD_NOW | RTLD_GLOBAL);
-    if (g_ass.handle) {
-        LOGI("Loaded libass.so");
-    } else {
-        LOGI("libass.so not found, trying libmpv.so...");
-        // 2. 回退到 libmpv.so（静态链接了 libass）
-        g_ass.handle = dlopen("libmpv.so", RTLD_NOW | RTLD_GLOBAL);
+    // 优先使用Java层传入的完整路径
+    if (g_libass_path[0] != '\0') {
+        g_ass.handle = dlopen(g_libass_path, RTLD_NOW | RTLD_GLOBAL);
         if (g_ass.handle) {
-            LOGI("Loaded libmpv.so, extracting libass symbols");
+            LOGI("Loaded libass.so from: %s", g_libass_path);
         } else {
-            LOGE("Neither libass.so nor libmpv.so found");
-            return;
+            LOGE("Failed to load libass.so from: %s", g_libass_path);
+        }
+    }
+    
+    if (!g_ass.handle && g_libmpv_path[0] != '\0') {
+        g_ass.handle = dlopen(g_libmpv_path, RTLD_NOW | RTLD_GLOBAL);
+        if (g_ass.handle) {
+            LOGI("Loaded libmpv.so from: %s", g_libmpv_path);
+        } else {
+            LOGE("Failed to load libmpv.so from: %s", g_libmpv_path);
+        }
+    }
+
+    // 回退：尝试dlopen(NULL)获取全局符号
+    if (!g_ass.handle) {
+        void* global_handle = dlopen(NULL, RTLD_NOW | RTLD_GLOBAL);
+        if (global_handle) {
+            LOGI("Trying to load libass symbols from global scope...");
+            if (load_libass_symbols(global_handle)) {
+                g_ass.available = 1;
+                g_ass.handle = global_handle;
+                LOGI("libass symbols loaded from global scope");
+                return;
+            }
+        }
+    }
+
+    // 最后的回退：尝试相对路径
+    if (!g_ass.handle) {
+        g_ass.handle = dlopen("libass.so", RTLD_NOW | RTLD_GLOBAL);
+        if (g_ass.handle) {
+            LOGI("Loaded libass.so (fallback)");
+        } else {
+            g_ass.handle = dlopen("libmpv.so", RTLD_NOW | RTLD_GLOBAL);
+            if (g_ass.handle) {
+                LOGI("Loaded libmpv.so (fallback)");
+            } else {
+                LOGE("Neither libass.so nor libmpv.so found");
+                return;
+            }
         }
     }
 
