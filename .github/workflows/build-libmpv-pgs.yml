@@ -129,13 +129,7 @@ jobs:
         with:
           tag_name: libmpv-pgs-v${{ github.run_number }}
           name: libmpv with PGS support - Build ${{ github.run_number }}
-          body: |
-            libmpv Android build with PGS subtitle support
-            
-            Based on: ${{ env.BUILD_REPO }}@${{ env.BUILD_TAG }}
-            Changes: Enabled `pgssub` decoder in default flavor
-            
-            Architectures: arm64-v8a, armeabi-v7a, x86, x86_64
+          body: "libmpv Android build with PGS subtitle support\n\nBased on: ${{ env.BUILD_REPO }}@${{ env.BUILD_TAG }}\nChanges: Enabled `pgssub` decoder in default flavor\n\nArchitectures: arm64-v8a, armeabi-v7a, x86, x86_64"
           files: libmpv-pgs-${{ matrix.abi }}.jar
           draft: false
           prerelease: true

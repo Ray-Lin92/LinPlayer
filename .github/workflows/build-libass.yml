@@ -220,19 +220,7 @@ jobs:
         with:
           tag_name: libass-${{ github.run_number }}
           name: libass Android Build ${{ github.run_number }}
-          body: |
-            Android libass.so build
-            
-            - libass version: ${{ env.LIBASS_VERSION }}
-            - freetype version: ${{ env.FREETYPE_VERSION }}
-            - fribidi version: ${{ env.FRIBIDI_VERSION }}
-            - NDK version: ${{ env.NDK_VERSION }}
-            - Architectures: arm64-v8a, armeabi-v7a
-            
-            Usage:
-            1. Download `libass-all` artifact
-            2. Extract to `android/app/src/main/jniLibs/`
-            3. Build APK as usual
+          body: "Android libass.so build\n\n- libass version: ${{ env.LIBASS_VERSION }}\n- freetype version: ${{ env.FREETYPE_VERSION }}\n- fribidi version: ${{ env.FRIBIDI_VERSION }}\n- NDK version: ${{ env.NDK_VERSION }}\n- Architectures: arm64-v8a, armeabi-v7a\n\nUsage:\n1. Download `libass-all` artifact\n2. Extract to `android/app/src/main/jniLibs/`\n3. Build APK as usual"
           files: combined/jniLibs/**/libass.so
           draft: false
           prerelease: true
