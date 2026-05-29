@@ -3,7 +3,6 @@ name: Extract libmpv from mpv-android
 on:
   workflow_dispatch:
   schedule:
-    # 每周检查一次 mpv-android 更新
     - cron: '0 0 * * 0'
 
 env:
@@ -11,7 +10,7 @@ env:
 
 jobs:
   extract-libmpv:
-    name: Extract libmpv from mpv-android
+    name: Extract libmpv (${{ matrix.abi }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,78 +23,91 @@ jobs:
       - name: Get latest mpv-android release
         id: get_release
         run: |
-          # 获取最新 release 的 APK URL
           RELEASE_INFO=$(curl -s "https://api.github.com/repos/${{ env.MPV_ANDROID_REPO }}/releases/latest")
-          APK_URL=$(echo "$RELEASE_INFO" | grep -o '"browser_download_url": "[^"]*\.apk"' | head -1 | cut -d'"' -f4)
+          
+          # 使用按 ABI 分发的 APK（更可靠，避免 universal APK 的压缩问题）
+          ABI="${{ matrix.abi }}"
+          APK_URL=$(echo "$RELEASE_INFO" | grep -o '"browser_download_url": "[^"]*app-default-'"$ABI"'-release\.apk"' | head -1 | cut -d'"' -f4)
           
           if [ -z "$APK_URL" ]; then
-            echo "❌ No APK found in latest release"
+            echo "❌ No APK found for ABI: $ABI"
             exit 1
           fi
           
-          echo "📥 Found APK: $APK_URL"
+          echo "📥 Found APK for $ABI: $APK_URL"
           echo "apk_url=$APK_URL" >> $GITHUB_OUTPUT
       
-      - name: Download and extract APK
+      - name: Download and verify APK
         run: |
           APK_URL="${{ steps.get_release.outputs.apk_url }}"
+          ABI="${{ matrix.abi }}"
           
-          # 下载 APK
-          echo "Downloading APK..."
-          wget -q "$APK_URL" -O mpv-android.apk
+          echo "Downloading APK for $ABI..."
+          wget -q --show-progress "$APK_URL" -O "mpv-android-$ABI.apk"
           
-          # 创建解压目录
-          mkdir -p apk_extracted
+          # 验证 APK 大小（按 ABI 的 APK 应该约 20-25MB）
+          APK_SIZE=$(stat -c%s "mpv-android-$ABI.apk")
+          echo "APK size: $APK_SIZE bytes"
           
-          # 使用 unzip 解压 APK (APK 本质上是 ZIP)
-          echo "Extracting APK..."
-          unzip -q mpv-android.apk -d apk_extracted/
+          if [ "$APK_SIZE" -lt 10000000 ]; then
+            echo "❌ APK too small ($APK_SIZE bytes), may be corrupted"
+            exit 1
+          fi
           
+          # 解压 APK
+          mkdir -p "apk_extracted_$ABI"
+          unzip -q "mpv-android-$ABI.apk" -d "apk_extracted_$ABI/"
           echo "✅ APK extracted"
       
       - name: Extract libmpv.so
         run: |
           ABI="${{ matrix.abi }}"
-          SOURCE_DIR="apk_extracted/lib/$ABI"
+          SOURCE_DIR="apk_extracted_$ABI/lib/$ABI"
           DEST_DIR="android/app/src/main/jniLibs/$ABI"
           
           mkdir -p "$DEST_DIR"
           
-          # 复制 libmpv.so
           if [ -f "$SOURCE_DIR/libmpv.so" ]; then
             cp "$SOURCE_DIR/libmpv.so" "$DEST_DIR/"
             echo "✅ Extracted libmpv.so for $ABI"
-            ls -lh "$DEST_DIR/libmpv.so"
           else
-            echo "⚠️ libmpv.so not found for $ABI, checking available libraries..."
-            find apk_extracted/lib -name "*.so" | head -20
+            echo "❌ libmpv.so not found for $ABI"
+            find "apk_extracted_$ABI" -name "*.so" | head -20
             exit 1
           fi
-          
-          # 同时复制其他可能需要的库
-          for lib in libass.so libplacebo.so; do
-            if [ -f "$SOURCE_DIR/$lib" ]; then
-              cp "$SOURCE_DIR/$lib" "$DEST_DIR/"
-              echo "✅ Also extracted $lib"
-            fi
-          done
       
-      - name: Verify PGS support
+      - name: Verify library integrity
         run: |
           ABI="${{ matrix.abi }}"
           LIBMPV="android/app/src/main/jniLibs/$ABI/libmpv.so"
           
-          # 检查是否包含 pgssub 解码器
-          if strings "$LIBMPV" | grep -q "pgssub"; then
-            echo "✅ PGS decoder (pgssub) found in libmpv.so"
-          else
-            echo "⚠️ PGS decoder not found - may need to build from source instead"
+          # 检查文件大小（完整的 libmpv.so 应该 > 10MB）
+          FILE_SIZE=$(stat -c%s "$LIBMPV")
+          echo "libmpv.so size: $FILE_SIZE bytes"
+          
+          if [ "$FILE_SIZE" -lt 10000000 ]; then
+            echo "❌ libmpv.so too small ($FILE_SIZE bytes), may be incomplete"
+            exit 1
           fi
           
-          # 检查是否包含 libass
-          if strings "$LIBMPV" | grep -q "libass"; then
-            echo "✅ libass found in libmpv.so"
+          # 验证 ELF 格式
+          if command -v file >/dev/null 2>&1; then
+            file "$LIBMPV"
           fi
+          
+          # 检查 PGS 解码器
+          if strings "$LIBMPV" | grep -q "pgssub"; then
+            echo "✅ PGS decoder found"
+          else
+            echo "⚠️ PGS decoder not found"
+          fi
+          
+          # 检查 libass
+          if strings "$LIBMPV" | grep -q "libass"; then
+            echo "✅ libass found"
+          fi
+          
+          ls -lh "$LIBMPV"
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -133,6 +145,22 @@ jobs:
           echo "=== Final jniLibs contents ==="
           find android/app/src/main/jniLibs -name "*.so" -exec ls -lh {} \;
       
+      - name: Verify before commit
+        run: |
+          echo "=== Verifying all libraries ==="
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            LIB="android/app/src/main/jniLibs/$abi/libmpv.so"
+            if [ -f "$LIB" ]; then
+              SIZE=$(stat -c%s "$LIB")
+              echo "$ABI: $SIZE bytes"
+              if [ "$SIZE" -lt 10000000 ]; then
+                echo "❌ Library too small!"
+                exit 1
+              fi
+            fi
+          done
+          echo "✅ All libraries verified"
+      
       - name: Commit libraries
         run: |
           git config --local user.email "action@github.com"
@@ -142,7 +170,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "chore: update libmpv from mpv-android (includes PGS support)"
+            git commit -m "chore: update libmpv from mpv-android (per-ABI APKs, includes PGS support)"
             git push
             echo "✅ Libraries committed"
           fi
@@ -153,7 +181,15 @@ jobs:
         with:
           tag_name: libmpv-extracted-${{ github.run_number }}
           name: libmpv from mpv-android - Build ${{ github.run_number }}
-          body: "Extracted libmpv.so from mpv-android release\n\nIncludes:\n- PGS subtitle decoder (pgssub)\n- libass for ASS/SSA subtitles\n- All standard mpv decoders\n\nSource: ${{ env.MPV_ANDROID_REPO }}"
+          body: |
+            Extracted libmpv.so from mpv-android release (per-ABI APKs)
+            
+            Includes:
+            - PGS subtitle decoder (pgssub)
+            - libass for ASS/SSA subtitles
+            - All standard mpv decoders
+            
+            Source: ${{ env.MPV_ANDROID_REPO }}
           files: android/app/src/main/jniLibs/**/*.so
           draft: false
           prerelease: true
