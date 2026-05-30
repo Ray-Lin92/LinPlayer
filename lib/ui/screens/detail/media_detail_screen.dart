@@ -6,6 +6,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../core/services/cast_service.dart';
 import '../../screens/download/download_screen.dart';
+import '../../utils/media_helpers.dart';
 import '../../widgets/common/media_widgets.dart';
 
 /// 媒体详情页（剧/电影通用）
@@ -402,18 +403,17 @@ class _SeasonCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.read(apiClientProvider);
-    final imageUrl = season.primaryImageTag != null
-        ? api.image.getPrimaryImageUrl(season.id, tag: season.primaryImageTag, maxWidth: 300)
-        : null;
+    final imageUrls = resolveSeasonImageUrls(api, season, maxWidth: 300);
 
-    if (imageUrl != null) {
+    if (imageUrls.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: MediaImage(
-          imageUrl: imageUrl,
+          imageUrl: imageUrls.first,
+          imageUrls: imageUrls.length > 1 ? imageUrls.sublist(1) : null,
           width: 120,
           height: 120,
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
           borderRadius: BorderRadius.circular(8),
         ),
       );
@@ -538,10 +538,12 @@ class _EpisodeListTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isWatched = episode.userData?.played ?? false;
     final api = ref.read(apiClientProvider);
-    // 剧集缩略图使用Primary类型，如果没有则尝试使用Thumb
-    final imageUrl = episode.primaryImageTag != null
-        ? api.image.getPrimaryImageUrl(episode.id, tag: episode.primaryImageTag, maxWidth: 300)
-        : null;
+    final imageUrls = resolveEpisodeImageUrls(
+      api,
+      episode,
+      maxWidth: 300,
+      preferThumb: true,
+    );
     
     return ListTile(
       onTap: onTap,
@@ -553,12 +555,13 @@ class _EpisodeListTile extends ConsumerWidget {
           borderRadius: BorderRadius.circular(6),
         ),
         clipBehavior: Clip.antiAlias,
-        child: imageUrl != null
+        child: imageUrls.isNotEmpty
             ? MediaImage(
-                imageUrl: imageUrl,
+                imageUrl: imageUrls.first,
+                imageUrls: imageUrls.length > 1 ? imageUrls.sublist(1) : null,
                 width: 100,
                 height: 60,
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
               )
             : const Center(child: Icon(Icons.play_arrow)),
       ),

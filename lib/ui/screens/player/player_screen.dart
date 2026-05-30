@@ -3189,7 +3189,7 @@ class _EpisodeSelectorContentState extends ConsumerState<_EpisodeSelectorContent
               return GestureDetector(
                 onTap: () {
                   Navigator.pop(context);
-                  context.push('/player/${episode.id}');
+                  context.push('/episode/${episode.id}');
                 },
                 child: Container(
                   decoration: BoxDecoration(
@@ -3272,7 +3272,7 @@ class _EpisodeSelectorContentState extends ConsumerState<_EpisodeSelectorContent
               selected: isCurrent,
               onTap: () {
                 Navigator.pop(context);
-                context.push('/player/${episode.id}');
+                context.push('/episode/${episode.id}');
               },
             );
           },

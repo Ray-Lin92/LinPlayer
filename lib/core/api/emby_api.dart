@@ -272,13 +272,20 @@ class EmbyHomeApi implements HomeApi {
   final EmbyApiClient _client;
   EmbyHomeApi(this._client);
 
+  static const String _mediaFields =
+      'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,'
+      'RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,'
+      'ParentIndexNumber,ImageTags,ParentThumbItemId,ParentThumbImageTag,'
+      'ParentPrimaryImageItemId,ParentPrimaryImageTag,SeriesThumbImageTag,'
+      'SeriesPrimaryImageTag,BackdropImageTags';
+
   @override
   Future<List<MediaItem>> getResumeItems() async {
     final uid = _requireUserId(_client);
     final resp = await _client.get('/Users/$uid/Items/Resume', queryParameters: {
       'Limit': 12,
       'MediaTypes': 'Video',
-      'Fields': 'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,ParentIndexNumber',
+      'Fields': _mediaFields,
     });
     return _parseItemList(resp.data);
   }
@@ -289,7 +296,7 @@ class EmbyHomeApi implements HomeApi {
     final resp = await _client.get('/Shows/NextUp', queryParameters: {
       'UserId': uid,
       'Limit': 12,
-      'Fields': 'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,ParentIndexNumber',
+      'Fields': _mediaFields,
     });
     return _parseItemList(resp.data);
   }
@@ -308,7 +315,7 @@ class EmbyHomeApi implements HomeApi {
     final resp = await _client.get('/Users/$uid/Items/Latest', queryParameters: {
       'ParentId': libraryId,
       'Limit': limit,
-      'Fields': 'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,ParentIndexNumber',
+      'Fields': _mediaFields,
     });
     final items = resp.data as List<dynamic>;
     return items.map((e) => _parseMediaItem(e as Map<String, dynamic>)).toList();
@@ -322,7 +329,7 @@ class EmbyHomeApi implements HomeApi {
       'SortBy': 'Random',
       'IncludeItemTypes': 'Movie,Series',
       'Recursive': true,
-      'Fields': 'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags,BackdropImageTags',
+      'Fields': _mediaFields,
     });
     return _parseItemList(resp.data);
   }
@@ -333,6 +340,13 @@ class EmbyHomeApi implements HomeApi {
 class EmbyLibraryApi implements LibraryApi {
   final EmbyApiClient _client;
   EmbyLibraryApi(this._client);
+
+  static const String _libraryItemFields =
+      'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,'
+      'RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,'
+      'ParentIndexNumber,ImageTags,ParentThumbItemId,ParentThumbImageTag,'
+      'ParentPrimaryImageItemId,ParentPrimaryImageTag,SeriesThumbImageTag,'
+      'SeriesPrimaryImageTag';
 
   @override
   Future<List<MediaItem>> getLibraryItems({
@@ -350,7 +364,7 @@ class EmbyLibraryApi implements LibraryApi {
       'Limit': limit,
       'Recursive': true,
       'IncludeItemTypes': 'Movie,Series',
-      'Fields': 'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,ParentIndexNumber',
+      'Fields': _libraryItemFields,
     };
     if (sortBy != null) {
       params['SortBy'] = sortBy;
@@ -382,6 +396,13 @@ class EmbyMediaApi implements MediaApi {
   final EmbyApiClient _client;
   EmbyMediaApi(this._client);
 
+  static const String _detailFields =
+      'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,'
+      'RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,'
+      'ParentIndexNumber,People,Studios,ImageTags,ParentThumbItemId,'
+      'ParentThumbImageTag,ParentPrimaryImageItemId,ParentPrimaryImageTag,'
+      'SeriesThumbImageTag,SeriesPrimaryImageTag,BackdropImageTags';
+
   @override
   Future<MediaItem> getItemDetails(String itemId) async {
     if (itemId.isEmpty) {
@@ -389,7 +410,7 @@ class EmbyMediaApi implements MediaApi {
     }
     final uid = _client._userId;
     final params = <String, dynamic>{
-      'Fields': 'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,ParentIndexNumber,People,Studios',
+      'Fields': _detailFields,
     };
     if (uid != null) params['UserId'] = uid;
     try {
@@ -414,7 +435,7 @@ class EmbyMediaApi implements MediaApi {
     final resp = await _client.get('/Items/$itemId/Similar', queryParameters: {
       'UserId': uid,
       'Limit': 12,
-      'Fields': 'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags',
+      'Fields': _detailFields,
     });
     final items = (resp.data as Map<String, dynamic>)['Items'] as List<dynamic>;
     return items.map((e) => _parseMediaItem(e as Map<String, dynamic>)).toList();
@@ -425,7 +446,7 @@ class EmbyMediaApi implements MediaApi {
     final uid = _requireUserId(_client);
     final resp = await _client.get('/Shows/$seriesId/Seasons', queryParameters: {
       'UserId': uid,
-      'Fields': 'Overview,ImageTags',
+      'Fields': 'Overview,ImageTags,SeriesPrimaryImageTag,SeriesThumbImageTag',
     });
     final items = (resp.data as Map<String, dynamic>)['Items'] as List<dynamic>;
     return items.map((e) => _parseSeason(e as Map<String, dynamic>, seriesId)).toList();
@@ -436,7 +457,7 @@ class EmbyMediaApi implements MediaApi {
     final uid = _requireUserId(_client);
     final params = <String, dynamic>{
       'UserId': uid,
-      'Fields': 'Overview,RunTimeTicks,ImageTags',
+      'Fields': 'Overview,RunTimeTicks,ImageTags,ParentThumbItemId,ParentThumbImageTag,ParentPrimaryImageItemId,ParentPrimaryImageTag,SeriesThumbImageTag,SeriesPrimaryImageTag',
     };
     if (seasonId != null) params['SeasonId'] = seasonId;
     final resp = await _client.get('/Shows/$seriesId/Episodes', queryParameters: params);
@@ -641,6 +662,11 @@ class EmbyImageApi implements ImageApi {
   }
 
   @override
+  String getThumbImageUrl(String itemId, {String? tag, int? maxWidth}) {
+    return getImageUrl(itemId: itemId, imageTag: tag, imageType: 'Thumb', maxWidth: maxWidth);
+  }
+
+  @override
   String getBackdropImageUrl(String itemId, {String? tag, int? maxWidth}) {
     return getImageUrl(
       itemId: itemId,
@@ -697,6 +723,7 @@ MediaItem _parseMediaItem(Map<String, dynamic> d) {
     type: d['Type'] ?? '',
     overview: d['Overview']?.toString(),
     primaryImageTag: _extractImageTag(d, 'Primary'),
+    thumbImageTag: _extractImageTag(d, 'Thumb'),
     backdropImageTag: _extractImageTag(d, 'Backdrop'),
     communityRating: (d['CommunityRating'] as num?)?.toDouble(),
     officialRating: d['OfficialRating']?.toString(),
@@ -718,6 +745,12 @@ MediaItem _parseMediaItem(Map<String, dynamic> d) {
     parentIndexNumber: d['ParentIndexNumber'] as int?,
     seriesId: d['SeriesId']?.toString(),
     seasonId: d['SeasonId']?.toString(),
+    parentThumbItemId: d['ParentThumbItemId']?.toString(),
+    parentThumbImageTag: d['ParentThumbImageTag']?.toString(),
+    parentPrimaryImageItemId: d['ParentPrimaryImageItemId']?.toString(),
+    parentPrimaryImageTag: d['ParentPrimaryImageTag']?.toString(),
+    seriesThumbImageTag: d['SeriesThumbImageTag']?.toString(),
+    seriesPrimaryImageTag: d['SeriesPrimaryImageTag']?.toString(),
     mediaType: d['MediaType']?.toString(),
     parentId: d['ParentId']?.toString(),
   );
@@ -760,7 +793,10 @@ Season _parseSeason(Map<String, dynamic> d, String seriesId) {
     name: d['Name'] ?? '',
     indexNumber: d['IndexNumber'] as int?,
     primaryImageTag: _extractImageTag(d, 'Primary'),
+    thumbImageTag: _extractImageTag(d, 'Thumb'),
     seriesId: d['SeriesId']?.toString() ?? seriesId,
+    seriesPrimaryImageTag: d['SeriesPrimaryImageTag']?.toString(),
+    seriesThumbImageTag: d['SeriesThumbImageTag']?.toString(),
   );
 }
 
@@ -771,8 +807,15 @@ Episode _parseEpisode(Map<String, dynamic> d) {
     name: d['Name'] ?? '',
     indexNumber: d['IndexNumber'] as int?,
     primaryImageTag: _extractImageTag(d, 'Primary'),
+    thumbImageTag: _extractImageTag(d, 'Thumb'),
     seriesId: d['SeriesId']?.toString() ?? '',
     seasonId: d['SeasonId']?.toString() ?? '',
+    parentThumbItemId: d['ParentThumbItemId']?.toString(),
+    parentThumbImageTag: d['ParentThumbImageTag']?.toString(),
+    parentPrimaryImageItemId: d['ParentPrimaryImageItemId']?.toString(),
+    parentPrimaryImageTag: d['ParentPrimaryImageTag']?.toString(),
+    seriesThumbImageTag: d['SeriesThumbImageTag']?.toString(),
+    seriesPrimaryImageTag: d['SeriesPrimaryImageTag']?.toString(),
     runTimeTicks: _parseTicks(d['RunTimeTicks']),
     userData: ud != null
         ? UserData(

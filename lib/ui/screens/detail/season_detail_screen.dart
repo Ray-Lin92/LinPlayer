@@ -6,6 +6,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../core/services/cast_service.dart';
 import '../../screens/download/download_screen.dart';
+import '../../utils/media_helpers.dart';
 import '../../widgets/common/media_widgets.dart';
 
 /// 季详情页
@@ -77,21 +78,32 @@ class _SeasonDetailScreenState extends ConsumerState<SeasonDetailScreen> {
             itemCount: episodes.length,
             itemBuilder: (context, index) {
               final episode = episodes[index];
-              final imageUrl = episode.primaryImageTag != null
-                  ? api.image.getPrimaryImageUrl(episode.id, tag: episode.primaryImageTag, maxWidth: 200)
-                  : null;
+              final imageUrls = resolveEpisodeImageUrls(
+                api,
+                episode,
+                maxWidth: 200,
+                preferThumb: true,
+              );
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  onTap: () => context.push('/player/${episode.id}'),
+                  onTap: () => context.push('/episode/${episode.id}'),
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       width: 100,
                       height: 60,
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: imageUrl != null
-                          ? MediaImage(imageUrl: imageUrl, width: 100, height: 60, fit: BoxFit.cover)
+                      child: imageUrls.isNotEmpty
+                          ? MediaImage(
+                              imageUrl: imageUrls.first,
+                              imageUrls: imageUrls.length > 1
+                                  ? imageUrls.sublist(1)
+                                  : null,
+                              width: 100,
+                              height: 60,
+                              fit: BoxFit.contain,
+                            )
                           : const Center(child: Icon(Icons.play_arrow)),
                     ),
                   ),
@@ -129,6 +141,18 @@ class _EpisodeDetailScreenState extends ConsumerState<EpisodeDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _resetPlaybackSelections();
+  }
+
+  @override
+  void didUpdateWidget(covariant EpisodeDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.episodeId != widget.episodeId) {
+      _resetPlaybackSelections();
+    }
+  }
+
+  void _resetPlaybackSelections() {
     ref.read(selectedMediaSourceProvider.notifier).state = null;
     ref.read(audioTrackProvider.notifier).state = null;
     ref.read(subtitleTrackProvider.notifier).state = null;
@@ -442,8 +466,12 @@ class _PlaybackOptions extends ConsumerWidget {
   }
 
   MediaStream? _resolveSelectedStream(List<MediaStream> streams, int? selectedIndex) {
+    if (streams.isEmpty) {
+      return null;
+    }
     if (selectedIndex == null) {
-      return streams.firstOrNull;
+      return streams.where((stream) => stream.isDefault == true).firstOrNull ??
+          streams.firstOrNull;
     }
     return streams.where((stream) => stream.index == selectedIndex).firstOrNull;
   }
@@ -484,6 +512,20 @@ class _PlaybackOptions extends ConsumerWidget {
       availableSecondarySubs,
       selectedSecondarySubtitleIndex,
     );
+    if (selectedAudioIndex == null && selectedAudio?.index != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ref.read(audioTrackProvider) == null) {
+          ref.read(audioTrackProvider.notifier).state = selectedAudio!.index;
+        }
+      });
+    }
+    if (selectedSubtitleIndex == null && selectedSubtitle?.index != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ref.read(subtitleTrackProvider) == null) {
+          ref.read(subtitleTrackProvider.notifier).state = selectedSubtitle!.index;
+        }
+      });
+    }
 
     final currentLine = server?.lines.isNotEmpty == true
         ? server!.lines[selectedLineIndex.clamp(0, server.lines.length - 1)]
@@ -567,6 +609,11 @@ class _PlaybackOptions extends ConsumerWidget {
                       ref.read(serverListProvider.notifier).setActiveLine(currentServer.id, idx);
                       final updatedServer = ref.read(serverListProvider).firstWhere((s) => s.id == currentServer.id);
                       ref.read(currentServerProvider.notifier).state = updatedServer;
+                      ref.read(selectedMediaSourceProvider.notifier).state = null;
+                      ref.read(audioTrackProvider.notifier).state = null;
+                      ref.read(subtitleTrackProvider.notifier).state = null;
+                      ref.read(secondarySubtitleTrackProvider.notifier).state = null;
+                      ref.invalidate(playbackInfoProvider(episodeId));
                       Navigator.pop(ctx);
                     },
                   );

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../utils/media_helpers.dart';
 import '../../widgets/common/media_widgets.dart';
 
 /// 首页
@@ -349,7 +350,7 @@ class _RandomRecommendationCarouselState extends ConsumerState<RandomRecommendat
                   final item = items[index];
                   return _CarouselItem(
                     item: item,
-                    onTap: () => context.push('/detail/${item.id}'),
+                    onTap: () => context.push(mediaRouteForItem(item)),
                   );
                 },
               ),
@@ -605,10 +606,12 @@ class _ContinueWatchingCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.read(apiClientProvider);
-    // 使用集封面（横向缩略图）
-    final imageUrl = item.primaryImageTag != null
-        ? api.image.getPrimaryImageUrl(item.id, tag: item.primaryImageTag, maxWidth: 400)
-        : null;
+    final imageUrls = resolveMediaItemImageUrls(
+      api,
+      item,
+      maxWidth: 400,
+      preferThumb: true,
+    );
 
     final isEpisode = item.type == 'Episode';
     final seasonEpisodeText = isEpisode && item.parentIndexNumber != null && item.indexNumber != null
@@ -617,11 +620,7 @@ class _ContinueWatchingCard extends ConsumerWidget {
 
     return GestureDetector(
       onTap: () {
-        if (isEpisode && item.seriesId != null) {
-          context.push('/detail/${item.seriesId}');
-        } else {
-          context.push('/detail/${item.id}');
-        }
+        context.push(mediaRouteForItem(item));
       },
       child: SizedBox(
         width: 160,
@@ -637,7 +636,8 @@ class _ContinueWatchingCard extends ConsumerWidget {
                   fit: StackFit.expand,
                   children: [
                     MediaImage(
-                      imageUrl: imageUrl,
+                      imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
+                      imageUrls: imageUrls.length > 1 ? imageUrls.sublist(1) : null,
                       width: 160,
                       height: 90,
                       fit: BoxFit.contain,
@@ -787,9 +787,7 @@ class _LibraryCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.read(apiClientProvider);
-    final imageUrl = library.primaryImageTag != null
-        ? api.image.getPrimaryImageUrl(library.id, tag: library.primaryImageTag, maxWidth: 400)
-        : null;
+    final imageUrls = resolveLibraryImageUrls(api, library, maxWidth: 400);
 
     return GestureDetector(
       onTap: () => context.push('/library/${library.id}'),
@@ -803,9 +801,10 @@ class _LibraryCard extends ConsumerWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             clipBehavior: Clip.antiAlias,
-            child: imageUrl != null
+            child: imageUrls.isNotEmpty
                 ? MediaImage(
-                    imageUrl: imageUrl,
+                    imageUrl: imageUrls.first,
+                    imageUrls: imageUrls.length > 1 ? imageUrls.sublist(1) : null,
                     width: 135,
                     height: 100,
                     fit: BoxFit.contain,
@@ -921,7 +920,7 @@ class _LibraryLatestSection extends ConsumerWidget {
                     item: item,
                     width: 120,
                     height: 160,
-                    onTap: () => context.push('/detail/${item.id}'),
+                    onTap: () => context.push(mediaRouteForItem(item)),
                   ),
                 );
               }).toList(),

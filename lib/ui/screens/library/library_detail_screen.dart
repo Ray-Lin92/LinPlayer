@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../utils/media_helpers.dart';
 import '../../widgets/common/media_widgets.dart';
 
 /// 媒体库详情页
@@ -110,7 +111,7 @@ class _LibraryDetailScreenState extends ConsumerState<LibraryDetailScreen> {
                       item: item,
                       width: double.infinity,
                       height: double.infinity,
-                      onTap: () => context.push('/detail/${item.id}'),
+                      onTap: () => context.push(mediaRouteForItem(item)),
                     );
                   },
                 );
