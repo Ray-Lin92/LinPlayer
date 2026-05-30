@@ -287,13 +287,13 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
                   final file = result.files.first;
                   if (file.path != null) {
                     final content = await File(file.path!).readAsString();
-                    if (context.mounted) {
+                    if (mounted) {
                       _importFromJson(context, ref, content);
                     }
                   }
                 }
               } catch (e) {
-                if (context.mounted) {
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('读取文件失败: $e')),
                   );
@@ -334,7 +334,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
         final name = i < names.length ? names[i] : '导入服务器 ${i + 1}';
         
         final server = ServerConfig(
-          id: DateTime.now().millisecondsSinceEpoch.toString() + '_$i',
+          id: '${DateTime.now().millisecondsSinceEpoch}_$i',
           name: name,
           baseUrl: url,
           lines: [ServerLine(
@@ -354,7 +354,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('导入失败: ${e.toString()}')),
+        SnackBar(content: Text('导入失败: $e')),
       );
     }
   }
@@ -363,7 +363,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
     final text = _batchController.text;
     if (text.isEmpty) return;
 
-    final lines = <ServerLine>[];
+      final lines = <ServerLine>[];
 
     // 修改正则，支持有或没有协议前缀的URL
     final lineRegex = RegExp(r'(.+?线路)\s*[:：]\s*(?:https?://)?([^\s]+)', caseSensitive: false);
@@ -371,7 +371,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
     // 提取文本中声明的端口号（如"端口: 8443"）
     final portRegex = RegExp(r'端口\s*[:：]\s*(\d+)');
     final portMatch = portRegex.firstMatch(text);
-    final customPort = portMatch != null ? portMatch.group(1) : null;
+    final customPort = portMatch?.group(1);
 
     for (final match in lineRegex.allMatches(text)) {
       final name = match.group(1)?.trim() ?? '线路';
@@ -382,7 +382,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
 
       // 如果文本中声明了端口号，且URL中没有显式端口，则替换默认端口
       if (customPort != null) {
-        final hasExplicitPort = RegExp(r':\d+(?:/|$)').hasMatch(urlPart);
+      final hasExplicitPort = RegExp(r':\d+(?:/|$)').hasMatch(urlPart);
         if (!hasExplicitPort) {
           url = url.replaceFirst(
             url.startsWith('https://') ? ':443' : ':80',
@@ -392,7 +392,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
       }
 
       lines.add(ServerLine(
-        id: DateTime.now().millisecondsSinceEpoch.toString() + lines.length.toString(),
+        id: '${DateTime.now().millisecondsSinceEpoch}${lines.length}',
         name: name,
         url: url,
       ));
@@ -430,7 +430,8 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
       ref.read(currentServerProvider.notifier).state = server;
       ref.read(authStateProvider.notifier).state = AuthState.authenticated;
       
-      if (mounted) context.go('/home');
+      if (!mounted) return;
+      context.go('/home');
     } catch (e) {
       setState(() { _errorMessage = _formatError(e); });
     } finally {
@@ -460,7 +461,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
         final cleanPath = path.startsWith('/') ? path : '/$path';
         // 避免重复拼接：去掉 URL 尾部斜杠后检查是否已包含该路径
         final urlWithoutSlash = fullUrl.endsWith('/') ? fullUrl.substring(0, fullUrl.length - 1) : fullUrl;
-        if (!urlWithoutSlash.endsWith(cleanPath)) {
+        if (urlWithoutSlash.endsWith(cleanPath) != true) {
           fullUrl = '$urlWithoutSlash$cleanPath';
         }
       }
@@ -490,7 +491,8 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
         ref.read(currentServerProvider.notifier).state = server;
         ref.read(authStateProvider.notifier).state = AuthState.authenticated;
         
-        if (mounted) context.go('/home');
+        if (!mounted) return;
+        context.go('/home');
       } else {
         final server = ServerConfig(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -505,7 +507,8 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
         
         ref.read(serverListProvider.notifier).addServer(server);
         
-        if (mounted) context.pop();
+        if (!mounted) return;
+        context.pop();
       }
     } catch (e) {
       setState(() {

@@ -1924,6 +1924,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
   Future<void> _takeScreenshot() async {
     try {
       final data = await _playerService.screenshot();
+      if (!mounted) return;
       if (data != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('截图已保存')),
@@ -1994,7 +1995,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     _showRightPanel(
       title: '字幕设置',
       children: [
-        _SubtitleSettingsContent(),
+        const _SubtitleSettingsContent(),
       ],
     );
   }
@@ -2003,7 +2004,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     _showRightPanel(
       title: '音频设置',
       children: [
-        _AudioSettingsContent(),
+        const _AudioSettingsContent(),
       ],
     );
   }

@@ -251,7 +251,7 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
           ListTile(
             title: const Text('图片缓存'),
             subtitle: cacheSizeAsync.when(
-              data: (info) => Text('已用 ${info.imageFormatted}，${imageExpiryDays}天后过期'),
+              data: (info) => Text('已用 ${info.imageFormatted}，$imageExpiryDays天后过期'),
               loading: () => const Text('计算中...'),
               error: (_, __) => const Text('获取失败'),
             ),
@@ -269,7 +269,9 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
           ListTile(
             title: const Text('视频缓存'),
             subtitle: cacheSizeAsync.when(
-              data: (info) => Text('已用 ${info.videoFormatted}，上限 ${videoMaxSizeMB >= 1024 ? '${(videoMaxSizeMB / 1024).toStringAsFixed(0)} GB' : '$videoMaxSizeMB MB'}'),
+              data: (info) => Text(
+                '已用 ${info.videoFormatted}，上限 ${videoMaxSizeMB >= 1024 ? '${(videoMaxSizeMB / 1024).toStringAsFixed(0)} GB' : '$videoMaxSizeMB MB'}',
+              ),
               loading: () => const Text('计算中...'),
               error: (_, __) => const Text('获取失败'),
             ),
@@ -322,14 +324,13 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
         ],
       ),
     );
-    if (confirmed == true && mounted) {
+    if (confirmed == true) {
       await CacheService.clearAllImageCache();
+      if (!mounted) return;
       ref.invalidate(cacheSizeProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('图片缓存已清除')),
-        );
-      }
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        const SnackBar(content: Text('图片缓存已清除')),
+      );
     }
   }
 
@@ -345,14 +346,13 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
         ],
       ),
     );
-    if (confirmed == true && mounted) {
+    if (confirmed == true) {
       await CacheService.clearVideoCache();
+      if (!mounted) return;
       ref.invalidate(cacheSizeProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('视频缓存已清除')),
-        );
-      }
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        const SnackBar(content: Text('视频缓存已清除')),
+      );
     }
   }
 
@@ -368,14 +368,13 @@ class _GeneralSettingsScreenState extends ConsumerState<GeneralSettingsScreen> {
         ],
       ),
     );
-    if (confirmed == true && mounted) {
+    if (confirmed == true) {
       await CacheService.clearAllCache();
+      if (!mounted) return;
       ref.invalidate(cacheSizeProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('所有缓存已清除')),
-        );
-      }
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        const SnackBar(content: Text('所有缓存已清除')),
+      );
     }
   }
 
@@ -1365,12 +1364,12 @@ class _CustomSourceManagerSheetState extends ConsumerState<_CustomSourceManagerS
                 ),
                 const SizedBox(height: 8),
                 if (service.dandanplay != null)
-                  Card(
+                  const Card(
                     child: ListTile(
-                      leading: const Icon(Icons.cloud, color: Colors.blue),
-                      title: const Text('弹弹Play'),
-                      subtitle: const Text('默认源，无需配置'),
-                      trailing: const Icon(Icons.check_circle, color: Colors.green),
+                      leading: Icon(Icons.cloud, color: Colors.blue),
+                      title: Text('弹弹Play'),
+                      subtitle: Text('默认源，无需配置'),
+                      trailing: Icon(Icons.check_circle, color: Colors.green),
                     ),
                   ),
                 Expanded(

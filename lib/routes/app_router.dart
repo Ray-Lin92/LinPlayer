@@ -233,8 +233,8 @@ class _FloatingTabBar extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 label,
-                style: TextStyle(
-                  color: const Color(0xFF5B8DEF),
+                style: const TextStyle(
+                  color: Color(0xFF5B8DEF),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
