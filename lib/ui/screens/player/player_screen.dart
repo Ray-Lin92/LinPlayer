@@ -213,7 +213,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       final isExoAss = isAss && !isGraphical && _playerService.coreType == PlayerCoreType.exoPlayer;
 
       if (isExoAss) {
-        logger.i('Player', 'EXO内核: 内封ASS字幕改走下载后转SRT兜底');
+        logger.i('Player', 'EXO内核: 内封ASS字幕优先走libass，必要时回退SRT兜底');
         try {
           await _playerService.deselectSubtitleTrack();
           final api = ref.read(apiClientProvider);
@@ -231,7 +231,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
           logger.i('Player', 'EXO内封ASS字幕准备完成 - ${await subFile.length()} bytes');
           if (subFile.existsSync() && await subFile.length() > 0) {
             await _playerService.loadLibassSubtitle(subFile.path);
-            logger.i('Player', 'EXO内封ASS字幕已通过SRT兜底方式加载');
+            logger.i('Player', 'EXO内封ASS字幕已加载，优先保留ASS特效渲染链路');
           }
         } catch (e, stackTrace) {
           logger.eWithStack('Player', 'EXO内封ASS转SRT失败，回退原生选择', e, stackTrace);
@@ -868,7 +868,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
             if (subFile.existsSync() && await subFile.length() > 0) {
               await _playerService.loadLibassSubtitle(subFile.path);
-              logger.i('Player', 'EXO内封ASS切换已通过SRT兜底方式加载');
+            logger.i('Player', 'EXO内封ASS切换已加载，优先保留ASS特效渲染链路');
             }
           } catch (e, stackTrace) {
             logger.eWithStack('Player', 'EXO内封ASS切换转SRT失败，回退原生轨道选择', e, stackTrace);
@@ -1249,7 +1249,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             valueListenable: adapter.libassOverlayNotifier,
             builder: (context, showLibass, _) {
               if (!showLibass) return const SizedBox.shrink();
-              return Positioned.fill(child: _LibassOverlay(playerService: _playerService));
+              return Positioned.fill(
+                child: _LibassOverlay(
+                  playerService: _playerService,
+                  referenceWidth: adapter.libassRenderWidth,
+                  referenceHeight: adapter.libassRenderHeight,
+                ),
+              );
             },
           ),
         );
@@ -3121,8 +3127,14 @@ class _EpisodeSelectorContentState extends ConsumerState<_EpisodeSelectorContent
 /// libass 字幕位图叠加层
 class _LibassOverlay extends StatefulWidget {
   final VideoPlayerService playerService;
+  final int referenceWidth;
+  final int referenceHeight;
 
-  const _LibassOverlay({required this.playerService});
+  const _LibassOverlay({
+    required this.playerService,
+    required this.referenceWidth,
+    required this.referenceHeight,
+  });
 
   @override
   State<_LibassOverlay> createState() => _LibassOverlayState();
@@ -3193,7 +3205,12 @@ class _LibassOverlayState extends State<_LibassOverlay> {
   Widget build(BuildContext context) {
     if (_images == null || _images!.isEmpty) return const SizedBox.shrink();
     return CustomPaint(
-      painter: _LibassPainter(_images!, _rects!),
+      painter: _LibassPainter(
+        _images!,
+        _rects!,
+        widget.referenceWidth,
+        widget.referenceHeight,
+      ),
       size: Size.infinite,
     );
   }
@@ -3202,15 +3219,22 @@ class _LibassOverlayState extends State<_LibassOverlay> {
 class _LibassPainter extends CustomPainter {
   final List<ui.Image> images;
   final List<LibassBlendRect> rects;
+  final int referenceWidth;
+  final int referenceHeight;
 
-  _LibassPainter(this.images, this.rects);
+  _LibassPainter(
+    this.images,
+    this.rects,
+    this.referenceWidth,
+    this.referenceHeight,
+  );
 
   @override
   void paint(Canvas canvas, Size size) {
-    const referenceWidth = 1920.0;
-    const referenceHeight = 1080.0;
-    final scaleX = size.width / referenceWidth;
-    final scaleY = size.height / referenceHeight;
+    final width = referenceWidth > 0 ? referenceWidth.toDouble() : 1920.0;
+    final height = referenceHeight > 0 ? referenceHeight.toDouble() : 1080.0;
+    final scaleX = size.width / width;
+    final scaleY = size.height / height;
 
     for (int i = 0; i < images.length && i < rects.length; i++) {
       final paint = Paint()..filterQuality = FilterQuality.medium;

@@ -141,6 +141,11 @@ class ExoPlayerPlugin(
                 val dur = getPlayer(playerId)?.exoPlayer?.duration?.toInt() ?: 0
                 result.success(if (dur > 0) dur else 0)
             }
+            "getVideoSize" -> {
+                val playerId = call.argument<String>("playerId") ?: ""
+                val size = getPlayer(playerId)?.getVideoSize()
+                result.success(size ?: mapOf("width" to 0, "height" to 0))
+            }
             "getTracks" -> {
                 val playerId = call.argument<String>("playerId") ?: ""
                 val tracks = getPlayer(playerId)?.getTracksInfo()
@@ -370,6 +375,14 @@ class ExoPlayerPlugin(
 
         fun getTracksInfo(): List<Map<String, Any>> {
             return currentTracks
+        }
+
+        fun getVideoSize(): Map<String, Int> {
+            val size = exoPlayer.videoSize
+            return mapOf(
+                "width" to size.width,
+                "height" to size.height
+            )
         }
 
         fun selectTrack(groupIndex: Int, trackIndex: Int, trackType: Int) {
@@ -698,6 +711,7 @@ class ExoPlayerPlugin(
                 Player.STATE_READY -> {
                     emitEvent("buffering", false)
                     emitEvent("duration", exoPlayer.duration.toInt())
+                    emitCurrentVideoSize()
                 }
                 Player.STATE_ENDED -> emitEvent("completed", true)
             }
@@ -712,6 +726,17 @@ class ExoPlayerPlugin(
                 surfaceTextureEntry.surfaceTexture().setDefaultBufferSize(
                     videoSize.width, videoSize.height
                 )
+                emitCurrentVideoSize()
+            }
+        }
+
+        private fun emitCurrentVideoSize() {
+            val size = exoPlayer.videoSize
+            if (size.width > 0 && size.height > 0) {
+                emitEvent("videoSize", mapOf(
+                    "width" to size.width,
+                    "height" to size.height
+                ))
             }
         }
 
