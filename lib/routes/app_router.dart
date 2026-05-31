@@ -150,18 +150,61 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 });
 
 /// 底部Tab外壳（悬浮样式）
-class MainShell extends StatelessWidget {
+class MainShell extends StatefulWidget {
   final StatefulNavigationShell navigationShell;
-  
+
   const MainShell({super.key, required this.navigationShell});
-  
+
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  double _tabOpacity = 1.0;
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      setState(() {
+        if (delta > 0) {
+          // 向下滑动，渐隐
+          _tabOpacity = (_tabOpacity - delta / 150).clamp(0.0, 1.0);
+        } else if (delta < 0) {
+          // 向上滑动，渐显
+          _tabOpacity = (_tabOpacity - delta / 150).clamp(0.0, 1.0);
+        }
+      });
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: const SizedBox.shrink(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: _FloatingTabBar(navigationShell: navigationShell),
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final tabHeight = 64.0 + bottomPadding;
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScrollNotification,
+      child: Scaffold(
+        body: MediaQuery(
+          // 为底部Tab留出安全区域，避免遮挡页面内容
+          data: MediaQuery.of(context).copyWith(
+            padding: MediaQuery.of(context).padding.copyWith(
+              bottom: MediaQuery.of(context).padding.bottom + tabHeight,
+            ),
+          ),
+          child: widget.navigationShell,
+        ),
+        bottomNavigationBar: const SizedBox.shrink(),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: AnimatedOpacity(
+          opacity: _tabOpacity,
+          duration: const Duration(milliseconds: 200),
+          child: _FloatingTabBar(
+            navigationShell: widget.navigationShell,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -169,14 +212,16 @@ class MainShell extends StatelessWidget {
 /// 悬浮Tab栏
 class _FloatingTabBar extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
-  
-  const _FloatingTabBar({required this.navigationShell});
-  
+
+  const _FloatingTabBar({
+    required this.navigationShell,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(28),
@@ -210,10 +255,10 @@ class _FloatingTabBar extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = navigationShell.currentIndex == index;
-    
+
     return GestureDetector(
       onTap: () => navigationShell.goBranch(index),
       child: AnimatedContainer(

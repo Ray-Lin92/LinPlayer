@@ -56,17 +56,7 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: '导出/导入服务器配置、WebDAV同步',
             onTap: () => _showBackupRestore(context),
           ),
-          _SettingsCard(
-            icon: Icons.sync,
-            title: '线路同步',
-            subtitle: '配置扩展线路同步服务',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ExtDomainSettingsScreen()),
-              );
-            },
-          ),
+          // 线路同步已移至各服务器的线路管理页面
         ],
       ),
     );
@@ -1884,7 +1874,9 @@ class _ExtDomainSettingsScreenState extends ConsumerState<ExtDomainSettingsScree
   @override
   void initState() {
     super.initState();
-    final config = ref.read(extDomainConfigProvider);
+    final configs = ref.read(extDomainConfigProvider);
+    final currentServer = ref.read(currentServerProvider);
+    final config = currentServer != null ? configs[currentServer.id] : null;
     if (config != null) {
       _urlController.text = config.extDomainUrl;
     }
@@ -1924,12 +1916,14 @@ class _ExtDomainSettingsScreenState extends ConsumerState<ExtDomainSettingsScree
 
   Future<void> _saveConfig() async {
     final url = _urlController.text.trim();
+    final currentServer = ref.read(currentServerProvider);
+    final serverId = currentServer?.id ?? '';
     if (url.isEmpty) {
-      ref.read(extDomainConfigProvider.notifier).clearConfig();
+      ref.read(extDomainConfigProvider.notifier).clearConfig(serverId);
     } else {
-      ref.read(extDomainConfigProvider.notifier).setConfig(url);
+      ref.read(extDomainConfigProvider.notifier).setConfig(serverId, url);
     }
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('已保存')),
@@ -1938,7 +1932,10 @@ class _ExtDomainSettingsScreenState extends ConsumerState<ExtDomainSettingsScree
   }
 
   Future<void> _syncLines() async {
-    final config = ref.read(extDomainConfigProvider);
+    final currentServer = ref.read(currentServerProvider);
+    final serverId = currentServer?.id ?? '';
+    final configs = ref.read(extDomainConfigProvider);
+    final config = configs[serverId];
     if (config == null || config.extDomainUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请先配置线路同步地址')),
@@ -1946,7 +1943,6 @@ class _ExtDomainSettingsScreenState extends ConsumerState<ExtDomainSettingsScree
       return;
     }
 
-    final currentServer = ref.read(currentServerProvider);
     if (currentServer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请先选择一个服务器')),
@@ -2022,7 +2018,9 @@ class _ExtDomainSettingsScreenState extends ConsumerState<ExtDomainSettingsScree
 
   @override
   Widget build(BuildContext context) {
-    final config = ref.watch(extDomainConfigProvider);
+    final configs = ref.watch(extDomainConfigProvider);
+    final currentServer = ref.watch(currentServerProvider);
+    final config = currentServer != null ? configs[currentServer.id] : null;
 
     return Scaffold(
       appBar: AppBar(

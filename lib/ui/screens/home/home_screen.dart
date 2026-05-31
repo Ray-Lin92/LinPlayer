@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,11 +16,15 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
   double _appBarOpacity = 1.0;
   double _lastScrollOffset = 0.0;
   Color _backgroundColor = const Color(0xFF121212);
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -63,6 +66,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final currentServer = ref.watch(currentServerProvider);
     final hideDailyRecommendations = ref.watch(hideDailyRecommendationsProvider);
     final recommendationsAsync = ref.watch(randomRecommendationsProvider);
@@ -181,6 +185,12 @@ class _ServerSelectorOverlayState extends State<_ServerSelectorOverlay>
 
   @override
   Widget build(BuildContext context) {
+    // 计算最大文本宽度：基于最长服务器名字
+    final maxTextWidth = widget.servers
+        .map((s) => s.name.length * 16.0) // 估计每个字符16px
+        .reduce((a, b) => a > b ? a : b);
+    final containerWidth = (56 + maxTextWidth + 48).clamp(180.0, widget.screenWidth * 0.7);
+
     return GestureDetector(
       onTap: _dismiss,
       child: AnimatedBuilder(
@@ -194,9 +204,8 @@ class _ServerSelectorOverlayState extends State<_ServerSelectorOverlay>
         child: Stack(
           children: [
             Positioned(
-              left: 16,
-              top: widget.buttonPosition.dy + widget.buttonSize.height + 8,
-              width: widget.screenWidth - 32,
+              left: widget.buttonPosition.dx,
+              top: widget.buttonPosition.dy + widget.buttonSize.height,
               child: SlideTransition(
                 position: _slideAnimation,
                 child: FadeTransition(
@@ -204,90 +213,97 @@ class _ServerSelectorOverlayState extends State<_ServerSelectorOverlay>
                   child: Consumer(
                     builder: (context, ref, _) {
                       final currentServerId = ref.watch(currentServerProvider)?.id;
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(16),
+                      return Container(
+                        width: containerWidth,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
                             ),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxHeight: 350),
-                              child: ListView.builder(
-                                shrinkWrap: true,
-                                itemCount: widget.servers.length,
-                                itemBuilder: (context, index) {
-                                  final server = widget.servers[index];
-                                  final isCurrent = server.id == currentServerId;
-                                  return Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () {
-                                        _dismiss();
-                                        Future.delayed(const Duration(milliseconds: 200), () {
-                                          ref.read(currentServerProvider.notifier).state = server;
-                                          if (server.authToken != null) {
-                                            ref.read(authStateProvider.notifier).state = AuthState.authenticated;
-                                          }
-                                          ref.invalidate(librariesProvider);
-                                          ref.invalidate(resumeItemsProvider);
-                                          ref.invalidate(randomRecommendationsProvider);
-                                        });
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 40,
-                                              height: 40,
-                                              decoration: BoxDecoration(
-                                                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                              child: server.iconUrl != null
-                                                  ? ClipRRect(
-                                                      borderRadius: BorderRadius.circular(10),
-                                                      child: MediaImage(
-                                                        imageUrl: server.iconUrl,
-                                                        width: 40,
-                                                        height: 40,
-                                                        fit: BoxFit.cover,
-                                                      ),
-                                                    )
-                                                  : Icon(
-                                                      Icons.dns,
-                                                      size: 20,
-                                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                                                    ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Text(
-                                                server.name,
-                                                style: TextStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: Theme.of(context).colorScheme.onSurface,
+                          ],
+                        ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 280),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            padding: EdgeInsets.zero,
+                            itemCount: widget.servers.length,
+                            itemBuilder: (context, index) {
+                              final server = widget.servers[index];
+                              final isCurrent = server.id == currentServerId;
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    _dismiss();
+                                    Future.delayed(const Duration(milliseconds: 150), () {
+                                      ref.read(currentServerProvider.notifier).state = server;
+                                      if (server.authToken != null) {
+                                        ref.read(authStateProvider.notifier).state = AuthState.authenticated;
+                                      }
+                                      ref.invalidate(librariesProvider);
+                                      ref.invalidate(resumeItemsProvider);
+                                      ref.invalidate(randomRecommendationsProvider);
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF5B8DEF).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: server.iconUrl != null
+                                              ? ClipRRect(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  child: MediaImage(
+                                                    imageUrl: server.iconUrl,
+                                                    width: 32,
+                                                    height: 32,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                )
+                                              : const Icon(
+                                                  Icons.dns,
+                                                  size: 16,
+                                                  color: Color(0xFF5B8DEF),
                                                 ),
-                                              ),
-                                            ),
-                                            if (isCurrent)
-                                              Icon(
-                                                Icons.check_circle,
-                                                color: Theme.of(context).colorScheme.primary,
-                                                size: 20,
-                                              ),
-                                          ],
                                         ),
-                                      ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            server.name,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: isCurrent
+                                                  ? const Color(0xFF5B8DEF)
+                                                  : Colors.black87,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (isCurrent)
+                                          const Icon(
+                                            Icons.check_circle,
+                                            color: Color(0xFF5B8DEF),
+                                            size: 18,
+                                          ),
+                                      ],
                                     ),
-                                  );
-                                },
-                              ),
-                            ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       );
@@ -371,6 +387,8 @@ class _HomeAppBarState extends ConsumerState<_HomeAppBar> {
 
   @override
   Widget build(BuildContext context) {
+    final currentServer = ref.watch(currentServerProvider);
+
     return SafeArea(
       child: Container(
         color: Colors.transparent,
@@ -392,7 +410,17 @@ class _HomeAppBarState extends ConsumerState<_HomeAppBar> {
                         color: const Color(0xFF5B8DEF).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.dns, size: 18, color: Color(0xFF5B8DEF)),
+                      child: currentServer?.iconUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: MediaImage(
+                                imageUrl: currentServer!.iconUrl,
+                                width: 32,
+                                height: 32,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : const Icon(Icons.dns, size: 18, color: Color(0xFF5B8DEF)),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -455,28 +483,40 @@ class _RandomRecommendationCarouselState extends ConsumerState<RandomRecommendat
     super.dispose();
   }
 
-  /// 预提取所有推荐封面的颜色
+  /// 预提取所有推荐封面的颜色（延迟执行，避免阻塞首次渲染）
   Future<void> _precacheColors(List<MediaItem> items) async {
     final api = ref.read(apiClientProvider);
-    final futures = <Future<void>>[];
-    
-    for (final item in items) {
-      // 跳过已缓存的颜色
-      if (_colorCache.containsKey(item.id)) continue;
-      
-      final imageUrl = item.backdropImageTag != null
-          ? api.image.getBackdropImageUrl(item.id, tag: item.backdropImageTag, maxWidth: 400)
-          : item.primaryImageTag != null
-              ? api.image.getPrimaryImageUrl(item.id, tag: item.primaryImageTag, maxWidth: 400)
-              : null;
-      
-      if (imageUrl == null) continue;
-      
-      futures.add(_extractColorForItem(item.id, imageUrl));
+
+    // 分批处理，每批最多3个，避免一次性大量网络请求阻塞UI
+    const batchSize = 3;
+    for (var i = 0; i < items.length; i += batchSize) {
+      final batch = items.skip(i).take(batchSize);
+      final futures = <Future<void>>[];
+
+      for (final item in batch) {
+        // 跳过已缓存的颜色
+        if (_colorCache.containsKey(item.id)) continue;
+
+        final imageUrl = item.backdropImageTag != null
+            ? api.image.getBackdropImageUrl(item.id, tag: item.backdropImageTag, maxWidth: 400)
+            : item.primaryImageTag != null
+                ? api.image.getPrimaryImageUrl(item.id, tag: item.primaryImageTag, maxWidth: 400)
+                : null;
+
+        if (imageUrl == null) continue;
+
+        futures.add(_extractColorForItem(item.id, imageUrl));
+      }
+
+      if (futures.isNotEmpty) {
+        await Future.wait(futures);
+      }
+
+      // 让出时间片，避免阻塞UI
+      if (i + batchSize < items.length) {
+        await Future.delayed(const Duration(milliseconds: 16));
+      }
     }
-    
-    // 并行提取所有颜色
-    await Future.wait(futures);
   }
 
   Future<void> _extractColorForItem(String itemId, String imageUrl) async {
