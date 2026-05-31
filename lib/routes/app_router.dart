@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../ui/screens/home/home_screen.dart';
-import '../ui/screens/server/server_list_screen.dart';
-import '../ui/screens/server/add_server_screen.dart';
-import '../ui/screens/server/edit_server_screen.dart';
-import '../ui/screens/server/server_lines_screen.dart';
-import '../ui/screens/server/icon_select_screen.dart';
-import '../ui/screens/search/search_screen.dart';
-import '../ui/screens/settings/settings_screen.dart';
 import '../ui/screens/detail/media_detail_screen.dart';
 import '../ui/screens/detail/season_detail_screen.dart';
-// Episode detail is in season_detail_screen.dart
-import '../ui/screens/library/library_detail_screen.dart';
-import '../ui/screens/library/libraries_screen.dart';
-import '../ui/screens/player/player_screen.dart';
 import '../ui/screens/download/download_screen.dart';
+import '../ui/screens/favorites/favorites_screen.dart';
+import '../ui/screens/home/home_screen.dart';
+import '../ui/screens/library/libraries_screen.dart';
+import '../ui/screens/library/library_detail_screen.dart';
+import '../ui/screens/player/player_screen.dart';
+import '../ui/screens/search/search_screen.dart';
+import '../ui/screens/server/add_server_screen.dart';
+import '../ui/screens/server/edit_server_screen.dart';
+import '../ui/screens/server/icon_select_screen.dart';
+import '../ui/screens/server/server_lines_screen.dart';
+import '../ui/screens/server/server_list_screen.dart';
+import '../ui/screens/settings/settings_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -23,14 +23,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
-    // 处理导航异常，避免闪退
     onException: (context, state, router) {
-      // 安全地回到根路由
       router.go('/');
     },
     routes: [
-      // 主页（含底部Tab）
-      StatefulShellRoute.indexedStack(
+      StatefulShellRoute(
+        navigatorContainerBuilder: (context, navigationShell, children) {
+          return _AnimatedBranchContainer(
+            currentIndex: navigationShell.currentIndex,
+            children: children,
+          );
+        },
         builder: (context, state, navigationShell) {
           return MainShell(
             navigationShell: navigationShell,
@@ -38,33 +41,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
         branches: [
-          // 服务器Tab
           StatefulShellBranch(
+            preload: true,
             routes: [
               GoRoute(
                 path: '/',
-                pageBuilder: (context, state) => _buildPage(
+                pageBuilder: (context, state) => _buildHorizontalPage(
                   child: const ServerListScreen(),
                   state: state,
                 ),
                 routes: [
                   GoRoute(
                     path: 'home',
-                    pageBuilder: (context, state) => _buildPage(
+                    pageBuilder: (context, state) => _buildHorizontalPage(
                       child: const HomeScreen(),
                       state: state,
+                      direction: _PageTransitionDirection.forward,
                     ),
                   ),
                   GoRoute(
                     path: 'add',
-                    pageBuilder: (context, state) => _buildPage(
+                    pageBuilder: (context, state) => _buildHorizontalPage(
                       child: const AddServerScreen(),
                       state: state,
                     ),
                   ),
                   GoRoute(
                     path: 'edit/:serverId',
-                    pageBuilder: (context, state) => _buildPage(
+                    pageBuilder: (context, state) => _buildHorizontalPage(
                       child: EditServerScreen(
                         serverId: state.pathParameters['serverId']!,
                       ),
@@ -73,7 +77,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'lines/:serverId',
-                    pageBuilder: (context, state) => _buildPage(
+                    pageBuilder: (context, state) => _buildHorizontalPage(
                       child: ServerLinesScreen(
                         serverId: state.pathParameters['serverId']!,
                       ),
@@ -82,7 +86,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ),
                   GoRoute(
                     path: 'icons/:serverId',
-                    pageBuilder: (context, state) => _buildPage(
+                    pageBuilder: (context, state) => _buildHorizontalPage(
                       child: IconSelectScreen(
                         serverId: state.pathParameters['serverId']!,
                       ),
@@ -93,24 +97,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // 搜索Tab（现更名为收藏）
           StatefulShellBranch(
+            preload: true,
             routes: [
               GoRoute(
-                path: '/search',
-                pageBuilder: (context, state) => _buildPage(
-                  child: const SearchScreen(),
+                path: '/favorites',
+                pageBuilder: (context, state) => _buildBranchRootPage(
+                  child: const FavoritesScreen(),
                   state: state,
                 ),
               ),
             ],
           ),
-          // 设置Tab
           StatefulShellBranch(
+            preload: true,
             routes: [
               GoRoute(
                 path: '/settings',
-                pageBuilder: (context, state) => _buildPage(
+                pageBuilder: (context, state) => _buildBranchRootPage(
                   child: const SettingsScreen(),
                   state: state,
                 ),
@@ -119,46 +123,42 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-      
-      // 媒体详情
+      GoRoute(
+        path: '/search',
+        pageBuilder: (context, state) => _buildHorizontalPage(
+          child: const SearchScreen(),
+          state: state,
+          direction: _PageTransitionDirection.forward,
+        ),
+      ),
       GoRoute(
         path: '/detail/:id',
         builder: (context, state) => MediaDetailScreen(
           itemId: state.pathParameters['id']!,
         ),
       ),
-      
-      // 季详情
       GoRoute(
         path: '/season/:id',
         builder: (context, state) => SeasonDetailScreen(
           seasonId: state.pathParameters['id']!,
         ),
       ),
-      
-      // 集详情
       GoRoute(
         path: '/episode/:id',
         builder: (context, state) => EpisodeDetailScreen(
           episodeId: state.pathParameters['id']!,
         ),
       ),
-      
-      // 媒体库列表
       GoRoute(
         path: '/libraries',
         builder: (context, state) => const LibrariesScreen(),
       ),
-
-      // 媒体库详情
       GoRoute(
         path: '/library/:id',
         builder: (context, state) => LibraryDetailScreen(
           libraryId: state.pathParameters['id']!,
         ),
       ),
-      
-      // 播放页
       GoRoute(
         path: '/player/:id',
         builder: (context, state) => PlayerScreen(
@@ -166,8 +166,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           mediaSourceId: state.uri.queryParameters['mediaSourceId'],
         ),
       ),
-      
-      // 下载页
       GoRoute(
         path: '/downloads',
         builder: (context, state) => const DownloadScreen(),
@@ -176,8 +174,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// 构建带动画过渡的页面
-CustomTransitionPage<void> _buildPage({
+enum _PageTransitionDirection { neutral, forward, backward }
+
+CustomTransitionPage<void> _buildBranchRootPage({
   required Widget child,
   required GoRouterState state,
 }) {
@@ -185,40 +184,127 @@ CustomTransitionPage<void> _buildPage({
     key: state.pageKey,
     child: child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      // 推拉效果：从右向左推入，离开时向左推出
-      const begin = Offset(1.0, 0.0);
-      const end = Offset.zero;
-      const reverseBegin = Offset.zero;
-      const reverseEnd = Offset(-0.3, 0.0);
+      return FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        ),
+        child: child,
+      );
+    },
+    transitionDuration: const Duration(milliseconds: 180),
+    reverseTransitionDuration: const Duration(milliseconds: 140),
+  );
+}
 
-      final isReverse = animation.status == AnimationStatus.reverse;
+CustomTransitionPage<void> _buildHorizontalPage({
+  required Widget child,
+  required GoRouterState state,
+  _PageTransitionDirection direction = _PageTransitionDirection.neutral,
+}) {
+  final Offset begin = switch (direction) {
+    _PageTransitionDirection.backward => const Offset(-0.18, 0),
+    _PageTransitionDirection.forward => const Offset(0.16, 0),
+    _PageTransitionDirection.neutral => const Offset(0.08, 0),
+  };
 
-      var tween = Tween(begin: isReverse ? reverseBegin : begin, end: isReverse ? reverseEnd : end)
-          .chain(CurveTween(curve: Curves.easeInOutCubic));
-
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
       return SlideTransition(
-        position: animation.drive(tween),
+        position: Tween<Offset>(
+          begin: begin,
+          end: Offset.zero,
+        ).animate(curved),
         child: FadeTransition(
-          opacity: animation.drive(Tween(begin: 0.8, end: 1.0)),
+          opacity: Tween<double>(begin: 0.92, end: 1).animate(curved),
           child: child,
         ),
       );
     },
-    transitionDuration: const Duration(milliseconds: 300),
-    reverseTransitionDuration: const Duration(milliseconds: 250),
+    transitionDuration: const Duration(milliseconds: 240),
+    reverseTransitionDuration: const Duration(milliseconds: 200),
   );
 }
 
-/// 底部Tab外壳（悬浮样式）
-class MainShell extends StatefulWidget {
-  final StatefulNavigationShell navigationShell;
-  final String currentPath;
+class _AnimatedBranchContainer extends StatefulWidget {
+  const _AnimatedBranchContainer({
+    required this.currentIndex,
+    required this.children,
+  });
 
+  final int currentIndex;
+  final List<Widget> children;
+
+  @override
+  State<_AnimatedBranchContainer> createState() => _AnimatedBranchContainerState();
+}
+
+class _AnimatedBranchContainerState extends State<_AnimatedBranchContainer> {
+  int _previousIndex = 0;
+
+  @override
+  void didUpdateWidget(covariant _AnimatedBranchContainer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentIndex != widget.currentIndex) {
+      _previousIndex = oldWidget.currentIndex;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool moveRight = widget.currentIndex > _previousIndex;
+    return Stack(
+      fit: StackFit.expand,
+      children: List<Widget>.generate(widget.children.length, (index) {
+        final bool isActive = index == widget.currentIndex;
+        final bool isLeaving = index == _previousIndex && !isActive;
+        final double targetOffset = isActive
+            ? 0
+            : isLeaving
+                ? (moveRight ? -0.08 : 0.08)
+                : (index > widget.currentIndex ? 0.08 : -0.08);
+
+        return IgnorePointer(
+          ignoring: !isActive,
+          child: TickerMode(
+            enabled: isActive || isLeaving,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              offset: Offset(targetOffset, 0),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                opacity: isActive ? 1 : 0,
+                child: Offstage(
+                  offstage: !isActive && !isLeaving,
+                  child: widget.children[index],
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class MainShell extends StatefulWidget {
   const MainShell({
     super.key,
     required this.navigationShell,
     required this.currentPath,
   });
+
+  final StatefulNavigationShell navigationShell;
+  final String currentPath;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -229,21 +315,17 @@ class _MainShellState extends State<MainShell> {
 
   bool get _isHomePage => widget.currentPath == '/home';
   bool get _isServerListPage => widget.currentPath == '/';
+
   bool _onScrollNotification(ScrollNotification notification) {
-    // 只有在首页才响应滚动渐隐
     if (!_isHomePage) return false;
-    
+
     if (notification is ScrollUpdateNotification) {
       final delta = notification.scrollDelta ?? 0;
-      setState(() {
-        if (delta > 0) {
-          // 向下滑动，渐隐
+      if (delta.abs() > 1.5) {
+        setState(() {
           _tabOpacity = (_tabOpacity - delta / 150).clamp(0.0, 1.0);
-        } else if (delta < 0) {
-          // 向上滑动，渐显
-          _tabOpacity = (_tabOpacity - delta / 150).clamp(0.0, 1.0);
-        }
-      });
+        });
+      }
     }
     return false;
   }
@@ -251,13 +333,10 @@ class _MainShellState extends State<MainShell> {
   @override
   void didUpdateWidget(covariant MainShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 当从首页切回服务器页时，重置Tab透明度为1.0
-    if (oldWidget.currentPath != widget.currentPath) {
-      if (_isServerListPage) {
-        setState(() {
-          _tabOpacity = 1.0;
-        });
-      }
+    if (oldWidget.currentPath != widget.currentPath && _isServerListPage) {
+      setState(() {
+        _tabOpacity = 1.0;
+      });
     }
   }
 
@@ -265,14 +344,12 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final tabHeight = 64.0 + bottomPadding;
-    // 服务器页常驻显示Tab，首页根据滚动状态
     final effectiveOpacity = _isServerListPage ? 1.0 : _tabOpacity;
 
     return NotificationListener<ScrollNotification>(
       onNotification: _onScrollNotification,
       child: Scaffold(
         body: MediaQuery(
-          // 为底部Tab留出安全区域，避免遮挡页面内容
           data: MediaQuery.of(context).copyWith(
             padding: MediaQuery.of(context).padding.copyWith(
               bottom: MediaQuery.of(context).padding.bottom + tabHeight,
@@ -294,13 +371,12 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-/// 悬浮Tab栏
 class _FloatingTabBar extends StatelessWidget {
-  final StatefulNavigationShell navigationShell;
-
   const _FloatingTabBar({
     required this.navigationShell,
   });
+
+  final StatefulNavigationShell navigationShell;
 
   @override
   Widget build(BuildContext context) {

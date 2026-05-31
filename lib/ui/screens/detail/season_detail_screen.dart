@@ -592,7 +592,7 @@ class _PlayButtons extends ConsumerWidget {
               title: const Text('搜索其他播放源'),
               onTap: () {
                 Navigator.pop(ctx);
-                context.go('/search');
+                context.push('/search');
               },
             ),
             ListTile(
@@ -600,11 +600,19 @@ class _PlayButtons extends ConsumerWidget {
               title: const Text('下载'),
               onTap: () async {
                 Navigator.pop(ctx);
+                final item = await api.media.getItemDetails(itemId);
+                if (!(item.canDownload ?? false)) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('当前服务器未开放下载权限')),
+                    );
+                  }
+                  return;
+                }
                 final videoUrl = api.playback.getVideoStreamUrl(
                   itemId,
                   mediaSourceId: mediaSourceId,
                 );
-                final item = await api.media.getItemDetails(itemId);
                 final taskId = await ref.read(downloadServiceProvider).addDownload(
                   itemId: itemId,
                   title: item.name,
@@ -670,6 +678,7 @@ class _PlayButtons extends ConsumerWidget {
                   } else {
                     await api.favorite.addFavorite(itemId);
                   }
+                  refreshFavorites(ref);
                   ref.invalidate(mediaItemProvider(itemId));
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(

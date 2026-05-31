@@ -135,7 +135,7 @@ class _ServerListScreenState extends ConsumerState<ServerListScreen> {
             if (server.authToken != null) {
               ref.read(authStateProvider.notifier).state = AuthState.authenticated;
             }
-            context.push('/home');
+            context.go('/home');
           },
           onMoreTap: () => _showServerMenu(context, ref, server),
         );

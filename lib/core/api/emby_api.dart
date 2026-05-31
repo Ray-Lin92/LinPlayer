@@ -299,7 +299,8 @@ class EmbyHomeApi implements HomeApi {
       'RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,'
       'ParentIndexNumber,ImageTags,ParentThumbItemId,ParentThumbImageTag,'
       'ParentPrimaryImageItemId,ParentPrimaryImageTag,SeriesThumbImageTag,'
-      'SeriesPrimaryImageTag,BackdropImageTags';
+      'SeriesPrimaryImageTag,BackdropImageTags,ChildCount,RecursiveItemCount,'
+      'CanDownload,SupportsSync';
 
   @override
   Future<List<MediaItem>> getResumeItems() async {
@@ -368,7 +369,7 @@ class EmbyLibraryApi implements LibraryApi {
       'RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,'
       'ParentIndexNumber,ImageTags,ParentThumbItemId,ParentThumbImageTag,'
       'ParentPrimaryImageItemId,ParentPrimaryImageTag,SeriesThumbImageTag,'
-      'SeriesPrimaryImageTag';
+      'SeriesPrimaryImageTag,ChildCount,RecursiveItemCount,CanDownload,SupportsSync';
 
   @override
   Future<List<MediaItem>> getLibraryItems({
@@ -423,7 +424,8 @@ class EmbyMediaApi implements MediaApi {
       'RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,'
       'ParentIndexNumber,People,Studios,ImageTags,ParentThumbItemId,'
       'ParentThumbImageTag,ParentPrimaryImageItemId,ParentPrimaryImageTag,'
-      'SeriesThumbImageTag,SeriesPrimaryImageTag,BackdropImageTags';
+      'SeriesThumbImageTag,SeriesPrimaryImageTag,BackdropImageTags,'
+      'ChildCount,RecursiveItemCount,CanDownload,SupportsSync';
 
   @override
   Future<MediaItem> getItemDetails(String itemId) async {
@@ -479,7 +481,7 @@ class EmbyMediaApi implements MediaApi {
     final uid = _requireUserId(_client);
     final params = <String, dynamic>{
       'UserId': uid,
-      'Fields': 'Overview,RunTimeTicks,ImageTags,ParentThumbItemId,ParentThumbImageTag,ParentPrimaryImageItemId,ParentPrimaryImageTag,SeriesThumbImageTag,SeriesPrimaryImageTag',
+      'Fields': 'Overview,RunTimeTicks,ImageTags,ParentThumbItemId,ParentThumbImageTag,ParentPrimaryImageItemId,ParentPrimaryImageTag,SeriesThumbImageTag,SeriesPrimaryImageTag,CanDownload,SupportsSync',
     };
     if (seasonId != null) params['SeasonId'] = seasonId;
     final resp = await _client.get('/Shows/$seriesId/Episodes', queryParameters: params);
@@ -621,6 +623,29 @@ class EmbyFavoriteApi implements FavoriteApi {
   final EmbyApiClient _client;
   EmbyFavoriteApi(this._client);
 
+  static const String _favoriteFields =
+      'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,'
+      'RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,'
+      'ParentIndexNumber,ImageTags,ParentThumbItemId,ParentThumbImageTag,'
+      'ParentPrimaryImageItemId,ParentPrimaryImageTag,SeriesThumbImageTag,'
+      'SeriesPrimaryImageTag,BackdropImageTags,ChildCount,RecursiveItemCount,'
+      'CanDownload,SupportsSync';
+
+  @override
+  Future<List<MediaItem>> getFavorites() async {
+    final uid = _requireUserId(_client);
+    final resp = await _client.get('/Users/$uid/Items', queryParameters: {
+      'Filters': 'IsFavorite',
+      'Recursive': true,
+      'IncludeItemTypes': 'Movie,Series,Season,Episode',
+      'SortBy': 'DateCreated,SortName',
+      'SortOrder': 'Descending',
+      'Limit': 200,
+      'Fields': _favoriteFields,
+    });
+    return _parseItemList(resp.data);
+  }
+
   @override
   Future<void> addFavorite(String itemId) async {
     final uid = _requireUserId(_client);
@@ -742,6 +767,8 @@ List<MediaItem> _parseItemList(dynamic data) {
 
 MediaItem _parseMediaItem(Map<String, dynamic> d) {
   final ud = d['UserData'] as Map<String, dynamic>?;
+  final int? childCount = d['ChildCount'] as int?;
+  final int? recursiveItemCount = d['RecursiveItemCount'] as int?;
   return MediaItem(
     id: d['Id']?.toString() ?? '',
     name: d['Name'] ?? '',
@@ -778,7 +805,9 @@ MediaItem _parseMediaItem(Map<String, dynamic> d) {
     seriesPrimaryImageTag: d['SeriesPrimaryImageTag']?.toString(),
     mediaType: d['MediaType']?.toString(),
     parentId: d['ParentId']?.toString(),
-    childCount: d['ChildCount'] as int? ?? d['RecursiveItemCount'] as int?,
+    childCount: recursiveItemCount ?? childCount,
+    recursiveItemCount: recursiveItemCount,
+    canDownload: d['CanDownload'] as bool? ?? d['SupportsSync'] as bool?,
   );
 }
 

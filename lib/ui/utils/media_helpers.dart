@@ -32,8 +32,21 @@ List<String> resolveMediaItemImageUrls(
   int? maxWidth,
   bool preferThumb = false,
 }) {
+  final bool preferWideImage = item.type == 'Movie' && preferThumb;
   return _dedupeUrls([
-    if (preferThumb && item.thumbImageTag != null)
+    if (preferWideImage && item.thumbImageTag != null)
+      api.image.getThumbImageUrl(
+        item.id,
+        tag: item.thumbImageTag,
+        maxWidth: maxWidth,
+      ),
+    if (preferWideImage && item.backdropImageTag != null)
+      api.image.getBackdropImageUrl(
+        item.id,
+        tag: item.backdropImageTag,
+        maxWidth: maxWidth,
+      ),
+    if (!preferWideImage && preferThumb && item.thumbImageTag != null)
       api.image.getThumbImageUrl(
         item.id,
         tag: item.thumbImageTag,
@@ -45,7 +58,7 @@ List<String> resolveMediaItemImageUrls(
         tag: item.primaryImageTag,
         maxWidth: maxWidth,
       ),
-    if (!preferThumb && item.thumbImageTag != null)
+    if (!preferWideImage && !preferThumb && item.thumbImageTag != null)
       api.image.getThumbImageUrl(
         item.id,
         tag: item.thumbImageTag,
@@ -80,7 +93,7 @@ List<String> resolveMediaItemImageUrls(
         tag: item.seriesPrimaryImageTag,
         maxWidth: maxWidth,
       ),
-    if (item.backdropImageTag != null)
+    if (!preferWideImage && item.backdropImageTag != null)
       api.image.getBackdropImageUrl(
         item.id,
         tag: item.backdropImageTag,

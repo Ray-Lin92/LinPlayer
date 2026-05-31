@@ -447,7 +447,7 @@ class _HomeAppBarState extends ConsumerState<_HomeAppBar> {
               IconButton(
                 icon: const Icon(Icons.search),
                 onPressed: () {
-                  context.go('/search');
+                  context.push('/search');
                 },
               ),
             ],
@@ -1051,6 +1051,7 @@ class _ContinueWatchingCard extends ConsumerWidget {
         try {
           final api = ref.read(apiClientProvider);
           await api.favorite.addFavorite(item.id);
+          refreshFavorites(ref);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('已添加到收藏')),
@@ -1173,10 +1174,10 @@ class LibrariesSection extends ConsumerWidget {
               ),
             ),
             HorizontalList(
-              height: 145,
+              height: 178,
               children: libraries.map((library) {
                 return SizedBox(
-                  width: 135,
+                  width: 168,
                   child: _LibraryCard(library: library),
                 );
               }).toList(),
@@ -1199,7 +1200,7 @@ class _LibraryCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.read(apiClientProvider);
     final imageUrls = resolveLibraryImageUrls(api, library, maxWidth: 400);
-    const borderRadius = BorderRadius.all(Radius.circular(16));
+    const borderRadius = BorderRadius.all(Radius.circular(20));
 
     return GestureDetector(
       onTap: () => context.push('/library/${library.id}'),
@@ -1207,8 +1208,8 @@ class _LibraryCard extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 135,
-            height: 100,
+            width: 168,
+            height: 124,
             decoration: const BoxDecoration(
               borderRadius: borderRadius,
             ),
@@ -1217,9 +1218,9 @@ class _LibraryCard extends ConsumerWidget {
                 ? MediaImage(
                     imageUrl: imageUrls.first,
                     imageUrls: imageUrls.length > 1 ? imageUrls.sublist(1) : null,
-                    width: 135,
-                    height: 100,
-                    fit: BoxFit.contain,
+                    width: 168,
+                    height: 124,
+                    fit: BoxFit.cover,
                     borderRadius: borderRadius,
                   )
                 : Container(
@@ -1235,7 +1236,7 @@ class _LibraryCard extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           SizedBox(
-            width: 135,
+            width: 168,
             child: Text(
               library.name,
               maxLines: 1,

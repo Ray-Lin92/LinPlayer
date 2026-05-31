@@ -207,6 +207,8 @@ class MediaItem {
   final String? mediaType; // 'Video', 'Audio'
   final String? parentId; // 父级ID（可能是媒体库或文件夹）
   final int? childCount; // 子项数量（剧集的总集数）
+  final int? recursiveItemCount; // 递归子项数量（剧集总集数）
+  final bool? canDownload;
 
   MediaItem({
     required this.id,
@@ -238,6 +240,8 @@ class MediaItem {
     this.mediaType,
     this.parentId,
     this.childCount,
+    this.recursiveItemCount,
+    this.canDownload,
   });
   
   String? get formattedRuntime {
@@ -581,6 +585,10 @@ class PlaybackStopInfo {
 // ==================== 收藏相关 ====================
 
 abstract class FavoriteApi {
+  /// 获取收藏列表
+  /// GET /Users/{UserId}/Items?Filters=IsFavorite
+  Future<List<MediaItem>> getFavorites();
+
   /// 添加到收藏
   /// POST /Users/{UserId}/FavoriteItems/{Id}
   Future<void> addFavorite(String itemId);
