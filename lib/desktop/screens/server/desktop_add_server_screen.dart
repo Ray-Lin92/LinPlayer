@@ -255,6 +255,8 @@ class _DesktopAddServerScreenState extends ConsumerState<DesktopAddServerScreen>
             ? _nameController.text.trim()
             : serverInfo.serverName;
         
+        debugPrint('[AddServer] Auth success - userId: ${authResult.userId}, tokenLength: ${authResult.accessToken.length}');
+        
         final server = ServerConfig(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           name: name,
@@ -268,6 +270,8 @@ class _DesktopAddServerScreenState extends ConsumerState<DesktopAddServerScreen>
           authToken: authResult.accessToken,
           userId: authResult.userId,
         );
+        
+        debugPrint('[AddServer] Saving server - id: ${server.id}, authToken: ${server.authToken != null ? 'present' : 'null'}, userId: ${server.userId}');
         
         ref.read(serverListProvider.notifier).addServer(server);
         ref.read(currentServerProvider.notifier).state = server;

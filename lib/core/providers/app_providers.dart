@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_interfaces.dart';
@@ -164,9 +165,13 @@ class ServerListNotifier extends StateNotifier<List<ServerConfig>> {
       if (jsonStr != null) {
         final List<dynamic> jsonList = jsonDecode(jsonStr);
         state = jsonList.map((e) => _serverConfigFromJson(e as Map<String, dynamic>)).toList();
+        debugPrint('[ServerList] Loaded ${state.length} servers');
+        for (final server in state) {
+          debugPrint('[ServerList] Loaded ${server.name}: authToken=${server.authToken != null ? 'present' : 'null'}, userId=${server.userId}');
+        }
       }
     } catch (e) {
-      // 加载失败时保持空列表
+      debugPrint('[ServerList] Load failed: $e');
     }
   }
 
@@ -174,9 +179,14 @@ class ServerListNotifier extends StateNotifier<List<ServerConfig>> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonList = state.map((s) => _serverConfigToJson(s)).toList();
+      debugPrint('[ServerList] Saving ${state.length} servers');
+      for (final server in state) {
+        debugPrint('[ServerList] Server ${server.name}: authToken=${server.authToken != null ? 'present' : 'null'}, userId=${server.userId}');
+      }
       await prefs.setString(_serversKey, jsonEncode(jsonList));
+      debugPrint('[ServerList] Save completed');
     } catch (e) {
-      // 保存失败时静默处理
+      debugPrint('[ServerList] Save failed: $e');
     }
   }
 

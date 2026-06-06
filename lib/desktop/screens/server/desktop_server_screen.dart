@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../../core/api/emby_api.dart';
 import '../../../ui/widgets/common/media_widgets.dart';
 
 /// 桌面端服务器管理页
@@ -144,12 +145,12 @@ class _DesktopServerScreenState extends ConsumerState<DesktopServerScreen> {
   }
   
   void _selectServer(ServerConfig server) {
+    debugPrint('[SelectServer] Selecting ${server.name}: authToken=${server.authToken != null ? 'present' : 'null'}, userId=${server.userId}');
     ref.read(currentServerProvider.notifier).state = server;
     if (server.authToken != null && server.userId != null) {
       ref.read(authStateProvider.notifier).state = AuthState.authenticated;
     } else {
       ref.read(authStateProvider.notifier).state = AuthState.unauthenticated;
-      // 提示用户需要登录
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -157,7 +158,7 @@ class _DesktopServerScreenState extends ConsumerState<DesktopServerScreen> {
             action: SnackBarAction(
               label: '登录',
               onPressed: () {
-                // TODO: 打开登录对话框
+                _showReauthDialog(server);
               },
             ),
           ),
@@ -166,6 +167,13 @@ class _DesktopServerScreenState extends ConsumerState<DesktopServerScreen> {
     }
     ref.invalidate(librariesProvider);
     ref.invalidate(resumeItemsProvider);
+  }
+
+  void _showReauthDialog(ServerConfig server) {
+    showDialog(
+      context: context,
+      builder: (context) => _ReauthDialog(server: server),
+    );
   }
 }
 
@@ -638,5 +646,150 @@ class _ServerListTileState extends State<_ServerListTile> with SingleTickerProvi
         ),
       ),
     );
+  }
+}
+
+/// 重新认证对话框
+class _ReauthDialog extends ConsumerStatefulWidget {
+  final ServerConfig server;
+
+  const _ReauthDialog({required this.server});
+
+  @override
+  ConsumerState<_ReauthDialog> createState() => _ReauthDialogState();
+}
+
+class _ReauthDialogState extends ConsumerState<_ReauthDialog> {
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('登录到 ${widget.server.name}'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _usernameController,
+              decoration: const InputDecoration(
+                labelText: '用户名',
+                prefixIcon: Icon(Icons.person),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: '密码',
+                prefixIcon: const Icon(Icons.lock),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  ),
+                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _isLoading ? null : _authenticate,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('登录'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _authenticate() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+
+    if (username.isEmpty) {
+      setState(() => _errorMessage = '请输入用户名');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final client = EmbyApiClient(
+        baseUrl: widget.server.activeLineUrl,
+      );
+
+      final authResult = await client.auth.login(
+        username: username,
+        password: password,
+      );
+
+      if (authResult.userId.isEmpty || authResult.accessToken.isEmpty) {
+        throw Exception('认证失败：服务器返回的数据不完整');
+      }
+
+      final updatedServer = widget.server.copyWith(
+        username: username,
+        authToken: authResult.accessToken,
+        userId: authResult.userId,
+      );
+
+      ref.read(serverListProvider.notifier).updateServer(updatedServer);
+      ref.read(currentServerProvider.notifier).state = updatedServer;
+      ref.read(authStateProvider.notifier).state = AuthState.authenticated;
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${widget.server.name} 认证成功')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 }
