@@ -21,11 +21,10 @@ class PersistentNetworkImageProvider
     this.scale = 1.0,
     this.headers,
     this.cache = true,
-    this.retries = 5,
+    this.retries = 3,
     this.timeLimit,
-    this.timeRetry = const Duration(milliseconds: 350),
+    this.timeRetry = const Duration(milliseconds: 100),
     this.cacheKey,
-    this.requestKey,
     this.printError = true,
     this.cacheRawData = false,
     this.cancelToken,
@@ -46,7 +45,6 @@ class PersistentNetworkImageProvider
   final Map<String, String>? headers;
   final CancellationToken? cancelToken;
   final String? cacheKey;
-  final Object? requestKey;
   final bool printError;
   final Duration? cacheMaxAge;
 
@@ -284,7 +282,6 @@ class PersistentNetworkImageProvider
         scale == other.scale &&
         cache == other.cache &&
         cacheKey == other.cacheKey &&
-        requestKey == other.requestKey &&
         retries == other.retries &&
         imageCacheName == other.imageCacheName &&
         cacheMaxAge == other.cacheMaxAge;
@@ -296,7 +293,6 @@ class PersistentNetworkImageProvider
         scale,
         cache,
         cacheKey,
-        requestKey,
         retries,
         imageCacheName,
         cacheMaxAge,

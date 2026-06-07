@@ -6,7 +6,6 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../ui/utils/media_helpers.dart';
 import '../../../ui/widgets/common/media_widgets.dart';
-import '../../widgets/desktop_cover_radii.dart';
 
 /// 桌面端媒体库列表页
 class DesktopLibraryScreen extends ConsumerWidget {
@@ -16,7 +15,6 @@ class DesktopLibraryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final librariesAsync = ref.watch(librariesProvider);
     final servers = ref.watch(serverListProvider);
-    final theme = Theme.of(context);
     
     return Scaffold(
       body: CustomScrollView(
@@ -27,9 +25,10 @@ class DesktopLibraryScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
               child: Row(
                 children: [
-                  Text(
+                  const Text(
                     '媒体库',
-                    style: theme.textTheme.headlineSmall?.copyWith(
+                    style: TextStyle(
+                      fontSize: 24,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -115,7 +114,6 @@ class _DesktopLibraryGridCardState extends ConsumerState<_DesktopLibraryGridCard
   Widget build(BuildContext context) {
     final api = ref.read(apiClientProvider);
     final imageUrls = resolveLibraryImageUrls(api, widget.library, maxWidth: 600);
-    final theme = Theme.of(context);
     
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -130,33 +128,83 @@ class _DesktopLibraryGridCardState extends ConsumerState<_DesktopLibraryGridCard
               ? (Matrix4.identity()..translateByDouble(0.0, -6.0, 0.0, 1.0))
               : Matrix4.identity(),
           transformAlignment: Alignment.center,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: _isHovered
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : [],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: desktopLandscapeCoverRadius,
-                  child: MediaImage(
-                    imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.contain,
+              // 封面图
+              MediaImage(
+                imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.cover,
+              ),
+              
+              // 底部渐变
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 120,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.7),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+              
+              // 名称
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
                 child: Text(
                   widget.library.name,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge?.copyWith(
+                  style: const TextStyle(
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
+                    color: Colors.white,
                   ),
                 ),
               ),
+              
+              // 悬停播放图标
+              if (_isHovered)
+                Center(
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
