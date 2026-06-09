@@ -116,6 +116,7 @@ class _DesktopTopBarState extends ConsumerState<_DesktopTopBar> {
               ref.invalidate(resumeItemsProvider);
               ref.invalidate(librariesProvider);
               ref.invalidate(randomRecommendationsProvider);
+              ref.invalidate(embyMediaCountsProvider);
             },
           ),
         ],
@@ -179,59 +180,92 @@ class _DesktopTopBarState extends ConsumerState<_DesktopTopBar> {
     AsyncValue<EmbyMediaCounts> mediaCountsAsync,
   ) {
     final theme = Theme.of(context);
-    final labelStyle = theme.textTheme.bodySmall?.copyWith(
-      fontSize: 12,
-      height: 1.35,
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    final valueStyle = theme.textTheme.bodySmall?.copyWith(
-      fontSize: 12,
-      height: 1.35,
+    final labelStyle = theme.textTheme.labelSmall?.copyWith(
+      fontSize: 11,
       fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.88),
+    );
+    final valueStyle = theme.textTheme.titleSmall?.copyWith(
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.2,
       color: theme.colorScheme.onSurface,
     );
+    final dividerColor = theme.colorScheme.outlineVariant.withValues(alpha: 0.35);
 
-    Widget buildLine(String label, String value) {
-      return RichText(
-        text: TextSpan(
-          style: labelStyle,
+    Widget buildMetric(String label, String value) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 76),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextSpan(text: '$label：'),
-            TextSpan(text: value, style: valueStyle),
+            Text(label, style: labelStyle),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.fade,
+              softWrap: false,
+              style: valueStyle,
+            ),
           ],
         ),
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.28),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
-      ),
+    Widget buildContent(String movieValue, String seriesValue, String totalValue) {
+      return Row(
+        key: ValueKey('$movieValue-$seriesValue-$totalValue'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          buildMetric('电影', movieValue),
+          Container(
+            width: 1,
+            height: 28,
+            margin: const EdgeInsets.symmetric(horizontal: 14),
+            color: dividerColor,
+          ),
+          buildMetric('剧集', seriesValue),
+          Container(
+            width: 1,
+            height: 28,
+            margin: const EdgeInsets.symmetric(horizontal: 14),
+            color: dividerColor,
+          ),
+          buildMetric('总共', totalValue),
+        ],
+      );
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 180),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeOutCubic,
       child: mediaCountsAsync.when(
-        data: (counts) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        data: (counts) => buildContent(
+          counts.movieCount.toString(),
+          counts.episodeCount.toString(),
+          counts.totalCount.toString(),
+        ),
+        loading: () => buildContent('...', '...', '...'),
+        error: (_, __) => Row(
+          key: const ValueKey('stats-error'),
           mainAxisSize: MainAxisSize.min,
           children: [
-            buildLine('电影', counts.movieCount.toString()),
-            buildLine('剧集', counts.seriesCount.toString()),
-            buildLine('总共', counts.totalCount.toString()),
+            Icon(
+              Icons.bar_chart_rounded,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '统计不可用',
+              style: labelStyle?.copyWith(fontSize: 12),
+            ),
           ],
         ),
-        loading: () => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            buildLine('电影', '...'),
-            buildLine('剧集', '...'),
-            buildLine('总共', '...'),
-          ],
-        ),
-        error: (_, __) => buildLine('统计', '--'),
       ),
     );
   }

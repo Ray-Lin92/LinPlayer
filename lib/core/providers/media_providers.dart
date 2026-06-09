@@ -4,14 +4,16 @@ import '../providers/app_providers.dart';
 
 class EmbyMediaCounts {
   final int movieCount;
-  final int seriesCount;
+  final int episodeCount;
+  final int? itemCount;
 
   const EmbyMediaCounts({
     required this.movieCount,
-    required this.seriesCount,
+    required this.episodeCount,
+    this.itemCount,
   });
 
-  int get totalCount => movieCount + seriesCount;
+  int get totalCount => movieCount + episodeCount;
 }
 
 /// ==========================================
@@ -57,45 +59,12 @@ final randomRecommendationsProvider = FutureProvider<List<MediaItem>>((ref) asyn
 final embyMediaCountsProvider = FutureProvider<EmbyMediaCounts>((ref) async {
   ref.keepAlive();
   final api = ref.watch(apiClientProvider);
-  final libraries = await api.home.getLibraries();
-  final hiddenLibraries = ref.watch(hiddenLibrariesProvider);
-  final visibleLibraries = libraries
-      .where((library) => !hiddenLibraries.contains(library.id))
-      .toList(growable: false);
-
-  final movieIds = <String>{};
-  final seriesIds = <String>{};
-
-  for (final library in visibleLibraries) {
-    var startIndex = 0;
-    while (true) {
-      final items = await api.library.getLibraryItems(
-        libraryId: library.id,
-        startIndex: startIndex,
-        limit: 200,
-      );
-      if (items.isEmpty) {
-        break;
-      }
-
-      for (final item in items) {
-        if (item.type == 'Movie') {
-          movieIds.add(item.id);
-        } else if (item.type == 'Series') {
-          seriesIds.add(item.id);
-        }
-      }
-
-      if (items.length < 200) {
-        break;
-      }
-      startIndex += items.length;
-    }
-  }
+  final counts = await api.home.getMediaCounts();
 
   return EmbyMediaCounts(
-    movieCount: movieIds.length,
-    seriesCount: seriesIds.length,
+    movieCount: counts.movieCount,
+    episodeCount: counts.episodeCount,
+    itemCount: counts.itemCount,
   );
 });
 

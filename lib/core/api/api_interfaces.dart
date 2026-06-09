@@ -114,6 +114,10 @@ abstract class HomeApi {
   /// 获取媒体库列表
   /// GET /Users/{userId}/Views
   Future<List<Library>> getLibraries();
+
+  /// 获取媒体数量统计
+  /// GET /Items/Counts
+  Future<MediaCounts> getMediaCounts();
   
   /// 获取最新添加
   /// GET /Users/{UserId}/Items/Latest
@@ -121,6 +125,20 @@ abstract class HomeApi {
   
   /// 获取随机推荐
   Future<List<MediaItem>> getRandomRecommendations({int limit = 8});
+}
+
+class MediaCounts {
+  final int movieCount;
+  final int episodeCount;
+  final int? itemCount;
+
+  const MediaCounts({
+    required this.movieCount,
+    required this.episodeCount,
+    this.itemCount,
+  });
+
+  int get totalCount => movieCount + episodeCount;
 }
 
 // ==================== 媒体库相关 ====================
