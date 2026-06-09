@@ -28,6 +28,8 @@ class VideoPlayerService extends ChangeNotifier {
 
   Timer? _progressTimer;
   Timer? _hideControlsTimer;
+  Timer? _pendingPlaybackTimer;
+  bool? _pendingPlayingState;
 
   // 手势状态
   bool _showControls = true;
@@ -69,6 +71,7 @@ class VideoPlayerService extends ChangeNotifier {
   bool get lastInitializationUsedFallback => _lastInitializationUsedFallback;
   String? get lastFallbackReason => _lastFallbackReason;
   Duration get dragPreviewPosition => _dragPreviewPosition;
+  bool get isPlaybackActionPending => _pendingPlayingState != null;
 
   /// 当前播放器适配器（用于内核特定操作）
   PlayerAdapter? get adapter => _adapter;
@@ -130,7 +133,11 @@ class VideoPlayerService extends ChangeNotifier {
       onPositionChanged: () => notifyListeners(),
       onDurationChanged: () => notifyListeners(),
       onPlayingStateChanged: () {
-        if (_adapter?.isPlaying ?? false) {
+        final isNowPlaying = _adapter?.isPlaying ?? false;
+        if (_pendingPlayingState == isNowPlaying) {
+          _setPendingPlayingState(null, notify: false);
+        }
+        if (isNowPlaying) {
           if (!_hasReportedStart) {
             _reportStart();
             _hasReportedStart = true;
@@ -146,8 +153,32 @@ class VideoPlayerService extends ChangeNotifier {
         notifyListeners();
         // TODO: 自动播放下一集
       },
-      onError: () => notifyListeners(),
+      onError: () {
+        _setPendingPlayingState(null, notify: false);
+        notifyListeners();
+      },
     ));
+  }
+
+  void _setPendingPlayingState(bool? targetState, {bool notify = true}) {
+    _pendingPlaybackTimer?.cancel();
+    _pendingPlaybackTimer = null;
+
+    final changed = _pendingPlayingState != targetState;
+    _pendingPlayingState = targetState;
+
+    if (targetState != null) {
+      _pendingPlaybackTimer = Timer(const Duration(milliseconds: 900), () {
+        if (_pendingPlayingState == targetState) {
+          _pendingPlayingState = null;
+          notifyListeners();
+        }
+      });
+    }
+
+    if (notify && changed) {
+      notifyListeners();
+    }
   }
 
   /// 初始化播放器
@@ -176,6 +207,7 @@ class VideoPlayerService extends ChangeNotifier {
     _hasReportedStart = false;
     _lastInitializationUsedFallback = false;
     _lastFallbackReason = fallbackReason;
+    _setPendingPlayingState(null, notify: false);
 
     if (coreType != null) {
       _coreType = coreType;
@@ -285,20 +317,41 @@ class VideoPlayerService extends ChangeNotifier {
 
   /// 播放
   Future<void> play() async {
-    await _adapter?.play();
+    if (_adapter == null || !isInitialized || hasError || isPlaying || isPlaybackActionPending) {
+      return;
+    }
+    _setPendingPlayingState(true);
+    try {
+      await _adapter!.play();
+    } catch (_) {
+      _setPendingPlayingState(null);
+      rethrow;
+    }
     _startHideControlsTimer();
     notifyListeners();
   }
 
   /// 暂停
   Future<void> pause() async {
-    await _adapter?.pause();
+    if (_adapter == null || !isInitialized || hasError || !isPlaying || isPlaybackActionPending) {
+      return;
+    }
+    _setPendingPlayingState(false);
+    try {
+      await _adapter!.pause();
+    } catch (_) {
+      _setPendingPlayingState(null);
+      rethrow;
+    }
     _cancelHideControlsTimer();
     notifyListeners();
   }
 
   /// 播放/暂停切换
   Future<void> togglePlay() async {
+    if (!isInitialized || hasError || isPlaybackActionPending) {
+      return;
+    }
     if (isPlaying) {
       await pause();
     } else {
@@ -567,6 +620,9 @@ class VideoPlayerService extends ChangeNotifier {
   /// 释放资源
   @override
   Future<void> dispose() async {
+    _setPendingPlayingState(null, notify: false);
+    _pendingPlaybackTimer?.cancel();
+    _pendingPlaybackTimer = null;
     _reportStop();
     _stopProgressTimer();
     _cancelHideControlsTimer();

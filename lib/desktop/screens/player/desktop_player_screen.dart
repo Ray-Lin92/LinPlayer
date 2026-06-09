@@ -42,7 +42,6 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
   late VideoPlayerService _playerService;
   final FocusNode _focusNode = FocusNode();
   bool _initializingPlayer = false;
-  bool _autoPlayAttempted = false;
 
   // 控制栏显隐状态
   bool _showControls = true;
@@ -133,14 +132,6 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
   }
 
   void _onPlayerUpdate() {
-    if (!_autoPlayAttempted &&
-        !_initializingPlayer &&
-        _playerService.isInitialized &&
-        !_playerService.isPlaying &&
-        !_playerService.hasError) {
-      _autoPlayAttempted = true;
-      unawaited(_playerService.play());
-    }
     setState(() {});
     _checkSkipOpening();
   }
@@ -171,7 +162,6 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
   Future<void> _initializePlayer() async {
     if (_initializingPlayer) return;
     _initializingPlayer = true;
-    _autoPlayAttempted = false;
     final api = ref.read(apiClientProvider);
     try {
       final cachedItem = ref.read(currentPlayingItemProvider);
@@ -303,7 +293,6 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
       }
 
       await _playerService.play();
-      _autoPlayAttempted = true;
       _startHideControlsTimer();
     } finally {
       _initializingPlayer = false;
@@ -1991,6 +1980,9 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
   }
 
   Widget _buildPlaybackControls() {
+    final isPlayActionBlocked =
+        _initializingPlayer || !_playerService.isInitialized || _playerService.hasError;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -2001,17 +1993,23 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
         ),
         const SizedBox(width: 16),
         GestureDetector(
-          onTap: _playerService.togglePlay,
+          onTap: isPlayActionBlocked ? null : _playerService.togglePlay,
           child: Container(
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
+              color: Colors.white.withValues(
+                alpha: isPlayActionBlocked ? 0.05 : 0.1,
+              ),
               shape: BoxShape.circle,
             ),
             child: Icon(
-              _playerService.isPlaying ? Icons.pause : Icons.play_arrow,
-              color: Colors.white,
+              _playerService.isPlaybackActionPending || _initializingPlayer
+                  ? Icons.hourglass_top
+                  : (_playerService.isPlaying ? Icons.pause : Icons.play_arrow),
+              color: isPlayActionBlocked
+                  ? Colors.white.withValues(alpha: 0.45)
+                  : Colors.white,
               size: 28,
             ),
           ),
@@ -2039,11 +2037,6 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
           icon: Icons.audiotrack,
           tooltip: '音轨',
           onPressed: _showAudioSelector,
-        ),
-        _buildIconButton(
-          icon: Icons.camera_alt_outlined,
-          tooltip: '截图',
-          onPressed: _takeScreenshot,
         ),
         _buildIconButton(
           icon: _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
