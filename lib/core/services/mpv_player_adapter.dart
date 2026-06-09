@@ -41,6 +41,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
   String? _secondarySid;
   bool _hasBitmapSubtitle = false;
   bool _currentSubIsAss = false;
+  bool _needsInitialPlaybackNudge = false;
+  Duration _initialPlaybackPosition = Duration.zero;
 
   List<Map<String, dynamic>> _tracks = [];
   List<SubtitleTrack> _subtitleTracks = [];
@@ -126,6 +128,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
       _subtitleTracks = [];
       _audioTracks = [];
       _secondarySid = null;
+      _needsInitialPlaybackNudge = false;
+      _initialPlaybackPosition = startPosition ?? Duration.zero;
 
       await _configManager.initialize();
       await _configManager.writeConfig(
@@ -190,6 +194,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
       if (startPosition != null && startPosition > Duration.zero) {
         await _player!.seek(startPosition);
       }
+
+      _needsInitialPlaybackNudge = true;
 
       _isInitialized = true;
       _callbacks?.onDurationChanged?.call();
@@ -488,6 +494,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
     try {
       await _player!.setSubtitleTrack(SubtitleTrack.no());
       _selectedSubtitleTrackId = null;
+      _hasBitmapSubtitle = false;
+      _currentSubIsAss = false;
       _markTrackSelected();
     } catch (e, stackTrace) {
       _logger.eWithStack('MpvAdapter', '关闭字幕失败', e, stackTrace);
@@ -920,6 +928,17 @@ class MpvPlayerAdapter implements PlayerAdapter {
     if (_player == null) return;
     await _player!.play();
     _isCompleted = false;
+    if (_needsInitialPlaybackNudge) {
+      _needsInitialPlaybackNudge = false;
+      final nudgePosition =
+          _position > Duration.zero ? _position : _initialPlaybackPosition;
+      try {
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+        await _player!.seek(nudgePosition);
+      } catch (e) {
+        _logger.w('MpvAdapter', '初始起播刷新失败: $e');
+      }
+    }
   }
 
   @override
@@ -981,6 +1000,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
     _isBuffering = false;
     _position = Duration.zero;
     _duration = Duration.zero;
+    _needsInitialPlaybackNudge = false;
+    _initialPlaybackPosition = Duration.zero;
     _tracks = [];
     _subtitleTracks = [];
     _audioTracks = [];

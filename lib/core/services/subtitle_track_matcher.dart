@@ -27,11 +27,17 @@ class SubtitleTrackMatcher {
     }
 
     final lowerTitle = (title ?? '').toLowerCase();
+    if (_looksLikeGraphicalSubtitleTitle(lowerTitle)) {
+      return SubtitleKind.bitmap;
+    }
     if (lowerTitle.contains('ass') || lowerTitle.contains('ssa')) {
       return SubtitleKind.ass;
     }
 
     final lowerExpectedTitle = (expectedTitle ?? '').toLowerCase();
+    if (_looksLikeGraphicalSubtitleTitle(lowerExpectedTitle)) {
+      return SubtitleKind.bitmap;
+    }
     if (lowerExpectedTitle.contains('ass') || lowerExpectedTitle.contains('ssa')) {
       return SubtitleKind.ass;
     }
@@ -92,11 +98,7 @@ class SubtitleTrackMatcher {
     }
 
     final candidates = _filterCandidates(realTracks, targetKind);
-    if (candidates.isEmpty) {
-      return realTracks.first['id']?.toString();
-    }
-
-    var working = candidates;
+    var working = candidates.isEmpty ? realTracks : candidates;
     final directIndexMatches = working
         .where((track) => extractEmbySubtitleIndex(track['id']?.toString()) == targetStreamIndex)
         .toList();
@@ -186,5 +188,19 @@ class SubtitleTrackMatcher {
 
   static String _normalizeCodec(String? codec) {
     return (codec ?? '').trim().toLowerCase();
+  }
+
+  static bool _looksLikeGraphicalSubtitleTitle(String title) {
+    if (title.isEmpty) {
+      return false;
+    }
+    return title.contains('pgs') ||
+        title.contains('sup') ||
+        title.contains('hdmv') ||
+        title.contains('vobsub') ||
+        title.contains('dvdsub') ||
+        title.contains('dvd sub') ||
+        title.contains('dvd subtitle') ||
+        title.contains('dvbsub');
   }
 }

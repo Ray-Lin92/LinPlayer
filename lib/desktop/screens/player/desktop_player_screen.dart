@@ -294,6 +294,11 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
       }
 
       await _playerService.play();
+      if (coreType == PlayerCoreType.mpv) {
+        final currentPosition = _playerService.position;
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+        await _playerService.seekTo(currentPosition);
+      }
       _startHideControlsTimer();
     } finally {
       _initializingPlayer = false;
@@ -484,6 +489,17 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
       codec: targetCodec,
       title: targetTitle,
     );
+    if (_playerService.coreType == PlayerCoreType.mpv) {
+      final directMatch = _matchMpvSubtitleTrackByType(
+        subtitleTracks,
+        targetLang: targetLang,
+        targetTitle: targetTitle,
+        targetKind: kind,
+      );
+      if (directMatch != null && directMatch.isNotEmpty) {
+        return directMatch;
+      }
+    }
     final typedStreamPosition = _typedSubtitleStreamPosition(
       subtitleStreams,
       targetStreamIndex,
@@ -499,6 +515,60 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
       targetTitle: targetTitle,
       titlesMatch: _titlesMatch,
     );
+  }
+
+  String? _matchMpvSubtitleTrackByType(
+    List<Map<String, dynamic>> subtitleTracks, {
+    required String? targetLang,
+    required String? targetTitle,
+    required SubtitleKind targetKind,
+  }) {
+    var candidates = subtitleTracks.where((track) {
+      final trackKind = SubtitleTrackMatcher.classifyKind(
+        codec: track['codec']?.toString(),
+        title: track['title']?.toString(),
+        isBitmap: track['isBitmap'] == true || track['type'] == 'bitmap',
+        isAss: track['isAss'] == true,
+      );
+      if (targetKind == SubtitleKind.bitmap) {
+        return trackKind == SubtitleKind.bitmap;
+      }
+      if (targetKind == SubtitleKind.ass) {
+        return trackKind == SubtitleKind.ass;
+      }
+      return trackKind == SubtitleKind.text;
+    }).toList();
+
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    if (targetTitle != null && targetTitle.isNotEmpty) {
+      for (final track in candidates) {
+        final title = (track['title'] ?? '').toString();
+        if (title.isNotEmpty && _titlesMatch(targetTitle, title)) {
+          return track['id']?.toString();
+        }
+      }
+    }
+
+    final normalizedTargetLang = (targetLang ?? '').trim().toLowerCase();
+    if (normalizedTargetLang.isNotEmpty) {
+      final langMatches = candidates.where((track) {
+        final language = (track['language'] ?? '').toString().trim().toLowerCase();
+        return language == normalizedTargetLang ||
+            language == 'chi' ||
+            language == 'zh';
+      }).toList();
+      if (langMatches.length == 1) {
+        return langMatches.first['id']?.toString();
+      }
+      if (langMatches.length > 1) {
+        candidates = langMatches;
+      }
+    }
+
+    return candidates.length == 1 ? candidates.first['id']?.toString() : null;
   }
 
   int _typedSubtitleStreamPosition(
