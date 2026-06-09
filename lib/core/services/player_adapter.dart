@@ -68,6 +68,9 @@ abstract class PlayerAdapter {
   /// 加载字幕数据到内存（通过 libass）
   Future<void> loadLibassSubtitleMemory(Uint8List data, {String codec = 'ass'}) async {}
 
+  /// 为下一次字幕选择提供类型/标题提示。
+  void setSubtitleSelectionHint(String? codec, {String? title}) {}
+
   /// 播放
   Future<void> play();
 

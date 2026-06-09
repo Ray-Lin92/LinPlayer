@@ -279,6 +279,11 @@ class VideoPlayerService extends ChangeNotifier {
     await _adapter?.loadLibassSubtitleMemory(data, codec: codec);
   }
 
+  /// 为底层播放器提供字幕类型/标题提示，帮助匹配内封字幕。
+  void setSubtitleSelectionHint({String? codec, String? title}) {
+    _adapter?.setSubtitleSelectionHint(codec, title: title);
+  }
+
   /// 选择字幕轨道（内封字幕切换）
   Future<void> selectSubtitleTrack(String trackId) async {
     await _adapter?.selectSubtitleTrack(trackId);
