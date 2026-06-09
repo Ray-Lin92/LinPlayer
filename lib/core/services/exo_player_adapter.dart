@@ -94,6 +94,12 @@ class ExoPlayerAdapter implements PlayerAdapter {
   }
 
   @override
+  void setSubtitleSelectionHint(String? codec, {String? title}) {
+    // ExoPlayer currently selects subtitle tracks directly by track id/index,
+    // so the desktop hint is not needed here.
+  }
+
+  @override
   Future<void> initialize({
     required String videoUrl,
     Duration? startPosition,
