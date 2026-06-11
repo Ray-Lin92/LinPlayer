@@ -254,7 +254,9 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
       _displayTitle = item.name;
 
       final coreString = normalizePlayerCore(ref.read(playerCoreProvider));
-      final coreType = coreString == 'mpv' ? PlayerCoreType.mpv : PlayerCoreType.exoPlayer;
+      final coreType = coreString == 'mpv'
+          ? PlayerCoreType.mpv
+          : PlayerCoreType.exoPlayer;
 
       final dolbyVisionFix = coreType == PlayerCoreType.mpv ? ref.read(mpvDolbyVisionFixProvider) : false;
       final useLibass = coreType == PlayerCoreType.exoPlayer ? ref.read(exoLibassProvider) : false;

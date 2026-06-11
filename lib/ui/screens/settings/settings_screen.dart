@@ -762,17 +762,13 @@ class PlayerSettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 120),
         children: [
-          if (isDesktopPlatform)
-            const ListTile(
-              title: Text('播放器内核'),
-              subtitle: Text('MPV（桌面版固定）'),
-            )
-          else
-            ListTile(
-              title: const Text('播放器内核'),
-              subtitle: Text(playerCore == 'exoPlayer' ? 'ExoPlayer/AVPlayer' : 'MPV'),
-              onTap: () => _showCoreSelector(context, ref),
-            ),
+          ListTile(
+            title: const Text('播放器内核'),
+            subtitle: Text(playerCore == 'mpv'
+                ? 'MPV (libmpv)'
+                : 'ExoPlayer/AVPlayer'),
+            onTap: () => _showCoreSelector(context, ref),
+          ),
 
           const Divider(),
           const Padding(
@@ -942,6 +938,19 @@ class PlayerSettingsScreen extends ConsumerWidget {
   }
 
   void _showCoreSelector(BuildContext context, WidgetRef ref) {
+    final children = <Widget>[
+      const RadioListTile<String>(
+        title: Text('ExoPlayer/AVPlayer'),
+        subtitle: Text('轻量稳定，适合大多数场景'),
+        value: 'exoPlayer',
+      ),
+      const RadioListTile<String>(
+        title: Text('MPV'),
+        subtitle: Text('libmpv，支持 HDR/着色器/PGS/SUP'),
+        value: 'mpv',
+      ),
+    ];
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -954,20 +963,9 @@ class PlayerSettingsScreen extends ConsumerWidget {
             }
             Navigator.pop(context);
           },
-          child: const Column(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<String>(
-                title: Text('ExoPlayer/AVPlayer（默认）'),
-                subtitle: Text('轻量稳定，适合大多数场景'),
-                value: 'exoPlayer',
-              ),
-              RadioListTile<String>(
-                title: Text('MPV'),
-                subtitle: Text('支持PGS/SUP图形字幕、HDR'),
-                value: 'mpv',
-              ),
-            ],
+            children: children,
           ),
         ),
       ),

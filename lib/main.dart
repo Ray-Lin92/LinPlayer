@@ -10,6 +10,7 @@ import 'desktop/desktop_app.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+
   await initializeAppPreferences();
 
   if (isDesktopPlatform) {

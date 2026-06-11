@@ -171,10 +171,32 @@ jobs:
         env:
           DANDANPLAY_APP_ID: ${{ secrets.DANDANPLAY_APP_ID }}
           DANDANPLAY_APP_SECRET: ${{ secrets.DANDANPLAY_APP_SECRET }}
+          # 由后续独立步骤替换 libmpv-2.dll，便于重试和验证。
+          LINPLAYER_SKIP_LIBMPV_UPGRADE: 1
         run: |
           flutter build windows --release `
             --dart-define=DANDANPLAY_APP_ID="$env:DANDANPLAY_APP_ID" `
             --dart-define=DANDANPLAY_APP_SECRET="$env:DANDANPLAY_APP_SECRET"
+
+      - name: Upgrade libmpv-2.dll for PGS/SUP
+        shell: pwsh
+        run: |
+          $outputDir = "build/windows/x64/runner/Release"
+          & "$env:GITHUB_WORKSPACE/windows/scripts/upgrade_libmpv_for_pgs.ps1" -BuildOutput $outputDir
+
+          $orig = Join-Path $outputDir "libmpv-2.dll.orig"
+          if (-not (Test-Path -LiteralPath $orig)) {
+            throw "libmpv-2.dll 未成功替换，PGS/SUP 可能无法显示"
+          }
+
+          $target = Join-Path $outputDir "libmpv-2.dll"
+          $targetInfo = Get-Item -LiteralPath $target
+          $origInfo = Get-Item -LiteralPath $orig
+          if ($targetInfo.Length -le $origInfo.Length) {
+            throw "libmpv-2.dll 替换后大小未增长，可能仍缺少 PGS 解码器"
+          }
+
+          Write-Host "libmpv-2.dll 已替换为完整版，目标大小: $($targetInfo.Length) bytes"
 
       - name: Package Windows Build
         shell: pwsh

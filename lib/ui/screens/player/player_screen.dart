@@ -1099,7 +1099,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     final server = ref.read(currentServerProvider);
     final logger = AppLogger();
 
-    if (_playerService.coreType != PlayerCoreType.mpv) {
+    if (!_playerService.coreType == PlayerCoreType.mpv) {
       logger.w('Player', '次字幕仅支持MPV内核');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2335,36 +2335,38 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
   void _showCoreSwitchDialog() {
     final currentCore = normalizePlayerCore(ref.read(playerCoreProvider));
+    final children = <Widget>[
+      ListTile(
+        title: const Text('ExoPlayer', style: TextStyle(color: Colors.white)),
+        subtitle: const Text('Android 原生，轻量稳定', style: TextStyle(fontSize: 12, color: Colors.white70)),
+        leading: currentCore == 'exoPlayer'
+            ? const Icon(Icons.check_circle, color: Color(0xFF5B8DEF))
+            : null,
+        onTap: () {
+          Navigator.pop(context);
+          if (currentCore != 'exoPlayer') {
+            _switchCore('exoPlayer');
+          }
+        },
+      ),
+      ListTile(
+        title: const Text('MPV', style: TextStyle(color: Colors.white)),
+        subtitle: const Text('libmpv FFI，全格式/HDR/高级字幕', style: TextStyle(fontSize: 12, color: Colors.white70)),
+        leading: currentCore == 'mpv'
+            ? const Icon(Icons.check_circle, color: Color(0xFF5B8DEF))
+            : null,
+        onTap: () {
+          Navigator.pop(context);
+          if (currentCore != 'mpv') {
+            _switchCore('mpv');
+          }
+        },
+      ),
+    ];
+
     _showRightPanel(
       title: '切换播放器内核',
-      children: [
-        ListTile(
-          title: const Text('ExoPlayer', style: TextStyle(color: Colors.white)),
-          subtitle: const Text('Android 原生，轻量稳定', style: TextStyle(fontSize: 12, color: Colors.white70)),
-          leading: currentCore == 'exoPlayer'
-              ? const Icon(Icons.check_circle, color: Color(0xFF5B8DEF))
-              : null,
-          onTap: () {
-            Navigator.pop(context);
-            if (currentCore != 'exoPlayer') {
-              _switchCore('exoPlayer');
-            }
-          },
-        ),
-        ListTile(
-          title: const Text('MPV', style: TextStyle(color: Colors.white)),
-          subtitle: const Text('libmpv FFI，全格式/HDR/高级字幕', style: TextStyle(fontSize: 12, color: Colors.white70)),
-          leading: currentCore == 'mpv'
-              ? const Icon(Icons.check_circle, color: Color(0xFF5B8DEF))
-              : null,
-          onTap: () {
-            Navigator.pop(context);
-            if (currentCore != 'mpv') {
-              _switchCore('mpv');
-            }
-          },
-        ),
-      ],
+      children: children,
     );
   }
 
@@ -2380,8 +2382,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       await _playerService.seekTo(savedPosition);
     }
     if (mounted) {
+      final label = normalizePlayerCore(core) == 'mpv' ? 'MPV' : 'ExoPlayer';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已切换到 ${core == 'mpv' ? 'MPV' : 'ExoPlayer'}')),
+        SnackBar(content: Text('已切换到 $label')),
       );
     }
   }

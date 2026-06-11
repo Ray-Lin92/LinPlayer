@@ -39,10 +39,13 @@ dependencies:
   
   # 原生播放器
   # media_kit: 跨平台视频播放器（基于 libmpv 的封装库）
-  media_kit: ^1.1.11
-  media_kit_video: ^1.2.5
-  media_kit_libs_video: ^1.0.5
-  
+  # 注意：PC 端 PGS/SUP 渲染依赖 libmpv 是否包含 hdmv_pgs_subtitle 解码器；
+  #       media-kit 的 Windows 预编译包默认不含该解码器，需额外替换 libmpv-2.dll。
+  media_kit: ^1.2.6
+  media_kit_video: ^1.3.1
+  media_kit_libs_video: ^1.0.7
+
+
   # 工具
   freezed_annotation: ^2.4.1
   json_annotation: ^4.8.1

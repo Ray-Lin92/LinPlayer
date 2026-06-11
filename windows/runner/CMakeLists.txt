@@ -38,3 +38,16 @@ target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
+
+# 构建完成后自动替换完整版 libmpv-2.dll，以启用 media-kit 预编译包中缺失的
+# hdmv_pgs_subtitle 解码器。可通过 -DLINPLAYER_UPGRADE_LIBMPV=OFF 或设置环境变量
+# LINPLAYER_SKIP_LIBMPV_UPGRADE=1 关闭。
+option(LINPLAYER_UPGRADE_LIBMPV "Upgrade libmpv-2.dll for PGS/SUP support" ON)
+if(LINPLAYER_UPGRADE_LIBMPV AND NOT DEFINED ENV{LINPLAYER_SKIP_LIBMPV_UPGRADE})
+  add_custom_command(
+    TARGET ${BINARY_NAME} POST_BUILD
+    COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_SOURCE_DIR}/../scripts/upgrade_libmpv_for_pgs.ps1" -BuildOutput "$<TARGET_FILE_DIR:${BINARY_NAME}>"
+    COMMENT "升级 libmpv-2.dll 以支持 PGS/SUP 图形字幕"
+    VERBATIM
+  )
+endif()
