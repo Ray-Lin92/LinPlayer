@@ -473,6 +473,7 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
   OverlayEntry _createMenuOverlay({
     required LayerLink link,
     required List<_MenuItem> items,
+    double menuWidth = 280,
   }) {
     final overlayBox =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
@@ -480,11 +481,15 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
     final localAnchor = overlayBox != null && anchor != null
         ? overlayBox.globalToLocal(anchor)
         : null;
-    const menuWidth = 280.0;
-    final estimatedMenuHeight = (items.length * 58.0).clamp(120.0, 360.0);
     final screenSize = MediaQuery.of(context).size;
+    final resolvedMenuWidth =
+        menuWidth.clamp(220.0, screenSize.width - 32.0).toDouble();
+    final estimatedRowHeight =
+        items.any((item) => item.label.contains('\n')) ? 76.0 : 58.0;
+    final estimatedMenuHeight =
+        (items.length * estimatedRowHeight).clamp(120.0, 360.0);
     final left = localAnchor?.dx
-        .clamp(16.0, screenSize.width - menuWidth - 16.0)
+        .clamp(16.0, screenSize.width - resolvedMenuWidth - 16.0)
         .toDouble();
     final top = localAnchor == null
         ? null
@@ -511,7 +516,7 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
               left: left,
               top: top,
               child: _MenuSurface(
-                width: menuWidth,
+                width: resolvedMenuWidth,
                 maxHeight: estimatedMenuHeight,
                 backgroundColor: widget.backgroundColor,
                 items: items,
@@ -524,7 +529,7 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
               showWhenUnlinked: false,
               offset: const Offset(0, 8),
               child: _MenuSurface(
-                width: menuWidth,
+                width: resolvedMenuWidth,
                 maxHeight: estimatedMenuHeight,
                 backgroundColor: widget.backgroundColor,
                 items: items,
@@ -762,10 +767,12 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
               (s) => s.isVideo,
               orElse: () => MediaStream(index: 0, type: 'Video'),
             );
+            final sourceLabel = _buildSourceName(source, videoStream);
+            final versionLabel = _buildVideoVersionLabel(source, videoStream);
             final fileSummary = <String>[
-              if ((source.name ?? '').trim().isNotEmpty) source.name!.trim(),
-              if (_buildVideoVersionLabel(source, videoStream).isNotEmpty)
-                _buildVideoVersionLabel(source, videoStream),
+              sourceLabel,
+              if (versionLabel.isNotEmpty && versionLabel != sourceLabel)
+                versionLabel,
               if (source.size != null) _formatBytes(source.size!),
               if (_formatBitRate(source, videoStream) != null)
                 _formatBitRate(source, videoStream)!,
@@ -798,8 +805,9 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
                         link: _sourceLink,
                         child: _SelectorCard(
                           label: '版本',
-                          value: _buildSourceDisplayName(source, videoStream),
+                          value: sourceLabel,
                           tooltip: fileSummary,
+                          valueMaxLines: null,
                           scaleFactor: scale,
                           onTapDown: _rememberMenuAnchor,
                           onTap: () => _toggleSourceMenu(info),
@@ -907,8 +915,7 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
                   child: _mediaInfoExpanded
                       ? _MediaInfoPanel(
                           source: source,
-                          versionLabel:
-                              _buildSourceDisplayName(source, videoStream),
+                          versionLabel: sourceLabel,
                           scaleFactor: scale,
                         )
                       : const SizedBox.shrink(),
@@ -1014,6 +1021,14 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
     return '默认版本';
   }
 
+  String _buildSourceName(MediaSource source, MediaStream videoStream) {
+    final customName = source.name?.trim();
+    if (customName != null && customName.isNotEmpty) {
+      return customName;
+    }
+    return _buildSourceDisplayName(source, videoStream);
+  }
+
   String? _formatBitRate(MediaSource source, MediaStream videoStream) {
     final bitRate = videoStream.bitRate;
     if (bitRate == null || bitRate <= 0) return null;
@@ -1068,6 +1083,7 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
     final selectedSourceId = ref.read(selectedMediaSourceProvider);
     _sourceMenuOverlay = _createMenuOverlay(
       link: _sourceLink,
+      menuWidth: 420,
       items: info.mediaSources.map((source) {
         final videoStream = source.mediaStreams.firstWhere(
           (stream) => stream.isVideo,
@@ -1525,6 +1541,7 @@ class _SelectorCard extends StatefulWidget {
   final String label;
   final String value;
   final String? tooltip;
+  final int? valueMaxLines;
   final double scaleFactor;
   final VoidCallback onTap;
   final ValueChanged<TapDownDetails>? onTapDown;
@@ -1533,6 +1550,7 @@ class _SelectorCard extends StatefulWidget {
     required this.label,
     required this.value,
     this.tooltip,
+    this.valueMaxLines = 3,
     required this.scaleFactor,
     required this.onTap,
     this.onTapDown,
@@ -1593,8 +1611,11 @@ class _SelectorCardState extends State<_SelectorCard> {
                     color: _detailPrimaryText(context),
                     fontWeight: FontWeight.w500,
                   ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: widget.valueMaxLines,
+                  overflow: widget.valueMaxLines == null
+                      ? null
+                      : TextOverflow.ellipsis,
+                  softWrap: true,
                 ),
               ),
             ],
@@ -1736,6 +1757,7 @@ class _FocusableMenuItemState extends State<_FocusableMenuItem> {
                 : Colors.transparent,
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
                 widget.icon,
@@ -1743,11 +1765,14 @@ class _FocusableMenuItemState extends State<_FocusableMenuItem> {
                 color: _isHovered ? widget.primaryColor : secondaryText,
               ),
               const SizedBox(width: 12),
-              Text(
-                widget.label,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: _isHovered ? primaryText : secondaryText,
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _isHovered ? primaryText : secondaryText,
+                  ),
+                  softWrap: true,
                 ),
               ),
             ],
