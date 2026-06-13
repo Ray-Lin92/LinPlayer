@@ -33,47 +33,6 @@ class WatchHistoryService {
     );
   }
 
-  Future<int?> resolveResumePositionTicks({
-    required String scopeKey,
-    required ApiClientFactory api,
-    required MediaItem item,
-    int? remotePositionTicks,
-    bool remotePlayed = false,
-  }) async {
-    if (remotePlayed) {
-      return null;
-    }
-
-    final normalizedRemotePosition = _normalizePositionTicks(
-      remotePositionTicks,
-      item.runTimeTicks,
-    );
-    final fingerprint = await buildFingerprint(api, item);
-    if (fingerprint == null) {
-      return normalizedRemotePosition;
-    }
-
-    final records = await _store.loadScope(scopeKey);
-    final existing = _findExistingRecord(records, fingerprint, item.id);
-    if (existing == null || existing.played) {
-      return normalizedRemotePosition;
-    }
-
-    final normalizedLocalPosition = _normalizePositionTicks(
-      existing.lastPositionTicks,
-      item.runTimeTicks ?? existing.runTimeTicks,
-    );
-    if (normalizedLocalPosition == null) {
-      return normalizedRemotePosition;
-    }
-    if (normalizedRemotePosition == null) {
-      return normalizedLocalPosition;
-    }
-    return normalizedLocalPosition > normalizedRemotePosition
-        ? normalizedLocalPosition
-        : normalizedRemotePosition;
-  }
-
   Future<String?> resolveSeriesTmdbId(
     ApiClientFactory api,
     MediaItem item,
@@ -195,16 +154,6 @@ class WatchHistoryService {
       return true;
     }
     return DateTime.now().toUtc().difference(lastWriteAt).inSeconds >= 10;
-  }
-
-  int? _normalizePositionTicks(int? positionTicks, int? runtimeTicks) {
-    if (positionTicks == null || positionTicks <= 0) {
-      return null;
-    }
-    if (runtimeTicks == null || runtimeTicks <= 0) {
-      return positionTicks;
-    }
-    return positionTicks.clamp(0, runtimeTicks);
   }
 
   WatchHistoryRecord? _findExistingRecord(
