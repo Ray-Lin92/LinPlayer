@@ -201,7 +201,6 @@ class _EpisodeDetailScreenState extends ConsumerState<EpisodeDetailScreen> {
   }
 
   void _resetPlaybackSelections() {
-    // 使用 Future.microtask 延迟执行，避免在 widget 生命周期中直接修改 provider
     Future.microtask(() {
       ref.read(selectedMediaSourceProvider.notifier).state = null;
       ref.read(audioTrackProvider.notifier).state = null;
