@@ -36,6 +36,7 @@ Map<String, dynamic> _buildBackupPayload(WidgetRef ref) {
       'hardwareDecoding': ref.read(hardwareDecodingProvider),
       'backgroundPlayback': ref.read(backgroundPlaybackProvider),
       'autoPlayNext': ref.read(autoPlayNextProvider),
+      'watchedThreshold': ref.read(watchedThresholdProvider),
       'danmakuEnabled': ref.read(danmakuEnabledProvider),
       'danmakuOpacity': ref.read(danmakuOpacityProvider),
       'danmakuFontSize': ref.read(danmakuFontSizeProvider),
@@ -47,6 +48,7 @@ Map<String, dynamic> _buildBackupPayload(WidgetRef ref) {
       'rememberBrightness': ref.read(rememberBrightnessProvider),
       'subtitleFont': ref.read(subtitleFontProvider),
       'mpvDolbyVisionFix': ref.read(mpvDolbyVisionFixProvider),
+      'externalMpvPath': ref.read(externalMpvPathProvider),
       'impellerEnabled': ref.read(impellerEnabledProvider),
       'exoLibass': ref.read(exoLibassProvider),
       'subtitleBackground': ref.read(subtitleBackgroundProvider),
@@ -116,6 +118,10 @@ Future<void> _restoreBackupPayload(
     ref.read(autoPlayNextProvider.notifier).state =
         settings['autoPlayNext'] as bool;
   }
+  if (settings['watchedThreshold'] is num) {
+    ref.read(watchedThresholdProvider.notifier).state =
+        (settings['watchedThreshold'] as num).toInt();
+  }
   if (settings['danmakuEnabled'] is bool) {
     ref.read(danmakuEnabledProvider.notifier).state =
         settings['danmakuEnabled'] as bool;
@@ -159,6 +165,10 @@ Future<void> _restoreBackupPayload(
   if (settings['mpvDolbyVisionFix'] is bool) {
     ref.read(mpvDolbyVisionFixProvider.notifier).state =
         settings['mpvDolbyVisionFix'] as bool;
+  }
+  if (settings['externalMpvPath'] is String) {
+    ref.read(externalMpvPathProvider.notifier).state =
+        settings['externalMpvPath'] as String;
   }
   if (settings['impellerEnabled'] is bool) {
     ref.read(impellerEnabledProvider.notifier).state =
