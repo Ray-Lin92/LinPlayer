@@ -1,11 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_preferences.dart';
-import '../api/api_interfaces.dart' show MediaItem;
-import '../api/danmaku/danmaku_service.dart';
 import '../services/sync/bangumi_sync_service.dart';
 import '../services/sync/sync_models.dart';
-import '../services/sync/sync_scrobble_service.dart';
 import '../services/sync/sync_secure_store.dart';
 import '../services/sync/trakt_sync_service.dart';
 
@@ -50,7 +47,7 @@ class SyncState {
 const String _bangumiRedirectPrefKey = 'bangumi_redirect_uri';
 
 class SyncController extends StateNotifier<SyncState> {
-  SyncController(this._ref)
+  SyncController()
       : super(SyncState(
           bangumiRedirectUri:
               AppPreferencesStore.instance.getString(_bangumiRedirectPrefKey) ??
@@ -59,12 +56,8 @@ class SyncController extends StateNotifier<SyncState> {
     _restore();
   }
 
-  final Ref _ref;
-
   final TraktSyncService trakt = TraktSyncService();
   final BangumiSyncService bangumi = BangumiSyncService();
-  late final SyncScrobbleService _scrobble =
-      SyncScrobbleService(trakt: trakt, bangumi: bangumi);
 
   /// 启动时从存储恢复账号，并回填到 [SyncSession]（供 service 层调用）。
   void _restore() {
@@ -120,27 +113,6 @@ class SyncController extends StateNotifier<SyncState> {
     state = state.copyWith(bangumi: account);
   }
 
-  // ---- 观看记录自动同步 ----
-
-  /// 播放达到完成阈值后调用：把「看过」写入已连接的 Trakt/Bangumi。
-  /// 未连接任何服务时直接返回，不产生网络请求。
-  Future<void> scrobbleWatched(
-    MediaItem item, {
-    Map<String, String>? seriesProviderIds,
-  }) async {
-    if (!state.isConnected(SyncService.trakt) &&
-        !state.isConnected(SyncService.bangumi)) {
-      return;
-    }
-    // 弹弹play 在线时作为 Bangumi 反查首选（需配置 DANDANPLAY 凭据，与弹幕同一套）。
-    final dandanplay = _ref.read(danmakuServiceProvider).dandanplay;
-    await _scrobble.scrobbleWatched(
-      item,
-      seriesProviderIds: seriesProviderIds,
-      dandanplay: dandanplay,
-    );
-  }
-
   // ---- 断开连接 ----
 
   Future<void> disconnect(SyncService service) async {
@@ -157,5 +129,5 @@ class SyncController extends StateNotifier<SyncState> {
 
 final syncControllerProvider =
     StateNotifierProvider<SyncController, SyncState>((ref) {
-  return SyncController(ref);
+  return SyncController();
 });
