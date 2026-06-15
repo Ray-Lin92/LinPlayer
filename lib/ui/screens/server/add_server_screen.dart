@@ -433,13 +433,12 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
         username: username,
         authToken: authResult.accessToken,
         userId: authResult.userId,
-        password: password,
       );
-
+      
       ref.read(serverListProvider.notifier).addServer(server);
       ref.read(currentServerProvider.notifier).state = server;
       ref.read(authStateProvider.notifier).state = AuthState.authenticated;
-
+      
       if (!mounted) return;
       context.go('/home');
     } catch (e) {
@@ -495,7 +494,6 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
           username: username,
           authToken: authResult.accessToken,
           userId: authResult.userId,
-          password: password,
         );
         
         ref.read(serverListProvider.notifier).addServer(server);

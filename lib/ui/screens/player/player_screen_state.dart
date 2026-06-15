@@ -10,8 +10,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
   Timer? _longPressTimer;
   Timer? _sleepTimer;
   double? _initialVideoAspectRatio;
-  // 本次播放是否已上报「看过」到同步服务，避免 onStop 多次触发导致重复写入。
-  bool _didScrobble = false;
 
   static VideoPlayerService? _activePlayerService;
 
@@ -262,7 +260,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         ? DateTime.now().microsecondsSinceEpoch
         : null;
 
-    _didScrobble = false;
     await _playerService.initialize(
       videoUrl: videoUrl,
       itemId: widget.itemId,
@@ -293,7 +290,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         try {
           await api.playback.reportPlaybackStopped(info);
         } catch (_) {}
-        await _maybeScrobbleWatched(info, item);
       },
     );
 
@@ -523,18 +519,82 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
   }
 
-  // 字幕编解码归一收敛到公共 [PlayerSubtitleLoader]（三端共用，逻辑一致）。
-  String _embySubtitleCodec(String codec) =>
-      PlayerSubtitleLoader.embySubtitleCodec(codec, _playerService.coreType);
+  String _embySubtitleCodec(String codec) {
+    final lower = codec.toLowerCase();
+    final isPgs = lower == 'pgssub' ||
+        lower == 'pgs' ||
+        lower == 'sup' ||
+        lower.contains('hdmv');
+    if (_playerService.coreType == PlayerCoreType.mpv ||
+        _playerService.coreType == PlayerCoreType.nativeMpv) {
+      switch (lower) {
+        case 'srt' || 'subrip':
+          return 'srt';
+        case 'vtt' || 'webvtt':
+          return 'vtt';
+        default:
+          if (isPgs) return 'pgs';
+          return 'ass';
+      }
+    } else {
+      switch (lower) {
+        case 'srt' || 'subrip':
+          return 'srt';
+        case 'vtt' || 'webvtt':
+          return 'vtt';
+        case 'ass' || 'ssa':
+          return 'ass';
+        case 'pgssub' || 'pgs' || 'sup':
+          return 'pgs';
+        default:
+          if (isPgs) return 'pgs';
+          return 'srt';
+      }
+    }
+  }
 
-  String _subtitleFileExtension(String codec, PlayerCoreType coreType) =>
-      PlayerSubtitleLoader.subtitleFileExtension(codec, coreType);
+  String _subtitleFileExtension(String codec, PlayerCoreType coreType) {
+    final lower = codec.toLowerCase();
+    if (lower == 'srt' || lower == 'subrip') {
+      return 'srt';
+    }
+    if (lower == 'vtt' || lower == 'webvtt') {
+      return 'vtt';
+    }
+    if (lower == 'ass' || lower == 'ssa') {
+      return 'ass';
+    }
+    if (lower == 'pgssub' ||
+        lower == 'pgs' ||
+        lower == 'sup' ||
+        lower == 'dvdsub' ||
+        lower == 'vobsub' ||
+        lower.contains('hdmv') ||
+        lower.contains('pgs')) {
+      return 'sup';
+    }
+    if (coreType == PlayerCoreType.mpv ||
+        coreType == PlayerCoreType.nativeMpv) {
+      return 'ass';
+    }
+    return 'srt';
+  }
 
-  bool _isAssSubtitleCodec(String codec) =>
-      PlayerSubtitleLoader.isAssSubtitleCodec(codec);
+  bool _isAssSubtitleCodec(String codec) {
+    final lower = codec.toLowerCase();
+    return lower == 'ass' || lower == 'ssa';
+  }
 
-  bool _isGraphicalSubtitleCodec(String codec) =>
-      PlayerSubtitleLoader.isGraphicalSubtitleCodec(codec);
+  bool _isGraphicalSubtitleCodec(String codec) {
+    final lower = codec.toLowerCase();
+    return lower == 'pgssub' ||
+        lower == 'sup' ||
+        lower == 'pgs' ||
+        lower == 'dvdsub' ||
+        lower == 'vobsub' ||
+        lower.contains('hdmv') ||
+        lower.contains('pgs');
+  }
 
   Future<File> _prepareSubtitleFileForPlayer({
     required String subtitleUrl,
@@ -771,24 +831,125 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     }
   }
 
-  // 内封字幕匹配统一委托公共 [PlayerSubtitleLoader]（三端一致、单一来源）。
   String? _matchMpvSubtitleTrack(
     List<Map<String, dynamic>> subtitleTracks,
     String? targetLang,
     String? targetTitle,
     String? targetCodec,
     int targetStreamIndex,
-  ) =>
-      PlayerSubtitleLoader.matchMpvSubtitleTrack(
-          subtitleTracks, targetLang, targetTitle, targetCodec, targetStreamIndex);
+  ) {
+    final codec = targetCodec?.toLowerCase() ?? '';
+    final isGraphical = codec == 'pgssub' ||
+        codec == 'sup' ||
+        codec == 'pgs' ||
+        codec == 'dvdsub' ||
+        codec == 'vobsub' ||
+        codec.contains('hdmv') ||
+        codec.contains('pgs');
+    final isAss = codec == 'ass' || codec == 'ssa';
+
+    final candidates = isGraphical
+        ? subtitleTracks
+            .where((t) => t['type'] == 'bitmap' || t['isBitmap'] == true)
+            .toList()
+        : isAss
+            ? subtitleTracks
+                .where((t) => t['isAss'] == true || t['type'] == 'text')
+                .toList()
+            : subtitleTracks;
+
+    if (candidates.isEmpty) return subtitleTracks.first['id']?.toString();
+
+    if (targetTitle != null && targetTitle.isNotEmpty) {
+      for (final t in candidates) {
+        final tTitle = t['title']?.toString() ?? '';
+        if (tTitle.isNotEmpty && _titlesMatch(targetTitle, tTitle)) {
+          return t['id']?.toString();
+        }
+      }
+    }
+
+    if (targetLang != null) {
+      final langMatches = candidates
+          .where((t) =>
+              t['language'] == targetLang ||
+              t['language'] == 'chi' ||
+              t['language'] == 'zh')
+          .toList();
+      if (langMatches.length == 1) return langMatches.first['id']?.toString();
+      if (langMatches.length > 1 &&
+          targetTitle != null &&
+          targetTitle.isNotEmpty) {
+        for (final t in langMatches) {
+          final tTitle = t['title']?.toString() ?? '';
+          if (tTitle.isNotEmpty && _titlesMatch(targetTitle, tTitle)) {
+            return t['id']?.toString();
+          }
+        }
+        if (targetStreamIndex >= 0 && targetStreamIndex < langMatches.length) {
+          return langMatches[targetStreamIndex]['id']?.toString();
+        }
+        return langMatches.first['id']?.toString();
+      }
+    }
+
+    final embySubIndex =
+        _computeEmbySubtitleIndex(targetStreamIndex, subtitleTracks);
+    if (embySubIndex >= 0 && embySubIndex < candidates.length) {
+      return candidates[embySubIndex]['id']?.toString();
+    }
+
+    return candidates.first['id']?.toString();
+  }
 
   String? _matchMpvSecondarySubtitleTrack(
     List<Map<String, dynamic>> subtitleTracks,
     MediaStream target,
     String? primaryTrackId,
-  ) =>
-      PlayerSubtitleLoader.matchMpvSecondarySubtitleTrack(
-          subtitleTracks, target, primaryTrackId);
+  ) {
+    if (subtitleTracks.isEmpty) return null;
+
+    final codec = target.codec?.toLowerCase() ?? '';
+    final isGraphical = codec == 'pgssub' ||
+        codec == 'sup' ||
+        codec == 'pgs' ||
+        codec.contains('hdmv') ||
+        codec.contains('pgs');
+    if (isGraphical) return null;
+
+    final filtered = subtitleTracks.where((t) {
+      final isBitmap = t['type'] == 'bitmap' || t['isBitmap'] == true;
+      if (isBitmap) return false;
+      final embyIndex = _extractEmbySubtitleIndex(t['id']?.toString());
+      if (embyIndex != null && embyIndex == target.index) return true;
+      return false;
+    }).toList();
+    if (filtered.isNotEmpty) {
+      return filtered.first['id']?.toString();
+    }
+
+    final title = target.displayTitle ?? target.title;
+    if (title != null && title.isNotEmpty) {
+      for (final t in subtitleTracks) {
+        if (t['id']?.toString() == primaryTrackId) continue;
+        final isBitmap = t['type'] == 'bitmap' || t['isBitmap'] == true;
+        if (isBitmap) continue;
+        final tTitle = t['title']?.toString() ?? '';
+        if (tTitle.isNotEmpty && _titlesMatch(title, tTitle)) {
+          return t['id']?.toString();
+        }
+      }
+    }
+
+    for (final t in subtitleTracks) {
+      if (t['id']?.toString() == primaryTrackId) continue;
+      final isBitmap = t['type'] == 'bitmap' || t['isBitmap'] == true;
+      if (isBitmap) continue;
+      return t['id']?.toString();
+    }
+
+    return null;
+  }
 
   String? _matchExoSubtitleTrack(
     List<Map<String, dynamic>> subtitleTracks,
@@ -796,12 +957,115 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     String? targetTitle,
     String? targetCodec,
     int targetStreamIndex,
-  ) =>
-      PlayerSubtitleLoader.matchExoSubtitleTrack(
-          subtitleTracks, targetLang, targetTitle, targetCodec, targetStreamIndex);
+  ) {
+    final codec = targetCodec?.toLowerCase() ?? '';
+    final isGraphical = codec == 'pgssub' ||
+        codec == 'sup' ||
+        codec == 'pgs' ||
+        codec == 'dvdsub' ||
+        codec == 'vobsub' ||
+        codec.contains('hdmv') ||
+        codec.contains('pgs');
 
-  bool _titlesMatch(String embyTitle, String playerTitle) =>
-      PlayerSubtitleLoader.titlesMatch(embyTitle, playerTitle);
+    final candidates = isGraphical
+        ? subtitleTracks
+            .where((t) => t['type'] == 'bitmap' || t['isBitmap'] == true)
+            .toList()
+        : subtitleTracks;
+
+    if (candidates.isEmpty) return null;
+
+    for (final t in candidates) {
+      final groupIndex = t['groupIndex'];
+      if (groupIndex != null && groupIndex == targetStreamIndex) {
+        return t['id']?.toString();
+      }
+    }
+
+    if (targetTitle != null && targetTitle.isNotEmpty) {
+      for (final t in candidates) {
+        final tTitle = t['title']?.toString() ?? t['label']?.toString() ?? '';
+        if (tTitle.isNotEmpty && _titlesMatch(targetTitle, tTitle)) {
+          return t['id']?.toString();
+        }
+      }
+    }
+
+    if (targetLang != null) {
+      final langMatches =
+          candidates.where((t) => t['language'] == targetLang).toList();
+      if (langMatches.length == 1) return langMatches.first['id']?.toString();
+      if (langMatches.length > 1) {
+        final idx =
+            _computeEmbySubtitleIndex(targetStreamIndex, subtitleTracks);
+        if (idx >= 0 && idx < langMatches.length) {
+          return langMatches[idx]['id']?.toString();
+        }
+        return langMatches.first['id']?.toString();
+      }
+    }
+
+    final idx = _computeEmbySubtitleIndex(targetStreamIndex, subtitleTracks);
+    if (idx >= 0 && idx < candidates.length) {
+      return candidates[idx]['id']?.toString();
+    }
+
+    return candidates.first['id']?.toString();
+  }
+
+  int _computeEmbySubtitleIndex(
+      int embyStreamIndex, List<Map<String, dynamic>> subtitleTracks) {
+    if (subtitleTracks.isEmpty) return -1;
+    final ids = subtitleTracks.map((t) => t['id']?.toString() ?? '').toList();
+    for (int i = 0; i < ids.length; i++) {
+      final parts = ids[i].split('_');
+      if (parts.length == 2 && int.tryParse(parts[0]) == embyStreamIndex) {
+        return i;
+      }
+    }
+    final sorted = List<Map<String, dynamic>>.from(subtitleTracks);
+    sorted.sort((a, b) {
+      final aId = a['id']?.toString() ?? '0';
+      final bId = b['id']?.toString() ?? '0';
+      final aGroup = int.tryParse(aId.split('_').first) ?? 0;
+      final bGroup = int.tryParse(bId.split('_').first) ?? 0;
+      if (aGroup != bGroup) return aGroup.compareTo(bGroup);
+      final aTrack = int.tryParse(aId.split('_').last) ?? 0;
+      final bTrack = int.tryParse(bId.split('_').last) ?? 0;
+      return aTrack.compareTo(bTrack);
+    });
+    int subCounter = 0;
+    for (int i = 0; i < sorted.length; i++) {
+      final groupStr = sorted[i]['id'].toString().split('_').first;
+      final group = int.tryParse(groupStr) ?? 0;
+      if (group == embyStreamIndex) return subCounter;
+      subCounter++;
+    }
+    return -1;
+  }
+
+  int? _extractEmbySubtitleIndex(String? trackId) {
+    if (trackId == null || trackId.isEmpty) return null;
+    final parts = trackId.split('_');
+    if (parts.length != 2) return null;
+    return int.tryParse(parts.first);
+  }
+
+  bool _titlesMatch(String embyTitle, String playerTitle) {
+    final e = embyTitle.toLowerCase();
+    final p = playerTitle.toLowerCase();
+    if (e == p) return true;
+    if (p.contains(e) || e.contains(p)) return true;
+    final simpKeywords = ['简', 'chs', '简体', '简日', 'gb', '简中'];
+    final tradKeywords = ['繁', 'cht', '繁体', '繁日', 'big5', '繁中'];
+    final eIsSimp = simpKeywords.any((k) => e.contains(k));
+    final eIsTrad = tradKeywords.any((k) => e.contains(k));
+    final pIsSimp = simpKeywords.any((k) => p.contains(k));
+    final pIsTrad = tradKeywords.any((k) => p.contains(k));
+    if (eIsSimp && pIsSimp) return true;
+    if (eIsTrad && pIsTrad) return true;
+    return false;
+  }
 
   Future<void> _selectInternalSubtitleViaTrack(
       MediaStream target, int next, AppLogger logger) async {
@@ -1807,34 +2071,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     }
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  /// 播放停止时判断是否「看完」（进度达到设置里的统一观看阈值），是则上报到
-  /// 已连接的同步服务。onStop 可能因显式停止 + dispose 触发两次，用 [_didScrobble] 去重。
-  Future<void> _maybeScrobbleWatched(PlaybackStopInfo info, MediaItem item) async {
-    if (_didScrobble) return;
-    final runtime = item.runTimeTicks;
-    if (runtime == null || runtime <= 0) return;
-    // 复用设置页「观看阈值」（linplayer_watched_threshold，75~95，默认90）。
-    final thresholdPercent = ref.read(watchedThresholdProvider);
-    if (info.positionTicks / runtime < thresholdPercent / 100) return;
-    _didScrobble = true;
-
-    // 剧集需要所属剧的 ProviderIds 才能给 Bangumi 取 subject_id。
-    Map<String, String>? seriesProviderIds;
-    if (item.type == 'Episode' && item.seriesId != null) {
-      try {
-        final series =
-            await ref.read(apiClientProvider).media.getItemDetails(item.seriesId!);
-        seriesProviderIds = series.providerIds;
-      } catch (_) {}
-    }
-
-    try {
-      await ref
-          .read(syncControllerProvider.notifier)
-          .scrobbleWatched(item, seriesProviderIds: seriesProviderIds);
-    } catch (_) {}
   }
 
   Future<void> _playPrevious() async {
