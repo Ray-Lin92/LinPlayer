@@ -31,6 +31,18 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => _showDanmakuSettings(context),
           ),
           _SettingsCard(
+            icon: Icons.translate,
+            title: '字幕翻译',
+            subtitle: 'AI / 百度 / 腾讯翻译，Whisper 本地转写',
+            onTap: () => _showTranslationSettings(context),
+          ),
+          _SettingsCard(
+            icon: Icons.sync,
+            title: '同步服务',
+            subtitle: 'Trakt、Bangumi 观看记录同步',
+            onTap: () => _showSyncSettings(context),
+          ),
+          _SettingsCard(
             icon: Icons.extension,
             title: '插件',
             subtitle: '安装、启用/禁用第三方插件',
@@ -75,6 +87,20 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  void _showSyncSettings(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SyncSettingsScreen()),
+    );
+  }
+
+  void _showTranslationSettings(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TranslationSettingsScreen()),
+    );
+  }
+
   void _showAbout(BuildContext context) {
     showDialog(
       context: context,
@@ -109,9 +135,17 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _exportLogs(BuildContext context) async {
     try {
       final path = await AppLogger().exportToFile();
+      final livePath = AppLogger().logFilePath;
+      await Clipboard.setData(ClipboardData(text: path));
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('日志已导出到: $path')),
+          SnackBar(
+            duration: const Duration(seconds: 6),
+            content: Text(
+              '日志已导出（路径已复制）:\n$path'
+              '${livePath != null ? '\n实时日志文件: $livePath' : ''}',
+            ),
+          ),
         );
       }
     } catch (e) {

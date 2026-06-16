@@ -27,6 +27,10 @@ class MpvPlayerAdapter implements PlayerAdapter {
 
   Player? _player;
   VideoController? _videoController;
+  // 缓存 Video Widget，保证每次 build 返回同一实例。
+  // 否则播放页 setState（显示控制栏/选项）会重建 Video，
+  // 触发 media_kit 纹理重新挂载并瞬时呈现空白帧，造成画面闪现。
+  Widget? _videoWidget;
 
   bool _isInitialized = false;
   bool _isPlaying = false;
@@ -489,6 +493,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
         ),
       );
       _videoController = VideoController(_player!);
+      _videoWidget = null; // 新控制器，丢弃旧的缓存 Video 实例
       _setupStreamListeners();
 
       {
@@ -505,8 +510,10 @@ class MpvPlayerAdapter implements PlayerAdapter {
           // 默认关闭次字幕可见性，只有用户明确选择次字幕时才开启
           // 避免同时显示两个字幕（主字幕+次字幕）
           await np.setProperty('secondary-sub-visibility', 'no');
-          // 使用视频混合路径，确保 PGS/SUP 等位图字幕稳定显示。
-          await np.setProperty('blend-subtitles', 'video');
+          // 字幕走 OSD 覆盖层渲染（不混入视频帧）。
+          // blend-subtitles=video 会让位图字幕(PGS/SUP)每次刷新都重绘整帧，
+          // 导致视频画面闪现；覆盖层渲染同样能稳定显示 PGS/SUP。
+          await np.setProperty('blend-subtitles', 'no');
           await np.setProperty('sub-visibility', 'yes');
           await np.setProperty('hwdec', hardwareDecoding ? 'auto-safe' : 'no');
           await _applyShaderList(_glslShaders);
@@ -1468,7 +1475,10 @@ class MpvPlayerAdapter implements PlayerAdapter {
       await np.setProperty('sub-delay', _subtitleDelay.toStringAsFixed(3));
 
       if (_hasBitmapSubtitle) {
-        await np.setProperty('blend-subtitles', 'video');
+        // PGS/SUP 位图字幕必须走 OSD 覆盖层渲染：
+        // blend-subtitles=video 会把字幕混入视频帧，PGS 频繁的合成刷新
+        // (含清屏段) 会触发整帧重绘，在桌面端造成视频画面闪现。
+        await np.setProperty('blend-subtitles', 'no');
         // PGS/SUP 等位图字幕：关闭 ASS 处理，避免 libass 干扰原生渲染
         await np.setProperty('sub-ass', 'no');
         await np.setProperty('sub-ass-override', 'no');
@@ -1813,15 +1823,20 @@ class MpvPlayerAdapter implements PlayerAdapter {
   @override
   Widget buildVideo() {
     if (_videoController != null) {
-      return Video(
-        controller: _videoController!,
-        fit: BoxFit.contain,
-        controls: null,
-        // Keep Flutter's text subtitle overlay disabled.
-        // We rely on mpv's native subtitle pipeline to avoid duplicate ASS
-        // rendering and to preserve bitmap subtitle support.
-        subtitleViewConfiguration:
-            const SubtitleViewConfiguration(visible: false),
+      // 返回缓存实例：identical(old, new) 时 Flutter 会跳过该子树重建，
+      // 避免控制栏/选项弹出引起的视频纹理重挂载闪现。
+      // RepaintBoundary 进一步隔离上层覆盖层的重绘，不波及视频层。
+      return _videoWidget ??= RepaintBoundary(
+        child: Video(
+          controller: _videoController!,
+          fit: BoxFit.contain,
+          controls: null,
+          // Keep Flutter's text subtitle overlay disabled.
+          // We rely on mpv's native subtitle pipeline to avoid duplicate ASS
+          // rendering and to preserve bitmap subtitle support.
+          subtitleViewConfiguration:
+              const SubtitleViewConfiguration(visible: false),
+        ),
       );
     }
     return const Center(child: CircularProgressIndicator());
@@ -1906,6 +1921,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
       _player = null;
     }
     _videoController = null;
+    _videoWidget = null;
     _isInitialized = false;
     _isPlaying = false;
     _isBuffering = false;
