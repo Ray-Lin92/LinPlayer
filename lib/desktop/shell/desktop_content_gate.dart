@@ -51,9 +51,9 @@ class _NoServerPlaceholder extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
-            onPressed: () => context.go('/servers'),
+            onPressed: () => context.go('/add-server'),
             icon: const Icon(Icons.add),
-            label: const Text('前往服务器管理'),
+            label: const Text('添加服务器'),
           ),
         ],
       ),
