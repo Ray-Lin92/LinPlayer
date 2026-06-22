@@ -4,11 +4,11 @@ import 'package:cryptography/cryptography.dart';
 
 import 'secure_credential_store.dart' show secureRandomBytes;
 
-/// 备份文件的口令加密（H12）。
+/// 备份文件的口令加密（H12，旧格式，仅保留用于**向后兼容导入**）。
 ///
 /// 整包明文 JSON 用「PBKDF2-HMAC-SHA256 派生密钥 + AES-256-GCM」加密，输出一个
 /// 自描述的 JSON 包装（含算法/迭代次数/盐/nonce/密文/认证标签）。导入端据此
-/// 还原。格式文档见 `docs/BACKUP_FORMAT.md`。
+/// 还原。当前默认导出已改用免密的通用配置(见 `common_config.dart`)。
 class BackupCrypto {
   BackupCrypto._();
 

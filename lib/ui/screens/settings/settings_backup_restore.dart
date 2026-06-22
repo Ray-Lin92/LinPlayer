@@ -24,8 +24,15 @@ class BackupRestoreScreen extends ConsumerWidget {
               ),
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              '备份含服务器账号密码/Token，导出时会加密成乱码，任何兼容客户端无需密码即可导入。',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
           FilledButton.icon(
-            onPressed: () => _showExportDialog(context, ref),
+            onPressed: () => _exportBackup(context, ref),
             icon: const Icon(Icons.backup),
             label: const Text('导出备份'),
           ),
@@ -101,24 +108,22 @@ class BackupRestoreScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showExportDialog(BuildContext context, WidgetRef ref) async {
-    // 备份含服务器账号密码/Token，强制用口令加密整包（H12）。
-    final pass = await _promptPassphrase(context, forExport: true);
-    if (pass == null || !context.mounted) return;
+  /// 导出备份:通用配置(Richasy 兼容)格式,容器内带 `_key`,把明文密码/Token
+  /// 挡成乱码;免密、任何兼容客户端可直接导入。全程无提示。
+  Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
     final path = await FilePicker.platform.saveFile(
       dialogTitle: '导出备份',
-      fileName: 'linplayer-backup.json',
+      fileName: 'linplayer-config.json',
       type: FileType.custom,
       allowedExtensions: const ['json'],
     );
     if (path == null) return;
     try {
-      final plain = jsonEncode(_buildBackupPayload(ref));
-      final wrapper = await BackupCrypto.encrypt(plain, pass);
-      await File(path).writeAsString(jsonEncode(wrapper));
+      final container = await _buildCommonConfig(ref);
+      await File(path).writeAsString(jsonEncode(container));
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('备份已加密导出到: $path')),
+          SnackBar(content: Text('备份已导出: $path')),
         );
       }
     } catch (e) {
@@ -130,73 +135,16 @@ class BackupRestoreScreen extends ConsumerWidget {
     }
   }
 
-  /// 备份口令输入框。导出时需二次确认；导入时仅输入一次。返回 null=取消。
-  Future<String?> _promptPassphrase(BuildContext context,
-      {required bool forExport}) {
-    final controller = TextEditingController();
-    final confirmController = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        String? error;
-        return StatefulBuilder(builder: (dialogContext, setState) {
-          return AlertDialog(
-            title: Text(forExport ? '设置备份密码' : '输入备份密码'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  forExport
-                      ? '备份将用此密码加密（含服务器账号密码/Token）。务必记住——'
-                          '忘记密码将无法恢复，与他人互导时对方也需要此密码。'
-                      : '此备份已加密，请输入导出时设置的密码。',
-                  style: const TextStyle(fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: controller,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                      labelText: '密码', border: OutlineInputBorder()),
-                ),
-                if (forExport) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: confirmController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                        labelText: '确认密码', border: OutlineInputBorder()),
-                  ),
-                ],
-                if (error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(error!,
-                      style: const TextStyle(color: Colors.red, fontSize: 12)),
-                ],
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('取消')),
-              FilledButton(
-                onPressed: () {
-                  final pass = controller.text;
-                  if (pass.isEmpty) {
-                    setState(() => error = '密码不能为空');
-                    return;
-                  }
-                  if (forExport && pass != confirmController.text) {
-                    setState(() => error = '两次输入不一致');
-                    return;
-                  }
-                  Navigator.pop(dialogContext, pass);
-                },
-                child: Text(forExport ? '加密导出' : '解密导入'),
-              ),
-            ],
-          );
-        });
+  /// 把当前服务器 + 设置打包成通用配置容器。
+  Future<Map<String, dynamic>> _buildCommonConfig(WidgetRef ref) async {
+    final payload = _buildBackupPayload(ref);
+    return CommonConfig.build(
+      ref.read(serverListProvider),
+      exportTimeUnix: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      extra: {
+        'linplayer_settings': payload['settings'],
+        if (payload['currentServerId'] != null)
+          'current_server_id': payload['currentServerId'],
       },
     );
   }
@@ -228,6 +176,7 @@ class BackupRestoreScreen extends ConsumerWidget {
     try {
       final content = await File(path).readAsString();
       final json = jsonDecode(content) as Map<String, dynamic>;
+      if (!context.mounted) return;
       final payload = await _decodeBackup(context, json);
       if (payload == null) return; // 取消输入密码
       await _restoreBackupPayload(ref, payload);
@@ -239,21 +188,94 @@ class BackupRestoreScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('导入失败：密码错误或文件已损坏')),
+          const SnackBar(content: Text('导入失败：文件已损坏或格式不支持')),
         );
       }
     }
   }
 
-  /// 把读到的备份 JSON 解为明文 payload：加密备份则提示输入密码解密，
-  /// 旧版明文备份直接返回。返回 null = 用户取消输入密码。
+  /// 把读到的备份 JSON 解为统一 payload。
+  /// - 通用配置(默认导出)：用 _key/内置密钥解出服务器列表。
+  /// - 旧版口令加密备份：提示输入密码解密(向后兼容)。
+  /// - 旧版明文备份：直接返回。
+  /// 返回 null = 用户取消输入密码。
   Future<Map<String, dynamic>?> _decodeBackup(
       BuildContext context, Map<String, dynamic> json) async {
-    if (!BackupCrypto.isEncrypted(json)) return json; // 兼容旧明文备份
-    final pass = await _promptPassphrase(context, forExport: false);
-    if (pass == null) return null;
-    final plain = await BackupCrypto.decrypt(json, pass);
-    return jsonDecode(plain) as Map<String, dynamic>;
+    if (CommonConfig.isCommonConfig(json)) {
+      final servers = await CommonConfig.parse(json);
+      final extra = CommonConfig.additionalData(json);
+      final settings =
+          (extra?['linplayer_settings'] as Map?)?.cast<String, dynamic>();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已识别备份（${servers.length} 个服务器）')),
+        );
+      }
+      return {
+        'servers': servers.map(serverConfigToJson).toList(),
+        if (settings != null) 'settings': settings,
+        if (extra?['current_server_id'] != null)
+          'currentServerId': extra!['current_server_id'],
+      };
+    }
+    // 向后兼容：旧版口令加密备份。
+    if (BackupCrypto.isEncrypted(json)) {
+      final pass = await _promptImportPassphrase(context);
+      if (pass == null) return null;
+      final plain = await BackupCrypto.decrypt(json, pass);
+      return jsonDecode(plain) as Map<String, dynamic>;
+    }
+    return json; // 旧版明文备份
+  }
+
+  /// 旧版加密备份的密码输入框(仅导入时用)。返回 null=取消。
+  Future<String?> _promptImportPassphrase(BuildContext context) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        String? error;
+        return StatefulBuilder(builder: (dialogContext, setState) {
+          return AlertDialog(
+            title: const Text('输入备份密码'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('此备份由旧版本加密，请输入当时设置的密码。',
+                    style: TextStyle(fontSize: 12)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                      labelText: '密码', border: OutlineInputBorder()),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(error!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12)),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('取消')),
+              FilledButton(
+                onPressed: () {
+                  if (controller.text.isEmpty) {
+                    setState(() => error = '密码不能为空');
+                    return;
+                  }
+                  Navigator.pop(dialogContext, controller.text);
+                },
+                child: const Text('解密导入'),
+              ),
+            ],
+          );
+        });
+      },
+    );
   }
 
   void _showImportJsonDialog(BuildContext context) {
@@ -374,20 +396,17 @@ class BackupRestoreScreen extends ConsumerWidget {
     if (confirmed != true || !context.mounted) return;
     final config = ref.read(webdavConfigProvider);
     if (config == null) return;
-    final pass = await _promptPassphrase(context, forExport: true);
-    if (pass == null) return;
     try {
       final service = WebDAVService(
         serverUrl: config.serverUrl,
         username: config.username,
         password: config.password,
       );
-      final plain = jsonEncode(_buildBackupPayload(ref));
-      final backupData = jsonEncode(await BackupCrypto.encrypt(plain, pass));
+      final backupData = jsonEncode(await _buildCommonConfig(ref));
       await service.backupApp(backupData);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已成功加密备份到 WebDAV')),
+          const SnackBar(content: Text('已备份到 WebDAV')),
         );
       }
     } catch (e) {
@@ -439,7 +458,7 @@ class BackupRestoreScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('还原失败：密码错误或文件已损坏')),
+          const SnackBar(content: Text('还原失败：文件已损坏或格式不支持')),
         );
       }
     }
