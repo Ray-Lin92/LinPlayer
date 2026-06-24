@@ -168,3 +168,8 @@ third_party/**/.dart_tool/
 third_party/**/build/
 third_party/**/.cxx/
 third_party/**/example/
+
+# Ani-rss API reference dumps (contain private server address — never commit)
+api-docs.json
+Swagger UI.html
+Swagger UI_files/

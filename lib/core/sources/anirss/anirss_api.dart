@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../providers/server_providers.dart';
 import '../source_http.dart';
 import 'anirss_token.dart';
@@ -138,11 +140,15 @@ class AniRssApi {
   }
 
   /// 同步构造 proxyImage URL（已有 token 时用，如详情 provider 预解析后）。
+  ///
+  /// 服务端 `ProxyImageController` 对 `imgUrl` 做 **Base64 解码**，故须先 base64 编码原始
+  /// 图片地址；鉴权用 `s=<登录令牌>` 走 Form 鉴权（URL 无法带 Authorization 头）。
   static String buildProxyImageUrl(
       ServerConfig server, String imgUrl, String token) {
     final base = normalizeBaseUrl(server.activeLineUrl);
+    final encoded = base64.encode(utf8.encode(imgUrl));
     return '$base/api/proxyImage'
-        '?imgUrl=${Uri.encodeQueryComponent(imgUrl)}'
-        '&${AniRssAuth.header}=${Uri.encodeQueryComponent(token)}';
+        '?imgUrl=${Uri.encodeQueryComponent(encoded)}'
+        '&${AniRssAuth.queryAuthKey}=${Uri.encodeQueryComponent(token)}';
   }
 }

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -108,12 +111,7 @@ class _QuarkQrLoginViewState extends State<QuarkQrLoginView> {
         return Container(
           padding: const EdgeInsets.all(8),
           color: Colors.white,
-          child: QrImageView(
-            data: login.qrData ?? '',
-            version: QrVersions.auto,
-            size: 200,
-            backgroundColor: Colors.white,
-          ),
+          child: _qrContent(login.qrData ?? ''),
         );
       case QuarkQrState.success:
         return const Icon(Icons.check_circle, color: Colors.green, size: 64);
@@ -124,6 +122,57 @@ class _QuarkQrLoginViewState extends State<QuarkQrLoginView> {
       case QuarkQrState.loading:
         return const CircularProgressIndicator();
     }
+  }
+
+  /// 夸克 TV 的 `qr_data` 实际是**二维码 PNG 图片的 base64**（或 data URI），
+  /// 不是待编码文本——直接当图片显示；只有在确实是普通文本/URL 时才回退 [QrImageView]。
+  Widget _qrContent(String qrData) {
+    final bytes = _tryDecodeImage(qrData);
+    if (bytes != null) {
+      return Image.memory(
+        bytes,
+        width: 200,
+        height: 200,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => _qrFromText(qrData),
+      );
+    }
+    return _qrFromText(qrData);
+  }
+
+  Widget _qrFromText(String text) => QrImageView(
+        data: text,
+        version: QrVersions.auto,
+        size: 200,
+        backgroundColor: Colors.white,
+      );
+
+  /// 尝试把 [qrData] 解析为图片字节（data URI 前缀或裸 base64 的 PNG/JPEG/GIF）。
+  /// 解析不出图片签名则返回 null（说明是普通文本/URL）。
+  Uint8List? _tryDecodeImage(String qrData) {
+    var s = qrData.trim();
+    if (s.isEmpty) return null;
+    final comma = s.indexOf(',');
+    if (s.startsWith('data:image') && comma > 0) {
+      s = s.substring(comma + 1);
+    }
+    try {
+      final bytes = base64.decode(base64.normalize(s));
+      if (_looksLikeImage(bytes)) return bytes;
+    } catch (_) {}
+    return null;
+  }
+
+  bool _looksLikeImage(Uint8List b) {
+    if (b.length < 4) return false;
+    // PNG 89 50 4E 47
+    if (b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return true;
+    // JPEG FF D8 FF
+    if (b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return true;
+    // GIF 47 49 46
+    if (b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return true;
+    return false;
   }
 
   String _statusText(QuarkQrState state) {
