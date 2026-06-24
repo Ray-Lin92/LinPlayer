@@ -70,7 +70,8 @@ class _SeasonDetailScreenState extends ConsumerState<SeasonDetailScreen> {
     final api = ref.read(apiClientProvider);
 
     return DynamicBackground(
-      backgroundColor: widget.backgroundColor ?? const Color(0xFF121212),
+      backgroundColor:
+          widget.backgroundColor ?? Theme.of(context).scaffoldBackgroundColor,
       child: Scaffold(
         appBar: AppBar(
           title: Text(_seasonName ?? '季详情'),
@@ -235,7 +236,8 @@ class _EpisodeDetailScreenState extends ConsumerState<EpisodeDetailScreen> {
     });
   }
 
-  Color _backgroundColor = const Color(0xFF121212);
+  // null = 还未取色：跟随当前主题背景（浅色模式不再黑底）。
+  Color? _backgroundColor;
 
   void _onColorChanged(Color color) {
     if (_backgroundColor != color) {
@@ -249,13 +251,15 @@ class _EpisodeDetailScreenState extends ConsumerState<EpisodeDetailScreen> {
   Widget build(BuildContext context) {
     final itemAsync = ref.watch(mediaItemProvider(widget.episodeId));
     final playbackAsync = ref.watch(playbackInfoProvider(widget.episodeId));
-    final foregroundColor = readableTextColorForBackground(_backgroundColor);
+    final backgroundColor =
+        _backgroundColor ?? Theme.of(context).scaffoldBackgroundColor;
+    final foregroundColor = readableTextColorForBackground(backgroundColor);
 
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      backgroundColor: backgroundColor,
       body: itemAsync.when(
         data: (item) => DynamicBackground(
-          backgroundColor: _backgroundColor,
+          backgroundColor: backgroundColor,
           child: CustomScrollView(
           slivers: [
             // 封面区域
@@ -362,8 +366,9 @@ class _DetailHeader extends ConsumerStatefulWidget {
 }
 
 class _DetailHeaderState extends ConsumerState<_DetailHeader> {
-  Color _dominantColor = Colors.black;
-  Color _backgroundColor = const Color(0xFF121212);
+  // null = 还未取色：build 时退回当前主题背景。
+  Color? _dominantColor;
+  Color? _backgroundColor;
 
   @override
   void initState() {
@@ -388,9 +393,21 @@ class _DetailHeaderState extends ConsumerState<_DetailHeader> {
     );
     final imageUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
 
-    if (imageUrl == null) return;
-
     final brightness = Theme.of(context).brightness;
+
+    if (imageUrl == null) {
+      // 无横图也要给主题对应的兜底色，否则浅色模式停在深色默认值。
+      final fb = ExtractedColors.fallback(brightness);
+      if (mounted) {
+        setState(() {
+          _dominantColor = fb.gradientStart;
+          _backgroundColor = fb.background;
+        });
+        widget.onColorChanged?.call(fb.background);
+      }
+      return;
+    }
+
     final colors =
         await ColorExtractor.extractFromUrl(imageUrl, brightness: brightness);
     if (mounted) {
@@ -422,7 +439,10 @@ class _DetailHeaderState extends ConsumerState<_DetailHeader> {
 
     // 标题/元信息在「渐变→海报主色」底部，前景色按主色亮度自适配（深底浅字、
     // 浅底深字），阴影取反色保证两种模式下都清晰。
-    final fg = readableTextColorForBackground(_backgroundColor);
+    final themeBg = Theme.of(context).scaffoldBackgroundColor;
+    final dominantColor = _dominantColor ?? themeBg;
+    final backgroundColor = _backgroundColor ?? themeBg;
+    final fg = readableTextColorForBackground(backgroundColor);
     final shadowColor = fg.computeLuminance() > 0.5
         ? Colors.black.withValues(alpha: 0.5)
         : Colors.white.withValues(alpha: 0.5);
@@ -432,7 +452,7 @@ class _DetailHeaderState extends ConsumerState<_DetailHeader> {
         Container(
           height: headerHeight,
           width: double.infinity,
-          color: _dominantColor,
+          color: dominantColor,
           child: videoUrl != null
               ? VideoBackground(
                   videoUrl: videoUrl,
@@ -471,8 +491,8 @@ class _DetailHeaderState extends ConsumerState<_DetailHeader> {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  _backgroundColor.withValues(alpha: 0.9),
-                  _backgroundColor,
+                  backgroundColor.withValues(alpha: 0.9),
+                  backgroundColor,
                 ],
               ),
             ),

@@ -13,10 +13,11 @@ import '../../utils/desktop_smooth_scroll.dart';
 import '../../widgets/anirss/desktop_anirss_edit_dialog.dart';
 import '../../widgets/native_feedback.dart';
 
-/// 桌面端 Ani-rss 订阅页——对标 ani-rss 原版 PC 界面。
+/// 桌面端 Ani-rss 订阅页——对标 ani-rss 原版网页 `List.vue`。
 ///
-/// 每个订阅 = 一张横向卡（海报 + 标题 + 标签：季/启用/字幕组/集数进度/类型 + 操作：
-/// 编辑/刷新/启停/删除）；有下载任务时卡内内联进度条。编辑走完整的「基本/自定义」对话框。
+/// 默认「按周」分组（星期一…星期日 + 未排期），与原版番剧表一致；可切「平铺」。
+/// 每个订阅 = 一张横向卡（仿 `AniCard.vue`：海报 + 标题 + 3 列标签 + 操作），
+/// 有下载任务时卡内内联进度条（这是我们相对原版的增强）。编辑走「基本/自定义」对话框。
 class DesktopAniRssSubscriptionsTab extends ConsumerStatefulWidget {
   const DesktopAniRssSubscriptionsTab({super.key});
 
@@ -28,6 +29,7 @@ class DesktopAniRssSubscriptionsTab extends ConsumerStatefulWidget {
 class _DesktopAniRssSubscriptionsTabState
     extends ConsumerState<DesktopAniRssSubscriptionsTab> {
   String _query = '';
+  bool _groupByWeek = true;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +39,8 @@ class _DesktopAniRssSubscriptionsTabState
     return Column(
       children: [
         _Toolbar(
+          groupByWeek: _groupByWeek,
+          onToggleGroup: (v) => setState(() => _groupByWeek = v),
           onAdd: () => _showAddDialog(context, ref),
           onRefreshAll: () async {
             final api = ref.read(aniRssApiProvider);
@@ -54,7 +58,12 @@ class _DesktopAniRssSubscriptionsTabState
             data: (anis) {
               final torrents = asyncTorrents.valueOrNull ?? const [];
               final match = matchTorrents(anis, torrents);
-              return _SubscriptionGrid(anis: anis, match: match, query: _query);
+              return _SubscriptionGrid(
+                anis: anis,
+                match: match,
+                query: _query,
+                groupByWeek: _groupByWeek,
+              );
             },
           ),
         ),
@@ -73,10 +82,14 @@ class _DesktopAniRssSubscriptionsTabState
 }
 
 class _Toolbar extends StatelessWidget {
+  final bool groupByWeek;
+  final ValueChanged<bool> onToggleGroup;
   final VoidCallback onAdd;
   final Future<void> Function() onRefreshAll;
   final ValueChanged<String> onSearch;
   const _Toolbar({
+    required this.groupByWeek,
+    required this.onToggleGroup,
     required this.onAdd,
     required this.onRefreshAll,
     required this.onSearch,
@@ -100,8 +113,26 @@ class _Toolbar extends StatelessWidget {
             label: const Text('刷新全部'),
           ),
           const Spacer(),
+          // 按周 / 平铺 切换，对齐 ani-rss List.vue 的 showWeek。
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                  value: true,
+                  icon: Icon(Icons.calendar_view_week, size: 18),
+                  label: Text('按周')),
+              ButtonSegment(
+                  value: false,
+                  icon: Icon(Icons.grid_view_rounded, size: 18),
+                  label: Text('平铺')),
+            ],
+            selected: {groupByWeek},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => onToggleGroup(s.first),
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          ),
+          const SizedBox(width: 12),
           SizedBox(
-            width: 240,
+            width: 220,
             child: TextField(
               decoration: const InputDecoration(
                 isDense: true,
@@ -123,8 +154,23 @@ class _SubscriptionGrid extends ConsumerWidget {
   final List<AniModel> anis;
   final TorrentMatchResult match;
   final String query;
-  const _SubscriptionGrid(
-      {required this.anis, required this.match, required this.query});
+  final bool groupByWeek;
+  const _SubscriptionGrid({
+    required this.anis,
+    required this.match,
+    required this.query,
+    required this.groupByWeek,
+  });
+
+  static const _weekLabels = [
+    '星期一',
+    '星期二',
+    '星期三',
+    '星期四',
+    '星期五',
+    '星期六',
+    '星期日',
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -137,15 +183,9 @@ class _SubscriptionGrid extends ConsumerWidget {
               (a.subgroup?.toLowerCase().contains(q) ?? false))
           .toList();
     }
-    // 有活动下载的订阅排前面。
-    final sorted = [...list]..sort((a, b) {
-        final ai = (match.byAni[a.id]?.isNotEmpty ?? false) ? 0 : 1;
-        final bi = (match.byAni[b.id]?.isNotEmpty ?? false) ? 0 : 1;
-        return ai.compareTo(bi);
-      });
     final unmatched = match.unmatched;
 
-    if (sorted.isEmpty && unmatched.isEmpty) {
+    if (list.isEmpty && unmatched.isEmpty) {
       return Center(
         child: Text(query.isEmpty ? '暂无订阅' : '没有匹配「$query」的订阅'),
       );
@@ -155,32 +195,10 @@ class _SubscriptionGrid extends ConsumerWidget {
       builder: (context, controller) => CustomScrollView(
         controller: controller,
         slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(24, 14, 24, 12),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 440,
-                mainAxisExtent: 176,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, i) {
-                  final ani = sorted[i];
-                  return _AniSubscriptionCard(
-                    ani: ani,
-                    episodes: match.byAni[ani.id] ?? const [],
-                    onEdit: () =>
-                        showDesktopAniRssEditDialog(context, ref, ani),
-                    onRefresh: () => _refresh(context, ref, ani),
-                    onToggleEnable: () => _toggle(context, ref, ani),
-                    onDelete: (df) => _delete(context, ref, ani, df),
-                  );
-                },
-                childCount: sorted.length,
-              ),
-            ),
-          ),
+          if (groupByWeek)
+            ..._buildWeekSections(context, ref, list)
+          else
+            _buildFlatGrid(context, ref, list),
           if (unmatched.isNotEmpty) ...[
             const SliverToBoxAdapter(
               child: Padding(
@@ -193,11 +211,117 @@ class _SubscriptionGrid extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
               sliver: SliverList.builder(
                 itemCount: unmatched.length,
-                itemBuilder: (_, i) => UnmatchedTorrentTile(torrent: unmatched[i]),
+                itemBuilder: (_, i) =>
+                    UnmatchedTorrentTile(torrent: unmatched[i]),
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// 平铺：有活动下载的订阅排前面，单一网格。
+  Widget _buildFlatGrid(
+      BuildContext context, WidgetRef ref, List<AniModel> list) {
+    final sorted = [...list]..sort((a, b) {
+        final ai = (match.byAni[a.id]?.isNotEmpty ?? false) ? 0 : 1;
+        final bi = (match.byAni[b.id]?.isNotEmpty ?? false) ? 0 : 1;
+        return ai.compareTo(bi);
+      });
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(24, 14, 24, 28),
+      sliver: _grid(context, ref, sorted),
+    );
+  }
+
+  /// 按周分组：星期一…星期日 + 未排期，对齐 ani-rss `weekList`。
+  List<Widget> _buildWeekSections(
+      BuildContext context, WidgetRef ref, List<AniModel> list) {
+    final groups = <int, List<AniModel>>{};
+    final unscheduled = <AniModel>[];
+    for (final a in list) {
+      final w = a.week;
+      if (w == null) {
+        unscheduled.add(a);
+      } else {
+        (groups[w] ??= []).add(a);
+      }
+    }
+
+    final sections = <Widget>[];
+    void addSection(String label, List<AniModel> items) {
+      if (items.isEmpty) return;
+      sections.add(_sectionHeader(context, label, items.length));
+      sections.add(
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+          sliver: _grid(context, ref, items),
+        ),
+      );
+    }
+
+    for (var w = 1; w <= 7; w++) {
+      addSection(_weekLabels[w - 1], groups[w] ?? const []);
+    }
+    addSection('未排期', unscheduled);
+    if (sections.isEmpty) {
+      sections.add(const SliverToBoxAdapter(child: SizedBox(height: 24)));
+    }
+    sections.add(const SliverToBoxAdapter(child: SizedBox(height: 12)));
+    return sections;
+  }
+
+  Widget _sectionHeader(BuildContext context, String label, int count) {
+    final theme = Theme.of(context);
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 18, 24, 10),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 16,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 6),
+            Text('$count',
+                style: TextStyle(
+                    fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  SliverGrid _grid(BuildContext context, WidgetRef ref, List<AniModel> items) {
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 440,
+        mainAxisExtent: 176,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, i) {
+          final ani = items[i];
+          return _AniSubscriptionCard(
+            ani: ani,
+            episodes: match.byAni[ani.id] ?? const [],
+            onEdit: () => showDesktopAniRssEditDialog(context, ref, ani),
+            onRefresh: () => _refresh(context, ref, ani),
+            onToggleEnable: () => _toggle(context, ref, ani),
+            onDelete: (df) => _delete(context, ref, ani, df),
+          );
+        },
+        childCount: items.length,
       ),
     );
   }
@@ -276,11 +400,28 @@ class _AniSubscriptionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(ani.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 14.5, fontWeight: FontWeight.w600)),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(ani.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                        if (ani.score != null && ani.score! > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Text(ani.score!.toStringAsFixed(1),
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFE800A4))),
+                          ),
+                      ],
+                    ),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 4,
@@ -290,8 +431,8 @@ class _AniSubscriptionCard extends StatelessWidget {
                         ani.enable
                             ? _tag('已启用', color: const Color(0xFF52B54B))
                             : _tag('未启用', color: Colors.grey),
-                        if (ani.subgroup != null)
-                          _tag(ani.subgroup!, color: Colors.blueGrey),
+                        _tag(ani.subgroup ?? '未知字幕组',
+                            color: Colors.blueGrey),
                         _tag(
                             '${ani.currentEpisodeNumber ?? 0} / ${(ani.totalEpisodeNumber ?? 0) > 0 ? ani.totalEpisodeNumber : '*'}',
                             color: Colors.orange),
@@ -299,6 +440,8 @@ class _AniSubscriptionCard extends StatelessWidget {
                             color: ani.ova
                                 ? Colors.redAccent
                                 : const Color(0xFF2F6FED)),
+                        if (ani.hasStandbyRss)
+                          _tag('备用RSS', color: Colors.teal),
                       ],
                     ),
                     if (active.isNotEmpty) ...[
