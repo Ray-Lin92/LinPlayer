@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 
 import '../../core/api/api_interfaces.dart';
+import '../../core/network/cf_proxy/cf_proxy_controller.dart';
+import '../../core/network/cf_proxy/cf_proxy_panel_page.dart';
 import '../../core/providers/media_providers.dart';
 import '../../core/providers/server_providers.dart';
 import '../../core/services/app_logger.dart';
@@ -81,6 +85,8 @@ class PluginContextBridge {
         return _emby(method, args);
       case 'extensions':
         return _extensions(method, args);
+      case 'cfproxy':
+        return _cfproxy(method, args);
       case 'util':
         return _util(method, args);
       default:
@@ -402,6 +408,97 @@ class PluginContextBridge {
         return null;
       default:
         throw Exception('未知 extensions 方法: $method');
+    }
+  }
+
+  // ---- cfproxy（CF 优选反代）----
+  Future<dynamic> _cfproxy(String method, List args) async {
+    _require(PluginPermissions.cfproxy.id);
+    final container = PluginHostBindings.instance.container;
+    if (container == null) throw Exception('应用未就绪');
+    final controller = CfProxyController.instance..ensureInit(container);
+
+    Map argMap() =>
+        (args.isNotEmpty && args[0] is Map) ? args[0] as Map : const {};
+
+    switch (method) {
+      case 'listServers':
+        return container.read(serverListProvider).map((s) {
+          final upstream = Uri.tryParse(s.directLineUrl);
+          final st = controller.stateFor(s.id);
+          return {
+            'id': s.id,
+            'name': s.name,
+            'host': upstream?.host ?? '',
+            'url': s.directLineUrl,
+            'sourceKind': s.sourceKind.name,
+            'active': controller.isActive(s.id),
+            'pinnedIp': st?.pinnedIp,
+            'latencyMs': st?.lastResult?.latencyMs,
+            'downloadKBps': st?.lastResult?.downloadKBps,
+            'scheduleEnabled': st?.scheduleEnabled ?? false,
+            'scheduleMinutes': st?.scheduleMinutes ?? 30,
+          };
+        }).toList();
+
+      case 'getStatus':
+        final servers = container.read(serverListProvider);
+        final active = <Map>[];
+        for (final s in servers) {
+          if (!controller.isActive(s.id)) continue;
+          final st = controller.stateFor(s.id);
+          active.add({
+            'id': s.id,
+            'name': s.name,
+            'pinnedIp': st?.pinnedIp,
+            'latencyMs': st?.lastResult?.latencyMs,
+            'downloadKBps': st?.lastResult?.downloadKBps,
+            'scheduleEnabled': st?.scheduleEnabled ?? false,
+          });
+        }
+        return {'active': active};
+
+      case 'openPanel':
+        final ctx = PluginHostBindings.instance.context;
+        if (ctx == null) {
+          PluginUiHost.showToast('当前端不支持打开优选面板');
+          return null;
+        }
+        // 不要 await：Navigator.push 的 Future 要等页面**关闭**才完成，await 会让
+        // 插件这次 JS 调用一直挂起，触发 30s 调用超时被误判失控而自动禁用插件。
+        unawaited(Navigator.of(ctx).push(
+          MaterialPageRoute(builder: (_) => const CfProxyPanelPage()),
+        ));
+        return null;
+
+      case 'speedTest':
+        final best =
+            await controller.speedTestAndApply('${argMap()['serverId'] ?? ''}');
+        return best?.toJson();
+
+      case 'disable':
+        await controller.disable('${argMap()['serverId'] ?? ''}');
+        return null;
+
+      case 'setSchedule':
+        final m = argMap();
+        await controller.setSchedule(
+          '${m['serverId'] ?? ''}',
+          m['enabled'] == true,
+          (m['minutes'] as num?)?.toInt() ?? 30,
+        );
+        return null;
+
+      case 'restore':
+        await controller.restoreAll();
+        return null;
+
+      case 'teardown':
+        await controller.teardownAll();
+        return null;
+
+      default:
+        throw Exception('未知 cfproxy 方法: $method');
     }
   }
 

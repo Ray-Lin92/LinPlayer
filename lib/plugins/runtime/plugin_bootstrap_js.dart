@@ -126,6 +126,27 @@ const String kPluginBootstrapJs = r'''
     }
   };
 
+  // ---- ctx.cfproxy（CF 优选反代，需 cfproxy 权限）----
+  var cfproxy = {
+    // 列出已添加服务器及其优选状态：[{id,name,host,url,active,pinnedIp,latencyMs,downloadKBps,scheduleEnabled,scheduleMinutes}]
+    listServers: function () { return __callHost('cfproxy', 'listServers', []); },
+    // 当前已启用反代的概况：{active:[{id,name,pinnedIp,latencyMs,downloadKBps,scheduleEnabled}]}
+    getStatus: function () { return __callHost('cfproxy', 'getStatus', []); },
+    // 打开宿主提供的「优选反代」可视化面板（推荐入口，自带实时测速进度）
+    openPanel: function () { return __callHost('cfproxy', 'openPanel', []); },
+    // 对某服务器测速并应用最优 IP，resolve 为最优结果或 null
+    speedTest: function (serverId) { return __callHost('cfproxy', 'speedTest', [{ serverId: serverId }]); },
+    // 关闭某服务器的反代，恢复直连
+    disable: function (serverId) { return __callHost('cfproxy', 'disable', [{ serverId: serverId }]); },
+    // 定时测速：setSchedule(serverId, enabled, minutes)
+    setSchedule: function (serverId, enabled, minutes) {
+      return __callHost('cfproxy', 'setSchedule', [{ serverId: serverId, enabled: !!enabled, minutes: Number(minutes) || 30 }]);
+    },
+    // 生命周期：按持久化配置恢复 / 全部拆除（通常在 onEnable/onDisable 调用）
+    restore: function () { return __callHost('cfproxy', 'restore', []); },
+    teardown: function () { return __callHost('cfproxy', 'teardown', []); }
+  };
+
   globalThis.ctx = {
     log: log,
     http: http,
@@ -134,6 +155,7 @@ const String kPluginBootstrapJs = r'''
     ui: ui,
     emby: emby,
     extensions: extensions,
+    cfproxy: cfproxy,
     // 延时（毫秒），用于重试退避。封顶 10s。
     sleep: function (ms) { return __callHost('util', 'sleep', [Number(ms) || 0]); },
     // 插件元信息，由宿主在加载后通过 __lp_setMeta 注入
