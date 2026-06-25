@@ -173,3 +173,6 @@ third_party/**/example/
 api-docs.json
 Swagger UI.html
 Swagger UI_files/
+
+# 运行时日志导出文件
+linplayer_log_*.txt
