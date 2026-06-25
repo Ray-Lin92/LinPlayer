@@ -108,15 +108,6 @@ class PluginRuntime {
     return _parseResult(raw);
   }
 
-  /// 触发一个命名事件（如自定义生命周期），data 为可序列化对象。
-  Future<dynamic> emitEvent(String event, Object? data) async {
-    if (_disposed || _faulted) return null;
-    final payload = jsonEncode([event, data]);
-    final raw = await _guarded(
-        () => _engine.invoke('__event', payload, timeout: callTimeout));
-    return _parseResult(raw);
-  }
-
   dynamic _parseResult(dynamic raw) {
     if (raw is! String) return raw;
     try {

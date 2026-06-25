@@ -16,17 +16,6 @@ ThemeModeOption parseThemeMode(String? value) {
   };
 }
 
-String themeModeLabel(ThemeModeOption mode) {
-  switch (mode) {
-    case ThemeModeOption.light:
-      return '浅色';
-    case ThemeModeOption.dark:
-      return '深色';
-    case ThemeModeOption.system:
-      return '跟随系统';
-  }
-}
-
 Locale? parseLocaleTag(String? value) {
   switch (value) {
     case null:
@@ -118,23 +107,6 @@ String desktopStartupLocationFor(StartupPageOption option) {
     StartupPageOption.servers => '/servers',
     StartupPageOption.resume => resumeRoutePath,
   };
-}
-
-String localeLabel(Locale? locale) {
-  if (locale == null) {
-    return '跟随系统';
-  }
-
-  final normalized = locale.toLanguageTag().replaceAll('-', '_');
-  switch (normalized) {
-    case 'zh':
-    case 'zh_CN':
-      return '简体中文';
-    case 'en':
-      return 'English';
-    default:
-      return normalized;
-  }
 }
 
 final themeModeProvider =

@@ -255,6 +255,124 @@ class TvPanelOption extends StatelessWidget {
   }
 }
 
+/// TV 对话框按钮（纯样式，焦点由外层 [TvFocusable] 提供）。
+///
+/// 统一了原先散落在各 TV 设置页的 _dlgBtn/_dialogBtn/_dialogButton/_btn。
+/// - [filled] 实心主色（默认描边底色）；[danger] 危险红（优先级最高）；
+/// - [fullWidth] 撑满宽度（纵向按钮列表用）。
+class TvDialogButton extends StatelessWidget {
+  final String label;
+  final bool filled;
+  final bool danger;
+  final bool fullWidth;
+
+  const TvDialogButton(
+    this.label, {
+    super.key,
+    this.filled = false,
+    this.danger = false,
+    this.fullWidth = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final m = context.tv;
+    final Color bg = danger
+        ? TvDesignTokens.error
+        : (filled ? TvDesignTokens.brand : TvDesignTokens.surfaceElevated);
+    return Container(
+      width: fullWidth ? double.infinity : null,
+      padding:
+          EdgeInsets.symmetric(horizontal: m.spacingLg, vertical: m.spacingMd),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(m.posterRadius),
+      ),
+      child: Text(label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              fontSize: m.fontSizeMd,
+              color: Colors.white,
+              fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+/// TV 是/否确认对话框：标题 + 可选说明 + 横排[取消, 确认]。
+///
+/// 取消默认 autofocus；返回 true=确认、false/null=取消。
+/// 统一了各处手写的 showGeneralDialog<bool> 确认框外壳。
+Future<bool> showTvConfirm(
+  BuildContext context, {
+  required String title,
+  String? message,
+  String confirmLabel = '确定',
+  String cancelLabel = '取消',
+  bool danger = false,
+}) async {
+  final m = context.tv;
+  final ok = await showGeneralDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: title,
+    barrierColor: Colors.black.withValues(alpha: 0.7),
+    pageBuilder: (ctx, _, __) => Center(
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: m.s(560),
+          padding: EdgeInsets.all(m.spacingXl),
+          decoration: BoxDecoration(
+            color: TvDesignTokens.surface,
+            borderRadius: BorderRadius.circular(m.posterRadius),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: TextStyle(
+                      fontSize: m.fontSizeLg,
+                      color: TvDesignTokens.textPrimary,
+                      fontWeight: FontWeight.bold)),
+              if (message != null) ...[
+                SizedBox(height: m.spacingSm),
+                Text(message,
+                    style: TextStyle(
+                        fontSize: m.fontSizeSm,
+                        color: TvDesignTokens.textSecondary)),
+              ],
+              SizedBox(height: m.spacingLg),
+              Row(
+                children: [
+                  Expanded(
+                    child: TvFocusable(
+                      autofocus: true,
+                      padding: EdgeInsets.all(m.s(4)),
+                      onSelect: () => Navigator.of(ctx).pop(false),
+                      child: TvDialogButton(cancelLabel),
+                    ),
+                  ),
+                  SizedBox(width: m.spacingMd),
+                  Expanded(
+                    child: TvFocusable(
+                      padding: EdgeInsets.all(m.s(4)),
+                      onSelect: () => Navigator.of(ctx).pop(true),
+                      child: TvDialogButton(confirmLabel,
+                          filled: !danger, danger: danger),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  return ok == true;
+}
+
 /// TV 面板分组标题
 class TvPanelSection extends StatelessWidget {
   final String title;

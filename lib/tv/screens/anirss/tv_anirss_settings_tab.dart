@@ -12,6 +12,7 @@ import '../../../core/sources/anirss/models/log_entry.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 
 /// Ani-rss 设置 Tab（TV）：服务器管理 + 关于 + 服务端 Config 镜像。
@@ -581,88 +582,17 @@ class _ServerManagementCard extends ConsumerWidget {
   }
 
   Future<void> _remove(BuildContext context, WidgetRef ref) async {
-    final m = context.tv;
-    final ok = await showGeneralDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '移除服务器',
-      barrierColor: Colors.black.withValues(alpha: 0.7),
-      pageBuilder: (ctx, _, __) => Center(
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: m.s(560),
-            padding: EdgeInsets.all(m.spacingXl),
-            decoration: BoxDecoration(
-              color: TvDesignTokens.surface,
-              borderRadius: BorderRadius.circular(m.posterRadius),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('移除「${server.name}」？',
-                    style: TextStyle(
-                        fontSize: m.fontSizeLg,
-                        color: TvDesignTokens.textPrimary,
-                        fontWeight: FontWeight.bold)),
-                SizedBox(height: m.spacingSm),
-                Text('仅从本应用移除该服务器，不影响 Ani-rss 服务端。',
-                    style: TextStyle(
-                        fontSize: m.fontSizeSm,
-                        color: TvDesignTokens.textSecondary)),
-                SizedBox(height: m.spacingLg),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TvFocusable(
-                        autofocus: true,
-                        padding: EdgeInsets.all(m.s(4)),
-                        onSelect: () => Navigator.of(ctx).pop(false),
-                        child: _dlgBtn(m, '取消', filled: false),
-                      ),
-                    ),
-                    SizedBox(width: m.spacingMd),
-                    Expanded(
-                      child: TvFocusable(
-                        padding: EdgeInsets.all(m.s(4)),
-                        onSelect: () => Navigator.of(ctx).pop(true),
-                        child: _dlgBtn(m, '移除', danger: true),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    final ok = await showTvConfirm(
+      context,
+      title: '移除「${server.name}」？',
+      message: '仅从本应用移除该服务器，不影响 Ani-rss 服务端。',
+      confirmLabel: '移除',
+      danger: true,
     );
-    if (ok != true) return;
+    if (!ok) return;
     AniRssAuth.instance.clearToken(server.id);
     ref.read(serverListProvider.notifier).removeServer(server.id);
     if (context.mounted) context.go('/tv/home');
-  }
-
-  Widget _dlgBtn(TvMetrics m, String label,
-      {bool filled = true, bool danger = false}) {
-    final Color bg = danger
-        ? TvDesignTokens.error
-        : (filled ? TvDesignTokens.brand : TvDesignTokens.surfaceElevated);
-    return Container(
-      padding:
-          EdgeInsets.symmetric(horizontal: m.spacingLg, vertical: m.spacingMd),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(m.posterRadius),
-      ),
-      child: Text(label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-              fontSize: m.fontSizeMd,
-              color: Colors.white,
-              fontWeight: FontWeight.w600)),
-    );
   }
 
   void _invalidateAll(WidgetRef ref) {
@@ -825,7 +755,7 @@ class _TvDiagnosticsSectionState extends ConsumerState<_TvDiagnosticsSection> {
                         autofocus: true,
                         padding: EdgeInsets.all(m.s(4)),
                         onSelect: () => Navigator.of(ctx).pop(false),
-                        child: _dialogButton(m, '取消', danger: false),
+                        child: const TvDialogButton('取消'),
                       ),
                     ),
                     SizedBox(width: m.spacingMd),
@@ -833,7 +763,7 @@ class _TvDiagnosticsSectionState extends ConsumerState<_TvDiagnosticsSection> {
                       child: TvFocusable(
                         padding: EdgeInsets.all(m.s(4)),
                         onSelect: () => Navigator.of(ctx).pop(true),
-                        child: _dialogButton(m, '停止', danger: true),
+                        child: const TvDialogButton('停止', danger: true),
                       ),
                     ),
                   ],
@@ -846,23 +776,6 @@ class _TvDiagnosticsSectionState extends ConsumerState<_TvDiagnosticsSection> {
     );
     if (ok != true) return;
     await _run('stop', (a) => a.stop(), '已发送停止指令');
-  }
-
-  Widget _dialogButton(TvMetrics m, String label, {required bool danger}) {
-    return Container(
-      padding:
-          EdgeInsets.symmetric(horizontal: m.spacingLg, vertical: m.spacingMd),
-      decoration: BoxDecoration(
-        color: danger ? TvDesignTokens.error : TvDesignTokens.surfaceElevated,
-        borderRadius: BorderRadius.circular(m.posterRadius),
-      ),
-      child: Text(label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-              fontSize: m.fontSizeMd,
-              color: Colors.white,
-              fontWeight: FontWeight.w600)),
-    );
   }
 
   Future<void> _showLogs() async {
@@ -950,7 +863,7 @@ class _TvDiagnosticsSectionState extends ConsumerState<_TvDiagnosticsSection> {
                   autofocus: true,
                   padding: EdgeInsets.all(m.s(4)),
                   onSelect: () => Navigator.of(ctx).pop(),
-                  child: _dialogButton(m, '关闭', danger: false),
+                  child: const TvDialogButton('关闭'),
                 ),
               ],
             ),
@@ -1102,7 +1015,7 @@ class _TextInputDialogState extends State<_TextInputDialog> {
                       child: TvFocusable(
                         padding: EdgeInsets.all(m.s(4)),
                         onSelect: () => Navigator.of(context).pop(),
-                        child: _btn(m, '取消', filled: false),
+                        child: const TvDialogButton('取消'),
                       ),
                     ),
                     SizedBox(width: m.spacingMd),
@@ -1111,7 +1024,7 @@ class _TextInputDialogState extends State<_TextInputDialog> {
                         padding: EdgeInsets.all(m.s(4)),
                         onSelect: () =>
                             Navigator.of(context).pop(_ctrl.text),
-                        child: _btn(m, '确定', filled: true),
+                        child: const TvDialogButton('确定', filled: true),
                       ),
                     ),
                   ],
@@ -1124,20 +1037,4 @@ class _TextInputDialogState extends State<_TextInputDialog> {
     );
   }
 
-  Widget _btn(TvMetrics m, String label, {required bool filled}) {
-    return Container(
-      padding:
-          EdgeInsets.symmetric(horizontal: m.spacingLg, vertical: m.spacingMd),
-      decoration: BoxDecoration(
-        color: filled ? TvDesignTokens.brand : TvDesignTokens.surfaceElevated,
-        borderRadius: BorderRadius.circular(m.posterRadius),
-      ),
-      child: Text(label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-              fontSize: m.fontSizeMd,
-              color: Colors.white,
-              fontWeight: FontWeight.w600)),
-    );
-  }
 }

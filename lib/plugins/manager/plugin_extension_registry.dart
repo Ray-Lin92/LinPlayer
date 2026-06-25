@@ -20,8 +20,6 @@ class PluginExtensionRegistry extends ChangeNotifier {
     return PluginPlatform.mobile;
   }
 
-  List<PluginExtension> get all => List.unmodifiable(_extensions);
-
   /// 按类型获取（已按平台过滤，调用方无需再判断）。
   List<PluginExtension> byType(PluginExtensionType type) =>
       _extensions.where((e) => e.type == type).toList(growable: false);
@@ -56,11 +54,5 @@ class PluginExtensionRegistry extends ChangeNotifier {
     final before = _extensions.length;
     _extensions.removeWhere((e) => e.pluginId == pluginId);
     if (_extensions.length != before) notifyListeners();
-  }
-
-  void clear() {
-    if (_extensions.isEmpty) return;
-    _extensions.clear();
-    notifyListeners();
   }
 }

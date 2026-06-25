@@ -17,9 +17,6 @@ class PluginPlayerHooks {
   Future<void> Function()? play;
   Future<void> Function()? pause;
   Future<void> Function(Duration position)? seek;
-  Duration Function()? position;
-  Duration Function()? duration;
-  bool Function()? isPlaying;
 }
 
 /// 播放器与插件系统之间的桥梁（全局单例）。
@@ -46,10 +43,6 @@ class PluginPlayerBridge {
   void bind(PluginPlayerHooks hooks, {Map<String, dynamic>? media}) {
     _hooks = hooks;
     if (media != null) currentMedia = media;
-  }
-
-  void updateCurrentMedia(Map<String, dynamic>? media) {
-    currentMedia = media;
   }
 
   void unbind(PluginPlayerHooks hooks) {

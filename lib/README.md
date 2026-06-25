@@ -20,7 +20,6 @@ lib/
 ├── core/
 │   ├── api/
 │   │   ├── api_interfaces.dart        # API抽象接口（供后端接入）
-│   │   ├── api_response.dart          # API响应包装
 │   │   └── emby_api.dart              # Emby API 真实客户端实现
 │   ├── models/                        # 数据模型（在api_interfaces中定义）
 │   ├── providers/
@@ -97,9 +96,6 @@ abstract class PlaybackApi { ... }
 
 // 收藏
 abstract class FavoriteApi { ... }
-
-// 会话
-abstract class SessionApi { ... }
 
 // 图片
 abstract class ImageApi { ... }

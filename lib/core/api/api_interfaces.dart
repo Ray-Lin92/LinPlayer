@@ -837,48 +837,6 @@ abstract class FavoriteApi {
   Future<void> removeFavorite(String itemId);
 }
 
-// ==================== 会话相关 ====================
-
-abstract class SessionApi {
-  /// 获取会话列表
-  /// GET /Sessions
-  Future<List<Session>> getSessions();
-}
-
-class Session {
-  final String id;
-  final String? userName;
-  final String? client;
-  final String? deviceName;
-  final bool? isNowPlaying;
-  final NowPlayingItem? nowPlayingItem;
-
-  Session({
-    required this.id,
-    this.userName,
-    this.client,
-    this.deviceName,
-    this.isNowPlaying,
-    this.nowPlayingItem,
-  });
-}
-
-class NowPlayingItem {
-  final String id;
-  final String name;
-  final String? seriesName;
-  final int? runTimeTicks;
-  final int? playbackPositionTicks;
-
-  NowPlayingItem({
-    required this.id,
-    required this.name,
-    this.seriesName,
-    this.runTimeTicks,
-    this.playbackPositionTicks,
-  });
-}
-
 // ==================== 图片相关 ====================
 
 abstract class ImageApi {
@@ -1108,7 +1066,6 @@ abstract class ApiClientFactory {
   SearchApi get search;
   PlaybackApi get playback;
   FavoriteApi get favorite;
-  SessionApi get session;
   ImageApi get image;
 
   /// 切换活跃线路

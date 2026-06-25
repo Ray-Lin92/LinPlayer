@@ -237,9 +237,6 @@ class VideoPlayerService extends ChangeNotifier {
     hooks.play = () => play();
     hooks.pause = () => pause();
     hooks.seek = (pos) => seekTo(pos);
-    hooks.position = () => position;
-    hooks.duration = () => duration;
-    hooks.isPlaying = () => isPlaying;
     _pluginHooks = hooks;
     PluginPlayerBridge.instance.bind(hooks);
   }
