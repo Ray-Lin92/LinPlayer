@@ -12,6 +12,7 @@ class PlayerSettingsScreen extends ConsumerWidget {
     final autoPlayNext = ref.watch(autoPlayNextProvider);
     final autoSkipSegments = ref.watch(autoSkipSegmentsProvider);
     final preloadEnabled = ref.watch(preloadEnabledProvider);
+    final multiThreadLoading = ref.watch(multiThreadLoadingProvider);
     final strmDirectPlay = ref.watch(strmDirectPlayProvider);
     final watchedThreshold = ref.watch(watchedThresholdProvider);
     final preferredSubtitleLanguage =
@@ -102,6 +103,14 @@ class PlayerSettingsScreen extends ConsumerWidget {
             value: preloadEnabled,
             onChanged: (value) =>
                 ref.read(preloadEnabledProvider.notifier).state = value,
+          ),
+          SwitchListTile(
+            title: const Text('多线程加载'),
+            subtitle: const Text(
+                '播放时用 2~4 个并发连接预取当前流喂给播放器，弱网更少卡顿。⚠️ 会向服务器并发请求，需先获得服主允许'),
+            value: multiThreadLoading,
+            onChanged: (value) =>
+                _toggleMultiThreadLoading(context, ref, value),
           ),
           SwitchListTile(
             title: const Text('STRM 直链播放'),
@@ -466,6 +475,39 @@ class PlayerSettingsScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// 开关「多线程加载」。开启前强制弹窗提醒须获服主允许，确认后才记录同意并启用。
+  Future<void> _toggleMultiThreadLoading(
+      BuildContext context, WidgetRef ref, bool value) async {
+    if (!value) {
+      ref.read(multiThreadLoadingProvider.notifier).state = false;
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('请先获得服主允许'),
+        content: const Text(
+            '多线程加载会用 2~4 个并发连接预取当前播放流，给服务器带来额外并发压力。'
+            '不少服主明确禁止多线程 / 预拉取，滥用可能导致封号。\n\n'
+            '请确认你已获得服主允许后再开启。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('暂不开启'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('我已获服主允许'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      ref.read(multiThreadLoadingConsentProvider.notifier).state = true;
+      ref.read(multiThreadLoadingProvider.notifier).state = true;
+    }
   }
 
   void _showWatchedThresholdSelector(BuildContext context, WidgetRef ref) {

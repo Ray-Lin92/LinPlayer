@@ -351,10 +351,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     // 本地文件覆盖播放源：用 file:// 形式喂给内核；在线地址作为本地失效时的回退。
     final localFileSource =
         hasLocal ? Uri.file(localPath).toString() : null;
-    final effectiveVideoUrl = localFileSource ?? onlineUrl;
+
+    // 多线程加载：仅对 Emby 服务端直传流起本地缓存预取代理（2~4 并发 Range）。
+    // 跳过本地文件与 STRM/网盘直链（直链需逐流专属 headers）；转码/HLS 无固定大小自动放弃。
+    final proxiedUrl = (localFileSource != null || hasDirect)
+        ? null
+        : await _maybeStartPrefetch(onlineUrl);
+
+    final effectiveVideoUrl = localFileSource ?? proxiedUrl ?? onlineUrl;
     final effectiveFallbackUrl = localFileSource != null
         ? (playbackInfo != null ? onlineUrl : null)
-        : (hasDirect ? videoUrl : fallbackVideoUrl);
+        : (proxiedUrl != null
+            ? onlineUrl
+            : (hasDirect ? videoUrl : fallbackVideoUrl));
 
     Duration? startPosition;
     try {
@@ -1472,6 +1481,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     if (_activeState == this) _activeState = null;
     _activePlayerService = null;
     _playerService.removeListener(_onPlayerUpdate);
+    unawaited(PrefetchProxy.instance.stop());
     _playerService.dispose();
     _longPressTimer?.cancel();
     _skipButtonTimer?.cancel();
@@ -1485,6 +1495,24 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       DeviceOrientation.landscapeRight,
     ]);
     super.dispose();
+  }
+
+  /// 多线程加载预取代理：仅在「开关开 + 已确认服主允许 + 在线 http 源」时启动，
+  /// 返回本地播放 URL（失败/不满足条件返回 null，调用方回退在线直链）。
+  Future<String?> _maybeStartPrefetch(String onlineUrl) async {
+    try {
+      if (!ref.read(multiThreadLoadingProvider)) return null;
+      if (!ref.read(multiThreadLoadingConsentProvider)) return null;
+      if (!onlineUrl.startsWith('http')) return null;
+      final limitMb = await CacheService.getVideoCacheMaxSizeMB();
+      return await PrefetchProxy.instance.start(
+        upstreamUrl: onlineUrl,
+        threads: ref.read(multiThreadLoadingThreadsProvider),
+        cacheLimitBytes: limitMb * 1024 * 1024,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   @override

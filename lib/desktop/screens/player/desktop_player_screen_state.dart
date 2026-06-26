@@ -364,10 +364,20 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
       // 本地文件覆盖播放源；在线地址留作本地失效时回退。
       final localFileSource =
           hasLocal ? Uri.file(localPath).toString() : null;
-      final effectiveVideoUrl = localFileSource ?? onlineUrl;
+
+      // 多线程加载：仅对 Emby 服务端直传流起本地缓存预取代理（2~4 并发 Range）。
+      // 跳过：① 本地文件；② STRM/网盘直链（需逐流专属 headers/UA，代理不复制，会鉴权失败）。
+      // 转码流/HLS 无固定大小，代理探测拿不到 size 会自动放弃 → 回退在线直链。
+      final proxiedUrl = (localFileSource != null || hasDirect)
+          ? null
+          : await _maybeStartPrefetch(onlineUrl);
+
+      final effectiveVideoUrl = localFileSource ?? proxiedUrl ?? onlineUrl;
       final effectiveFallbackUrl = localFileSource != null
           ? (playbackInfo != null ? onlineUrl : null)
-          : (hasDirect ? videoUrl : fallbackVideoUrl);
+          : (proxiedUrl != null
+              ? onlineUrl
+              : (hasDirect ? videoUrl : fallbackVideoUrl));
 
       Duration? startPosition;
       try {
@@ -2766,8 +2776,27 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
     _streamTranslator?.dispose();
     _introSkip.dispose();
     _focusNode.dispose();
+    unawaited(PrefetchProxy.instance.stop());
     _playerService.dispose();
     super.dispose();
+  }
+
+  /// 多线程加载预取代理：仅在「开关开 + 已确认服主允许 + 在线 http 源」时启动，
+  /// 返回本地播放 URL（失败/不满足条件返回 null，调用方回退在线直链）。
+  Future<String?> _maybeStartPrefetch(String onlineUrl) async {
+    try {
+      if (!ref.read(multiThreadLoadingProvider)) return null;
+      if (!ref.read(multiThreadLoadingConsentProvider)) return null;
+      if (!onlineUrl.startsWith('http')) return null;
+      final limitMb = await CacheService.getVideoCacheMaxSizeMB();
+      return await PrefetchProxy.instance.start(
+        upstreamUrl: onlineUrl,
+        threads: ref.read(multiThreadLoadingThreadsProvider),
+        cacheLimitBytes: limitMb * 1024 * 1024,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _writeWatchHistoryForItem({

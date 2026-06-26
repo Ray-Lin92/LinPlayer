@@ -10,7 +10,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/api/danmaku/danmaku_service.dart';
+import '../../../core/network/prefetch_proxy/prefetch_proxy.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/services/cache_service.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../../core/providers/sync_providers.dart';
 import '../../../core/utils/danmaku_filter.dart';
@@ -90,9 +92,28 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
     _streamTranslator?.stop();
     _introSkip.dispose();
     _service.removeListener(_onTick);
+    unawaited(PrefetchProxy.instance.stop());
     _service.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
+  }
+
+  /// 多线程加载预取代理：仅在「开关开 + 已确认服主允许 + 在线 http 源」时启动，
+  /// 返回本地播放 URL（失败/不满足条件返回 null，调用方回退在线直链）。
+  Future<String?> _maybeStartPrefetch(String onlineUrl) async {
+    try {
+      if (!ref.read(multiThreadLoadingProvider)) return null;
+      if (!ref.read(multiThreadLoadingConsentProvider)) return null;
+      if (!onlineUrl.startsWith('http')) return null;
+      final limitMb = await CacheService.getVideoCacheMaxSizeMB();
+      return await PrefetchProxy.instance.start(
+        upstreamUrl: onlineUrl,
+        threads: ref.read(multiThreadLoadingThreadsProvider),
+        cacheLimitBytes: limitMb * 1024 * 1024,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   void _onTick() {
@@ -297,9 +318,11 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
       );
       // STRM 直链：开启且解析出可用直链时优先用直链喂给内核。
       final directUrl = selection.directPlayUrl;
-      final effectiveUrl = (directUrl != null && directUrl.isNotEmpty)
-          ? directUrl
-          : videoUrl;
+      final hasDirect = directUrl != null && directUrl.isNotEmpty;
+      final onlineUrl = hasDirect ? directUrl : videoUrl;
+      // 多线程加载：仅对 Emby 服务端直传流起本地缓存预取代理；直链/转码自动跳过。
+      final proxiedUrl = hasDirect ? null : await _maybeStartPrefetch(onlineUrl);
+      final effectiveUrl = proxiedUrl ?? onlineUrl;
       final coreType =
           switch (normalizePlayerCore(ref.read(playerCoreProvider))) {
         'mpv' => PlayerCoreType.mpv,
@@ -345,6 +368,7 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
 
       await _service.initialize(
         videoUrl: effectiveUrl,
+        fallbackVideoUrl: proxiedUrl != null ? onlineUrl : null,
         itemId: _itemId,
         mediaSourceId: selection.mediaSource?.id,
         coreType: coreType,
