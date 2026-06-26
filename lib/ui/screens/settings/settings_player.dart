@@ -12,7 +12,8 @@ class PlayerSettingsScreen extends ConsumerWidget {
     final autoPlayNext = ref.watch(autoPlayNextProvider);
     final autoSkipSegments = ref.watch(autoSkipSegmentsProvider);
     final preloadEnabled = ref.watch(preloadEnabledProvider);
-    final multiThreadLoading = ref.watch(multiThreadLoadingProvider);
+    final mtlServers = ref.watch(multiThreadLoadingServersProvider);
+    final mtlThreads = ref.watch(multiThreadLoadingThreadsProvider);
     final strmDirectPlay = ref.watch(strmDirectPlayProvider);
     final watchedThreshold = ref.watch(watchedThresholdProvider);
     final preferredSubtitleLanguage =
@@ -104,13 +105,13 @@ class PlayerSettingsScreen extends ConsumerWidget {
             onChanged: (value) =>
                 ref.read(preloadEnabledProvider.notifier).state = value,
           ),
-          SwitchListTile(
+          ListTile(
             title: const Text('多线程加载'),
-            subtitle: const Text(
-                '播放时用 2~4 个并发连接预取当前流喂给播放器，弱网更少卡顿。⚠️ 会向服务器并发请求，需先获得服主允许'),
-            value: multiThreadLoading,
-            onChanged: (value) =>
-                _toggleMultiThreadLoading(context, ref, value),
+            subtitle: Text(mtlServers.isEmpty
+                ? '弱网加速：选择允许的服务器后启用（需服主允许）'
+                : '已在 ${mtlServers.length} 个服务器启用 · $mtlThreads 线程'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openMultiThreadLoadingSettings(context, ref),
           ),
           SwitchListTile(
             title: const Text('STRM 直链播放'),
@@ -477,11 +478,87 @@ class PlayerSettingsScreen extends ConsumerWidget {
     );
   }
 
-  /// 开关「多线程加载」。开启前强制弹窗提醒须获服主允许，确认后才记录同意并启用。
-  Future<void> _toggleMultiThreadLoading(
-      BuildContext context, WidgetRef ref, bool value) async {
-    if (!value) {
-      ref.read(multiThreadLoadingProvider.notifier).state = false;
+  /// 多线程加载配置：选择允许启用的服务器 + 调并发线程数。
+  void _openMultiThreadLoadingSettings(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Consumer(builder: (context, ref, _) {
+        final servers = ref.watch(serverListProvider);
+        final allowed = ref.watch(multiThreadLoadingServersProvider);
+        final threads = ref.watch(multiThreadLoadingThreadsProvider);
+        return AlertDialog(
+          title: const Text('多线程加载'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  child: Text(
+                    '用并发连接预取当前流喂给播放器，弱网更少卡顿。⚠️ 会向服务器并发请求，'
+                    '并非每个服主都允许——仅对你已获允许的服务器开启。',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+                ListTile(
+                  dense: true,
+                  title: const Text('并发线程数'),
+                  trailing: DropdownButton<int>(
+                    value: threads,
+                    items: const [2, 3, 4]
+                        .map((n) =>
+                            DropdownMenuItem(value: n, child: Text('$n')))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        ref
+                            .read(multiThreadLoadingThreadsProvider.notifier)
+                            .state = v;
+                      }
+                    },
+                  ),
+                ),
+                const Divider(),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(8, 0, 8, 4),
+                  child: Text('允许的服务器',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                if (servers.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Text('暂无服务器'),
+                  )
+                else
+                  ...servers.map((s) => SwitchListTile(
+                        dense: true,
+                        title: Text(s.name),
+                        value: allowed.contains(s.id),
+                        onChanged: (on) =>
+                            _toggleServerMtl(context, ref, s.id, on),
+                      )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('完成'),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  /// 把某服务器加入/移出多线程加载白名单。加入前强制确认须获服主允许。
+  Future<void> _toggleServerMtl(
+      BuildContext context, WidgetRef ref, String id, bool on) async {
+    final notifier = ref.read(multiThreadLoadingServersProvider.notifier);
+    final current = ref.read(multiThreadLoadingServersProvider);
+    if (!on) {
+      notifier.state = current.where((e) => e != id).toList();
       return;
     }
     final ok = await showDialog<bool>(
@@ -489,9 +566,9 @@ class PlayerSettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('请先获得服主允许'),
         content: const Text(
-            '多线程加载会用 2~4 个并发连接预取当前播放流，给服务器带来额外并发压力。'
+            '多线程加载会用并发连接预取当前播放流，给该服务器带来额外并发压力。'
             '不少服主明确禁止多线程 / 预拉取，滥用可能导致封号。\n\n'
-            '请确认你已获得服主允许后再开启。'),
+            '请确认你已获得该服服主允许后再开启。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -504,9 +581,8 @@ class PlayerSettingsScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (ok == true) {
-      ref.read(multiThreadLoadingConsentProvider.notifier).state = true;
-      ref.read(multiThreadLoadingProvider.notifier).state = true;
+    if (ok == true && !current.contains(id)) {
+      notifier.state = [...current, id];
     }
   }
 

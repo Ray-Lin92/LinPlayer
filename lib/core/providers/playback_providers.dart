@@ -201,33 +201,23 @@ final preloadEnabledProvider =
   );
 });
 
-/// 多线程加载（本地缓存预取代理）：播放时起本地代理，用 2~4 个并发 Range 连接超前
-/// 拉取当前流喂给播放器，弱网少卡顿。**会向服务器发起并发请求，需先获得服主允许**，
-/// 故默认关闭，且开启需经 [multiThreadLoadingConsentProvider] 确认。
-final multiThreadLoadingProvider =
-    StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
-  return PreferenceNotifier<bool>(
-    defaultValue: false,
-    readValue: (prefs) => prefs.getBool('linplayer_mt_loading_enabled'),
+/// 多线程加载（本地缓存预取代理）：播放时起本地代理，用并发 Range 连接超前拉取当前流
+/// 喂给播放器，弱网少卡顿。**会向服务器发起并发请求，并非每个服主都允许**，故采用
+/// **按服务器白名单**：仅对用户明确加入名单（已确认获服主允许）的服务器启用。
+/// 存放允许启用的服务器 id 列表。
+final multiThreadLoadingServersProvider =
+    StateNotifierProvider<PreferenceNotifier<List<String>>, List<String>>(
+        (ref) {
+  return PreferenceNotifier<List<String>>(
+    defaultValue: const [],
+    readValue: (prefs) => prefs.getStringList('linplayer_mt_loading_servers'),
     writeValue: (prefs, value) async {
-      await prefs.setBool('linplayer_mt_loading_enabled', value);
+      await prefs.setStringList('linplayer_mt_loading_servers', value);
     },
   );
 });
 
-/// 是否已确认「已获服主允许」开启多线程加载。
-final multiThreadLoadingConsentProvider =
-    StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
-  return PreferenceNotifier<bool>(
-    defaultValue: false,
-    readValue: (prefs) => prefs.getBool('linplayer_mt_loading_consent'),
-    writeValue: (prefs, value) async {
-      await prefs.setBool('linplayer_mt_loading_consent', value);
-    },
-  );
-});
-
-/// 多线程加载并发连接数（2~4）。
+/// 多线程加载并发连接数（2~4），用户可调。
 final multiThreadLoadingThreadsProvider =
     StateNotifierProvider<PreferenceNotifier<int>, int>((ref) {
   return PreferenceNotifier<int>(

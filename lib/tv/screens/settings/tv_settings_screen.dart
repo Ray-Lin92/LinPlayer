@@ -133,7 +133,6 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
     final autoNext = ref.watch(autoPlayNextProvider);
     final autoSkipSegments = ref.watch(autoSkipSegmentsProvider);
     final preloadEnabled = ref.watch(preloadEnabledProvider);
-    final multiThreadLoading = ref.watch(multiThreadLoadingProvider);
     final strmDirectPlay = ref.watch(strmDirectPlayProvider);
     final exoLibass = ref.watch(exoLibassProvider);
     final gpuNext = ref.watch(gpuNextEnabledProvider);
@@ -224,13 +223,7 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         onToggle: () => ref.read(preloadEnabledProvider.notifier).state =
             !preloadEnabled,
       ),
-      _toggleItem(
-        m,
-        title: '多线程加载',
-        subtitle: '播放时用 2~4 个并发连接预取当前流喂给播放器，弱网更少卡顿。⚠️ 需先获得服主允许',
-        value: multiThreadLoading,
-        onToggle: () => unawaited(_toggleMtLoading()),
-      ),
+      ..._mtlItems(m),
       _toggleItem(
         m,
         title: 'STRM 直链播放',
@@ -284,23 +277,52 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
     ]);
   }
 
-  /// 开关「多线程加载」。开启前强制确认须获服主允许，确认后才记录同意并启用。
-  Future<void> _toggleMtLoading() async {
-    if (ref.read(multiThreadLoadingProvider)) {
-      ref.read(multiThreadLoadingProvider.notifier).state = false;
+  /// 多线程加载设置项：并发线程数 + 每个服务器的允许开关（按服务器白名单）。
+  List<Widget> _mtlItems(TvMetrics m) {
+    final servers = ref.watch(serverListProvider);
+    final allowed = ref.watch(multiThreadLoadingServersProvider);
+    final threads = ref.watch(multiThreadLoadingThreadsProvider);
+    return [
+      _choiceItem<int>(
+        m,
+        title: '多线程加载 · 并发线程数',
+        subtitle: '弱网加速预取；仅对下方允许的服务器生效（需服主允许）',
+        current: threads,
+        options: const [MapEntry('2', 2), MapEntry('3', 3), MapEntry('4', 4)],
+        onPick: (v) =>
+            ref.read(multiThreadLoadingThreadsProvider.notifier).state = v,
+      ),
+      ...servers.map((s) => _toggleItem(
+            m,
+            title: '多线程加载：${s.name}',
+            subtitle: allowed.contains(s.id) ? '已允许' : '未允许（需服主允许）',
+            value: allowed.contains(s.id),
+            onToggle: () => unawaited(_toggleServerMtl(s.id)),
+          )),
+    ];
+  }
+
+  /// 把某服务器加入/移出多线程加载白名单。加入前强制确认须获服主允许。
+  Future<void> _toggleServerMtl(String id) async {
+    final current = ref.read(multiThreadLoadingServersProvider);
+    final notifier = ref.read(multiThreadLoadingServersProvider.notifier);
+    if (current.contains(id)) {
+      notifier.state = current.where((e) => e != id).toList();
       return;
     }
     final ok = await showTvConfirm(
       context,
       title: '请先获得服主允许',
-      message: '多线程加载会用 2~4 个并发连接预取当前播放流，给服务器带来额外并发压力。'
-          '不少服主明确禁止多线程 / 预拉取，滥用可能导致封号。请确认你已获服主允许后再开启。',
+      message: '多线程加载会用并发连接预取当前播放流，给该服务器带来额外并发压力。'
+          '不少服主明确禁止多线程 / 预拉取，滥用可能导致封号。请确认你已获该服服主允许后再开启。',
       confirmLabel: '我已获服主允许',
       cancelLabel: '暂不开启',
     );
     if (!mounted || !ok) return;
-    ref.read(multiThreadLoadingConsentProvider.notifier).state = true;
-    ref.read(multiThreadLoadingProvider.notifier).state = true;
+    final cur = ref.read(multiThreadLoadingServersProvider);
+    if (!cur.contains(id)) {
+      ref.read(multiThreadLoadingServersProvider.notifier).state = [...cur, id];
+    }
   }
 
   /// 保存正则筛选偏好：校验合法性，非法则提示且不保存。

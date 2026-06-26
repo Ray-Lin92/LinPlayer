@@ -2785,9 +2785,13 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
   /// 返回本地播放 URL（失败/不满足条件返回 null，调用方回退在线直链）。
   Future<String?> _maybeStartPrefetch(String onlineUrl) async {
     try {
-      if (!ref.read(multiThreadLoadingProvider)) return null;
-      if (!ref.read(multiThreadLoadingConsentProvider)) return null;
       if (!onlineUrl.startsWith('http')) return null;
+      // 仅对用户加入「多线程加载」白名单（已确认获服主允许）的当前服务器启用。
+      final serverId = ref.read(currentServerProvider)?.id;
+      if (serverId == null ||
+          !ref.read(multiThreadLoadingServersProvider).contains(serverId)) {
+        return null;
+      }
       final limitMb = await CacheService.getVideoCacheMaxSizeMB();
       return await PrefetchProxy.instance.start(
         upstreamUrl: onlineUrl,
