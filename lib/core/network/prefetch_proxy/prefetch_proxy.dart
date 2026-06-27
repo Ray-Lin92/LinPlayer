@@ -268,7 +268,13 @@ class _Session {
           options: Options(headers: {'Range': 'bytes=$start-$end'}),
         );
         final body = resp.data;
-        if (body != null && body.isNotEmpty) return body;
+        if (body != null && body.isNotEmpty) {
+          _log.d('Prefetch',
+              'Range 段$c bytes=$start-$end (${(body.length / 1024).toStringAsFixed(0)}KB) '
+              '服务位=$_serveChunk/$_totalChunks 领先=${_fetchCursor - _serveChunk}段'
+              '${attempt > 0 ? ' 重试$attempt' : ''}');
+          return body;
+        }
         throw DioException(
             requestOptions: resp.requestOptions, error: 'empty body');
       } on DioException catch (e) {
