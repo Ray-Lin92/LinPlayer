@@ -1,1 +1,1 @@
-android/app/src/main/jniLibs/*/libmpv.so filter=lfs diff=lfs merge=lfs -text
+# 原生库直接以普通 Git 对象存放在仓库内（不再走 Git LFS，避免 LFS 配额限制）。
