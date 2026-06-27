@@ -98,14 +98,28 @@ class _DesktopLibraryDetailScreenState
             ),
           ),
           SliverToBoxAdapter(
-            child: filtersAsync.maybeWhen(
+            child: filtersAsync.when(
               data: (facets) => LibraryFilterBar(
                 facets: facets,
                 value: _filter,
                 currentYear: DateTime.now().year,
                 onChanged: (v) => setState(() => _filter = v),
               ),
-              orElse: () => const SizedBox.shrink(),
+              // 加载/失败不再静默隐藏，明确显示状态便于排查"看不到筛选"的归因。
+              loading: () => const Padding(
+                padding: EdgeInsets.fromLTRB(24, 6, 24, 6),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('筛选项加载中…',
+                      style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ),
+              ),
+              error: (e, _) => Padding(
+                padding: const EdgeInsets.fromLTRB(24, 6, 24, 6),
+                child: Text('筛选项加载失败：$e',
+                    style: TextStyle(
+                        fontSize: 12, color: theme.colorScheme.error)),
+              ),
             ),
           ),
           libraryItemsAsync.when(

@@ -32,7 +32,14 @@ class LibraryFilterBar extends StatelessWidget {
         f.tags.isNotEmpty ||
         f.studios.isNotEmpty ||
         yearChips.isNotEmpty;
-    if (!hasAny) return const SizedBox.shrink();
+    // 服务器对该库没有返回任何分面时，给个明确提示而非空白（避免误以为"功能没做"）。
+    if (!hasAny) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(16, 6, 16, 6),
+        child: Text('该媒体库暂无可筛选项',
+            style: TextStyle(fontSize: 12, color: Colors.grey)),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
