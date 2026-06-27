@@ -567,34 +567,22 @@ class EmbyLibraryApi implements LibraryApi {
   @override
   Future<Filters> getFilters(String libraryId) async {
     final uid = _requireUserId(_client);
-    // 分面一次取：/Items/Filters 带 Genres/Years/Tags/OfficialRatings；
-    // 工作室无分面字段，用专用 /Studios 端点，二者并行无额外延迟。
+    // 不走 /Items/Filters：部分 Emby（实测 4.9.5）该端点 404，/Users/{uid}/Items/Filters2
+    // 又 500（Unrecognized Guid format）。改用各分面专用端点并行取，
+    // 这些端点在标准 Emby 上也都在，兼容性更好；各自吞错互不拖垮。
     final results = await Future.wait([
-      _client.get('/Items/Filters', queryParameters: {
-        'UserId': uid,
-        'ParentId': libraryId,
-        // 必须按条目类型限定，否则部分服务器对 /Items/Filters 返回空分面。
-        'IncludeItemTypes': 'Movie,Series',
-      }),
-      _fetchStudios(libraryId, uid),
+      _fetchFacetNames('/Genres', libraryId, uid),
+      _fetchFacetNames('/Years', libraryId, uid),
+      _fetchFacetNames('/Tags', libraryId, uid),
+      _fetchFacetNames('/Studios', libraryId, uid),
+      _fetchFacetNames('/OfficialRatings', libraryId, uid),
     ]);
-    final d = (results[0] as Response).data as Map<String, dynamic>;
-    final studios = results[1] as List<String>;
     return Filters(
-      genres:
-          (d['Genres'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-              [],
-      years:
-          (d['Years'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-              [],
-      tags:
-          (d['Tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-              [],
-      studios: studios,
-      officialRatings: (d['OfficialRatings'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          [],
+      genres: results[0],
+      years: results[1],
+      tags: results[2],
+      studios: results[3],
+      officialRatings: results[4],
     );
   }
 
@@ -612,10 +600,12 @@ class EmbyLibraryApi implements LibraryApi {
     return _parseItemList(resp.data);
   }
 
-  /// 工作室列表（库内，含计数排序）。失败不应拖垮整个面板，故吞错返回空。
-  Future<List<String>> _fetchStudios(String libraryId, String uid) async {
+  /// 某分面端点（/Genres、/Years、/Tags、/Studios、/OfficialRatings）的库内取值，
+  /// 返回 Items[].Name 列表。失败不应拖垮整个面板，故吞错返回空。
+  Future<List<String>> _fetchFacetNames(
+      String endpoint, String libraryId, String uid) async {
     try {
-      final resp = await _client.get('/Studios', queryParameters: {
+      final resp = await _client.get(endpoint, queryParameters: {
         'UserId': uid,
         'ParentId': libraryId,
         'Recursive': true,
