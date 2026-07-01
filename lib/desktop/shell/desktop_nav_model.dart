@@ -65,7 +65,32 @@ const desktopNavItems = <DesktopNavItem>[
     selectedIcon: Icons.settings_rounded,
     label: '设置',
   ),
+  // 排行榜：分支 index 恒为末位（隐藏时不影响前序索引），但展示位置由
+  // [desktopVisibleNav] 排到「收藏」之后，观感更自然。
+  DesktopNavItem(
+    path: '/rankings',
+    icon: Icons.leaderboard_outlined,
+    selectedIcon: Icons.leaderboard_rounded,
+    label: '排行榜',
+  ),
 ];
+
+/// 排行榜分支在 [desktopNavItems] / 路由分支中的固定索引（末位）。
+final int desktopRankingBranchIndex =
+    desktopNavItems.indexWhere((e) => e.path == '/rankings');
+
+/// 计算侧边栏可见导航项（含真实分支索引）。排行榜按开关显隐，且展示在「收藏」后。
+/// 返回的 branchIndex 用于 [StatefulNavigationShell.goBranch] 与选中态比较。
+List<({int branchIndex, DesktopNavItem item})> desktopVisibleNav(
+    bool rankingEnabled) {
+  // 展示顺序：首页/媒体库/收藏/(排行榜)/下载/服务器/设置。
+  final order = <int>[0, 1, 2];
+  if (rankingEnabled) order.add(desktopRankingBranchIndex);
+  order.addAll([3, 4, 5]);
+  return [
+    for (final i in order) (branchIndex: i, item: desktopNavItems[i]),
+  ];
+}
 
 /// 由当前路由计算选中的导航索引（首页聚合 /home 与续播页）。
 int desktopSelectedNavIndex(String currentPath) {

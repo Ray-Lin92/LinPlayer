@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/ranking_providers.dart';
 import '../theme/tv_design_tokens.dart';
 import '../theme/tv_metrics.dart';
 import 'tv_focusable.dart';
 
 /// TV 左侧导航栏
-/// 固定左侧，5 项导航：首页、搜索、服务器、扫码、设置
-class TvSidebar extends StatefulWidget {
+/// 固定左侧：首页、搜索、服务器、扫码、设置（+ 排行榜按开关显隐，末位对齐路由）。
+class TvSidebar extends ConsumerStatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
   final bool collapsed;
@@ -18,11 +20,11 @@ class TvSidebar extends StatefulWidget {
   });
 
   @override
-  State<TvSidebar> createState() => _TvSidebarState();
+  ConsumerState<TvSidebar> createState() => _TvSidebarState();
 }
 
-class _TvSidebarState extends State<TvSidebar> {
-  final List<_NavItem> _items = const [
+class _TvSidebarState extends ConsumerState<TvSidebar> {
+  static const List<_NavItem> _baseItems = [
     _NavItem(Icons.home_rounded, '首页'),
     _NavItem(Icons.search_rounded, '搜索'),
     _NavItem(Icons.storage_rounded, '服务器'),
@@ -33,6 +35,12 @@ class _TvSidebarState extends State<TvSidebar> {
   @override
   Widget build(BuildContext context) {
     final m = context.tv;
+    // 排行榜作为末位项（index 5），与 tv_router / tv_shell 的 _routes 对齐。
+    final items = <_NavItem>[
+      ..._baseItems,
+      if (ref.watch(rankingEnabledProvider))
+        const _NavItem(Icons.leaderboard_rounded, '排行榜'),
+    ];
     final width = widget.collapsed
         ? m.sidebarCollapsedWidth
         : m.sidebarWidth;
@@ -45,8 +53,8 @@ class _TvSidebarState extends State<TvSidebar> {
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: List.generate(_items.length, (index) {
-            final item = _items[index];
+          children: List.generate(items.length, (index) {
+            final item = items[index];
             final isSelected = widget.selectedIndex == index;
 
             return TvFocusable(

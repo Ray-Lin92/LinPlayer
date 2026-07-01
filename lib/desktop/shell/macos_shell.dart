@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:macos_ui/macos_ui.dart';
 
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/ranking_providers.dart';
 import 'desktop_content_gate.dart';
 import 'desktop_nav_model.dart';
 
@@ -25,6 +26,7 @@ class MacosDesktopShell extends ConsumerWidget {
     final theme = MacosTheme.of(context);
     final collapsed = ref.watch(sidebarCollapsedProvider);
     final selectedIndex = navigationShell.currentIndex;
+    final visibleNav = desktopVisibleNav(ref.watch(rankingEnabledProvider));
     final isDark = theme.brightness == Brightness.dark;
 
     final sidebarColor = isDark
@@ -48,16 +50,16 @@ class MacosDesktopShell extends ConsumerWidget {
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
-                  itemCount: desktopNavItems.length,
+                  itemCount: visibleNav.length,
                   itemBuilder: (context, index) {
-                    final item = desktopNavItems[index];
+                    final e = visibleNav[index];
                     return _MacosNavTile(
-                      item: item,
-                      selected: index == selectedIndex,
+                      item: e.item,
+                      selected: e.branchIndex == selectedIndex,
                       accent: theme.primaryColor,
                       isDark: isDark,
                       collapsed: collapsed,
-                      onTap: () => navigationShell.goBranch(index),
+                      onTap: () => navigationShell.goBranch(e.branchIndex),
                     );
                   },
                 ),

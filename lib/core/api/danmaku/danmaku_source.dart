@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import '../api_interfaces.dart';
+import 'dandan_signing.dart';
 
 enum DanmakuSourceType { dandanplay, custom }
 
@@ -240,56 +241,18 @@ abstract class DanmakuSource {
 class DandanplaySource extends DanmakuSource {
   @override
   final DanmakuSourceConfig config;
-  final List<({String appId, String secret})> _credentials;
+  final DandanSigner _signer;
   static const String _baseUrl = 'https://api.dandanplay.net';
-  static final _random = Random();
 
   DandanplaySource({
     required this.config,
     required String appSecret,
     required String appId,
-  }) : _credentials = _buildCredentials(appId, appSecret);
+  }) : _signer = DandanSigner.fromRaw(appId, appSecret);
 
-  // 兼容多种分隔：换行/逗号/分号（CI 可能把多行凭据合成逗号分隔）。
-  static List<String> _lines(String v) => v
-      .split(RegExp(r'[\n,;]'))
-      .map((s) => s.trim())
-      .where((s) => s.isNotEmpty)
-      .toList();
+  bool get hasCredentials => _signer.hasCredentials;
 
-  static List<({String appId, String secret})> _buildCredentials(
-      String appIdRaw, String secretRaw) {
-    final ids = _lines(appIdRaw);
-    final secrets = _lines(secretRaw);
-    if (ids.isEmpty || secrets.isEmpty) return const [];
-    // 多对凭据按行配对；只有一个 AppId 时与每个 Secret 配对（兼容单 App 多 Secret）。
-    if (ids.length == 1) {
-      return [for (final s in secrets) (appId: ids.first, secret: s)];
-    }
-    final n = ids.length < secrets.length ? ids.length : secrets.length;
-    return [for (var i = 0; i < n; i++) (appId: ids[i], secret: secrets[i])];
-  }
-
-  bool get hasCredentials => _credentials.isNotEmpty;
-
-  String _generateSignature(
-      String appId, String path, int timestamp, String secret) {
-    final data = '$appId$timestamp$path$secret';
-    return base64.encode(sha256.convert(utf8.encode(data)).bytes);
-  }
-
-  Options _authOptions(String path) {
-    if (_credentials.isEmpty) return Options();
-    final cred = _credentials[_random.nextInt(_credentials.length)];
-    final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final signature =
-        _generateSignature(cred.appId, path, timestamp, cred.secret);
-    return Options(headers: {
-      'X-AppId': cred.appId,
-      'X-Timestamp': timestamp.toString(),
-      'X-Signature': signature,
-    });
-  }
+  Options _authOptions(String path) => _signer.authOptions(path);
 
   @override
   Future<DanmakuMatchResult> match({

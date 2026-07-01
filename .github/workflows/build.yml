@@ -156,6 +156,7 @@ jobs:
         env:
           DANDANPLAY_APP_ID: ${{ secrets.DANDANPLAY_APP_ID }}
           DANDANPLAY_APP_SECRET: ${{ secrets.DANDANPLAY_APP_SECRET }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           ORG_GRADLE_PROJECT_linplayerTargetAbis: arm64-v8a
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -167,6 +168,12 @@ jobs:
           CLEAN_SECRET=$(printf '%s' "$DANDANPLAY_APP_SECRET" | tr -d '\r' | paste -sd ',' -)
           VERSION="${{ needs.prepare.outputs.version }}"
 
+          # TMDB 密钥用内置口令 AES 加密后注入（明文不进产物）。未配置则留空。
+          TMDB_ENC=""
+          if [ -n "$TMDB_API_KEY" ]; then
+            TMDB_ENC=$(dart run tool/tmdb_encrypt.dart "$TMDB_API_KEY")
+          fi
+
           # --build-number 让 versionCode 随 CI run 递增，系统才认作「升级」。
           flutter build apk --release --split-per-abi \
             --flavor mobile \
@@ -174,7 +181,8 @@ jobs:
             --build-number="${{ github.run_number }}" \
             --dart-define=APP_VERSION="$VERSION" \
             --dart-define=DANDANPLAY_APP_ID="$CLEAN_ID" \
-            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET"
+            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET" \
+            --dart-define=TMDB_API_KEY_ENC="$TMDB_ENC"
 
           APK_DIR="build/app/outputs/flutter-apk"
           ARM64_SOURCE=$(find "$APK_DIR" -maxdepth 1 -type f -name '*arm64-v8a*release.apk' | head -n 1)
@@ -311,6 +319,7 @@ jobs:
         env:
           DANDANPLAY_APP_ID: ${{ secrets.DANDANPLAY_APP_ID }}
           DANDANPLAY_APP_SECRET: ${{ secrets.DANDANPLAY_APP_SECRET }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           ORG_GRADLE_PROJECT_linplayerTargetAbis: armeabi-v7a
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -322,6 +331,12 @@ jobs:
           CLEAN_SECRET=$(printf '%s' "$DANDANPLAY_APP_SECRET" | tr -d '\r' | paste -sd ',' -)
           VERSION="${{ needs.prepare.outputs.version }}"
 
+          # TMDB 密钥用内置口令 AES 加密后注入（明文不进产物）。未配置则留空。
+          TMDB_ENC=""
+          if [ -n "$TMDB_API_KEY" ]; then
+            TMDB_ENC=$(dart run tool/tmdb_encrypt.dart "$TMDB_API_KEY")
+          fi
+
           # Android TV release only needs the 32-bit build.
           # --build-number 让 versionCode 随 CI run 递增，系统才认作「升级」。
           flutter build apk --release --split-per-abi \
@@ -331,7 +346,8 @@ jobs:
             --dart-define=FLAVOR=tv \
             --dart-define=APP_VERSION="$VERSION" \
             --dart-define=DANDANPLAY_APP_ID="$CLEAN_ID" \
-            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET"
+            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET" \
+            --dart-define=TMDB_API_KEY_ENC="$TMDB_ENC"
 
           TV_APK_DIR="build/app/outputs/flutter-apk"
           TV_APK_SOURCE=$(find "$TV_APK_DIR" -maxdepth 1 -type f -name '*armeabi-v7a*release.apk' | head -n 1)
@@ -403,14 +419,21 @@ jobs:
         env:
           DANDANPLAY_APP_ID: ${{ secrets.DANDANPLAY_APP_ID }}
           DANDANPLAY_APP_SECRET: ${{ secrets.DANDANPLAY_APP_SECRET }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: |
           CLEAN_ID=$(printf '%s' "$DANDANPLAY_APP_ID" | tr -d '\r' | paste -sd ',' -)
           CLEAN_SECRET=$(printf '%s' "$DANDANPLAY_APP_SECRET" | tr -d '\r' | paste -sd ',' -)
 
+          TMDB_ENC=""
+          if [ -n "$TMDB_API_KEY" ]; then
+            TMDB_ENC=$(dart run tool/tmdb_encrypt.dart "$TMDB_API_KEY")
+          fi
+
           flutter build ios --release --no-codesign \
             --dart-define=APP_VERSION="${{ needs.prepare.outputs.version }}" \
             --dart-define=DANDANPLAY_APP_ID="$CLEAN_ID" \
-            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET"
+            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET" \
+            --dart-define=TMDB_API_KEY_ENC="$TMDB_ENC"
 
       - name: Package iOS IPA (unsigned)
         run: |
@@ -586,16 +609,24 @@ jobs:
         env:
           DANDANPLAY_APP_ID: ${{ secrets.DANDANPLAY_APP_ID }}
           DANDANPLAY_APP_SECRET: ${{ secrets.DANDANPLAY_APP_SECRET }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           LINPLAYER_SKIP_LIBMPV_UPGRADE: 1
         shell: pwsh
         run: |
           $cleanId = (("$env:DANDANPLAY_APP_ID" -split "[`r`n]+") | Where-Object { $_.Trim() -ne "" } | ForEach-Object { $_.Trim() }) -join ","
           $cleanSecret = (("$env:DANDANPLAY_APP_SECRET" -split "[`r`n]+") | Where-Object { $_.Trim() -ne "" } | ForEach-Object { $_.Trim() }) -join ","
 
+          # TMDB 密钥用内置口令 AES 加密后注入（明文不进产物）。未配置则留空。
+          $tmdbEnc = ""
+          if ("$env:TMDB_API_KEY".Trim() -ne "") {
+            $tmdbEnc = (dart run tool/tmdb_encrypt.dart "$env:TMDB_API_KEY").Trim()
+          }
+
           flutter build windows --release `
             --dart-define=APP_VERSION="${{ needs.prepare.outputs.version }}" `
             --dart-define=DANDANPLAY_APP_ID="$cleanId" `
-            --dart-define=DANDANPLAY_APP_SECRET="$cleanSecret"
+            --dart-define=DANDANPLAY_APP_SECRET="$cleanSecret" `
+            --dart-define=TMDB_API_KEY_ENC="$tmdbEnc"
 
       - name: Upgrade libmpv-2.dll for PGS/SUP
         shell: pwsh
@@ -724,14 +755,21 @@ jobs:
         env:
           DANDANPLAY_APP_ID: ${{ secrets.DANDANPLAY_APP_ID }}
           DANDANPLAY_APP_SECRET: ${{ secrets.DANDANPLAY_APP_SECRET }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: |
           CLEAN_ID=$(printf '%s' "$DANDANPLAY_APP_ID" | tr -d '\r' | paste -sd ',' -)
           CLEAN_SECRET=$(printf '%s' "$DANDANPLAY_APP_SECRET" | tr -d '\r' | paste -sd ',' -)
 
+          TMDB_ENC=""
+          if [ -n "$TMDB_API_KEY" ]; then
+            TMDB_ENC=$(dart run tool/tmdb_encrypt.dart "$TMDB_API_KEY")
+          fi
+
           flutter build linux --release \
             --dart-define=APP_VERSION="${{ needs.prepare.outputs.version }}" \
             --dart-define=DANDANPLAY_APP_ID="$CLEAN_ID" \
-            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET"
+            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET" \
+            --dart-define=TMDB_API_KEY_ENC="$TMDB_ENC"
 
       - name: Bundle ffmpeg (内置，避免运行时无校验下载，M6)
         run: |
@@ -803,14 +841,21 @@ jobs:
         env:
           DANDANPLAY_APP_ID: ${{ secrets.DANDANPLAY_APP_ID }}
           DANDANPLAY_APP_SECRET: ${{ secrets.DANDANPLAY_APP_SECRET }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: |
           CLEAN_ID=$(printf '%s' "$DANDANPLAY_APP_ID" | tr -d '\r' | paste -sd ',' -)
           CLEAN_SECRET=$(printf '%s' "$DANDANPLAY_APP_SECRET" | tr -d '\r' | paste -sd ',' -)
 
+          TMDB_ENC=""
+          if [ -n "$TMDB_API_KEY" ]; then
+            TMDB_ENC=$(dart run tool/tmdb_encrypt.dart "$TMDB_API_KEY")
+          fi
+
           flutter build macos --release \
             --dart-define=APP_VERSION="${{ needs.prepare.outputs.version }}" \
             --dart-define=DANDANPLAY_APP_ID="$CLEAN_ID" \
-            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET"
+            --dart-define=DANDANPLAY_APP_SECRET="$CLEAN_SECRET" \
+            --dart-define=TMDB_API_KEY_ENC="$TMDB_ENC"
 
       - name: Bundle ffmpeg (内置，避免运行时无校验下载，M6)
         run: |

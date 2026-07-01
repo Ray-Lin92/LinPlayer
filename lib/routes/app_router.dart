@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/providers/app_providers.dart';
 import '../core/providers/media_providers.dart';
+import '../core/providers/ranking_providers.dart';
 import '../core/theme/app_motion.dart';
 import '../plugins/plugin_system.dart';
 import '../ui/screens/detail/media_detail_screen.dart';
@@ -14,6 +15,7 @@ import '../ui/screens/home/home_screen.dart';
 import '../ui/screens/library/libraries_screen.dart';
 import '../ui/screens/library/library_detail_screen.dart';
 import '../ui/screens/player/player_screen.dart';
+import '../ui/screens/rankings/rankings_screen.dart';
 import '../ui/screens/search/search_screen.dart';
 import '../ui/screens/server/add_server_screen.dart';
 import '../ui/screens/server/edit_server_screen.dart';
@@ -233,6 +235,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/downloads',
         builder: (context, state) => const DownloadScreen(),
+      ),
+      GoRoute(
+        path: '/rankings',
+        builder: (context, state) => const RankingsScreen(),
       ),
       // 网盘/聚合源：文件浏览页（按 currentServer）。Ani-rss 走专属 3-Tab 迷你应用。
       GoRoute(
@@ -496,7 +502,7 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-class _FloatingTabBar extends StatelessWidget {
+class _FloatingTabBar extends ConsumerWidget {
   const _FloatingTabBar({
     required this.navigationShell,
   });
@@ -504,7 +510,8 @@ class _FloatingTabBar extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showRanking = ref.watch(rankingEnabledProvider);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -534,9 +541,33 @@ class _FloatingTabBar extends StatelessWidget {
             _buildNavItem(0, Icons.dns_rounded, '服务器'),
             const SizedBox(width: 24),
             _buildNavItem(1, Icons.favorite_rounded, '收藏'),
+            if (showRanking) ...[
+              const SizedBox(width: 24),
+              _buildPushItem(
+                  context, Icons.leaderboard_rounded, '排行榜', '/rankings'),
+            ],
             const SizedBox(width: 24),
             _buildNavItem(2, Icons.settings_rounded, '设置'),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// 跳转型入口（非 shell 分支，push 顶级路由）。样式与分支项一致，仅无选中态。
+  Widget _buildPushItem(
+      BuildContext context, IconData icon, String label, String path) {
+    return GestureDetector(
+      onTap: () => context.push(path),
+      child: Tooltip(
+        message: label,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Icon(icon, size: 22, color: Colors.grey),
         ),
       ),
     );

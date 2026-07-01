@@ -18,6 +18,7 @@ import '../screens/library/desktop_library_screen.dart';
 import '../screens/library/desktop_library_detail_screen.dart';
 import '../screens/server/desktop_server_screen.dart';
 import '../screens/server/desktop_add_server_screen.dart';
+import '../screens/rankings/desktop_rankings_screen.dart';
 import '../screens/source/desktop_source_login_screen.dart';
 import '../screens/source/desktop_source_picker_screen.dart';
 import '../screens/anirss/desktop_anirss_detail_screen.dart';
@@ -133,6 +134,18 @@ final desktopRouterProvider = Provider<GoRouter>((ref) {
                 path: '/settings',
                 pageBuilder: (context, state) => _buildFadePage(
                   child: const SettingsScreen(),
+                  state: state,
+                ),
+              ),
+            ],
+          ),
+          // 分支 6：排行榜（末位，按开关在侧边栏显隐；不需要服务器）
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/rankings',
+                pageBuilder: (context, state) => _buildFadePage(
+                  child: const DesktopRankingsScreen(),
                   state: state,
                 ),
               ),

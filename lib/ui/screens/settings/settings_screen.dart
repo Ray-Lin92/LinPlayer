@@ -28,6 +28,7 @@ import '../../../core/services/translation/whisper/desktop_binary_manager.dart';
 import '../../../core/services/translation/whisper/whisper_model.dart';
 import '../../../core/services/translation/whisper/whisper_model_manager.dart';
 import '../../../core/providers/update_providers.dart';
+import '../../../core/providers/ranking_providers.dart';
 import '../../../core/providers/proxy_providers.dart';
 import '../../../core/network/proxy_settings.dart';
 import '../../../core/network/proxy_http_client.dart';

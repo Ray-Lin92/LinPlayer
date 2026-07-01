@@ -10,6 +10,7 @@ import '../screens/source/tv_source_login_screen.dart';
 import '../../core/sources/source_playback.dart';
 import '../../core/sources/source_kind.dart';
 import '../screens/settings/tv_settings_screen.dart';
+import '../screens/rankings/tv_rankings_screen.dart';
 import '../screens/settings/tv_cf_proxy_screen.dart';
 import '../screens/settings/tv_plugin_screen.dart';
 import '../screens/settings/tv_lan_control_screen.dart';
@@ -116,6 +117,8 @@ final tvRouter = GoRouter(
           selectedIndex = 3;
         } else if (path.startsWith('/tv/settings')) {
           selectedIndex = 4;
+        } else if (path.startsWith('/tv/rankings')) {
+          selectedIndex = 5;
         }
         return TvShell(
           selectedIndex: selectedIndex,
@@ -150,6 +153,10 @@ final tvRouter = GoRouter(
         GoRoute(
           path: '/tv/settings',
           builder: (context, state) => const TvSettingsScreen(),
+        ),
+        GoRoute(
+          path: '/tv/rankings',
+          builder: (context, state) => const TvRankingsScreen(),
         ),
       ],
     ),
