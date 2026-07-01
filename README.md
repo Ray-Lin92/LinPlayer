@@ -1,19 +1,25 @@
 # LinPlayer
 
-LinPlayer - Emby 第三方客户端移动端
+**LinPlayer** 是一个跨平台的 Emby 第三方客户端，覆盖 **移动端（Android / iOS）**、**桌面端（Windows / Linux / macOS）** 与 **电视端（Android TV / tvOS）**，以 Flutter 作为唯一长期代码线演进。
 
-当前仓库以 Flutter 作为唯一长期代码线演进。
-后续 Apple 平台也计划复用这套 Flutter 架构，不再单独维护原生 Swift/SwiftUI 实现。
+> 每个平台使用各自的原生 UI 语言（Material / fluent_ui / macos_ui / TV 自适应），但共享同一套核心逻辑。
 
 ## 功能特性
 
-- **双播放器内核**：
+- **双播放器内核**
   - **ExoPlayer**（Android 原生）：轻量稳定，支持文本字幕（SRT/ASS/WEBVTT/TTML）
-  - **MPV**（media_kit）：全格式支持，HDR/Dolby Vision，原生支持 PGS/SUP 图形字幕
-- **字幕支持**：自动加载 Emby 字幕流，支持字幕轨道切换、延迟调整、字体/大小/位置设置
-- **手势控制**：亮度/音量/进度调节
-- **播放上报**：完整的 Emby 播放进度同步
-- **投屏支持**：DLNA 投屏
+  - **MPV**（media_kit / libmpv）：全格式支持，HDR / Dolby Vision，原生支持 PGS/SUP 图形字幕、Anime4K 超分辨率
+- **弹幕**：接入弹弹play 等多后端，智能集数匹配、并行分源、描边/显示区域渲染，三端可用
+- **排行榜**：弹弹play 动漫榜 + TMDB 影视榜（可开关）
+- **多源浏览**：Emby 之外支持网盘/聚合源（OpenList、夸克 Cookie/扫码、Ani-rss 等）
+- **字幕**：自动加载 Emby 字幕流，轨道切换、延迟调整、字体/大小/位置设置；MPV 走 libass 完整特效
+- **下载**：自建多线程（Range 分段）下载引擎，三端统一
+- **代理**：三端自定义代理 + CF 优选 IP 本地反代；Android TV 内置 mihomo 内核 + zashboard 面板
+- **插件系统**：QuickJS 脚本引擎，每个插件独立 isolate，崩溃/超时隔离
+- **投屏**：DLNA 投屏
+- **遥控**：手机扫码遥控电视端（内置 HTTP 服务 + Web 控制页）
+- **应用内更新**：双渠道（stable / pre）覆盖更新
+- **播放上报**：完整的 Emby 播放进度同步，支持跨服务器续播
 
 ## 播放器内核对比
 
@@ -22,119 +28,57 @@ LinPlayer - Emby 第三方客户端移动端
 | 视频格式 | H.264/H.265/AV1 | 全格式 |
 | 字幕格式 | SRT/ASS/WEBVTT/TTML | 全格式（含 PGS/SUP） |
 | 字幕特效 | 基础 | libass 完整支持 |
-| Dolby Vision | 部分支持 | 完整支持 |
+| Dolby Vision | 部分支持 | 完整支持（gpu-next + 软解自动切换） |
 | 超分辨率 | ❌ | Anime4K GLSL |
 | 体积 | 较小 | 较大（+30MB） |
 | 适用场景 | 普通视频 | 高质量/复杂字幕视频 |
-
-## 自动构建
-
-本项目配置了 **GitHub Actions** 自动构建：
-
-### 自动触发
-- Push 到 `main`/`master`/`develop` 分支时自动构建
-- 支持手动触发（可选择 debug/release）
-
-### 下载构建产物
-1. 进入 [Actions](../../actions) 页面
-2. 选择最新的 workflow run
-3. 下载 Artifacts 中的 APK 文件
 
 ## 本地开发
 
 ### 环境要求
 
-- Flutter 3.24.0+
-- Dart 3.0+
-- Android Studio / VS Code
-- Android SDK 34+
+- Flutter 3.24.0+ / Dart 3.0+
+- Android SDK 34+（Android/TV 构建）
+- Xcode（iOS/tvOS 构建）
+- 桌面端对应的原生工具链（Windows / Linux / macOS）
 
-### 构建步骤
+### 构建
 
 ```bash
-# 克隆仓库
-git clone https://github.com/yourusername/linplayer.git
-cd linplayer
-
-# 获取依赖
+git clone https://github.com/zzzwannasleep/LinPlayer.git
+cd LinPlayer
 flutter pub get
 
-# 构建 Debug APK
-flutter build apk --debug
-
-# 构建 Release APK
-flutter build apk --release
+# 各平台
+flutter build apk --release        # Android / TV
+flutter build windows              # Windows
+flutter build linux                # Linux
+flutter build macos                # macOS
+flutter build ios                  # iOS / tvOS
 ```
 
-### PGS/SUP 字幕支持
-
-ExoPlayer 默认不支持 PGS/SUP 图形字幕。播放含此类字幕的视频时：
-- 自动检测到 PGS/SUP 字幕
-- **PC 端默认使用 MPV 内核**，完整支持 HDR/Anime4K/高级字幕控制
-- 移动端可切换到 **MPV 内核** 获得完整支持
+CI 通过 **GitHub Actions** 自动构建：push 到 `main` 触发，产物在 [Actions](../../actions) 页面的 Artifacts 中下载。
 
 ### Windows 端 MPV PGS/SUP 说明
 
-media-kit 的 Windows 预编译 libmpv 为了减小体积禁用了 `hdmv_pgs_subtitle` 解码器，
-导致 PC 版 MPV 默认无法渲染 PGS/SUP。构建时会**自动**用完整版 `libmpv-2.dll` 替换：
+media-kit 的 Windows 预编译 libmpv 为减小体积禁用了 `hdmv_pgs_subtitle` 解码器，导致 PGS/SUP 默认无法渲染。构建时 CMake 会**自动**调用 `windows/scripts/upgrade_libmpv_for_pgs.ps1`，从 shinchiro 发布页下载完整版 `libmpv-2.dll` 替换。若目标 DLL 已含该解码器则自动跳过。
 
 ```powershell
-flutter build windows
-```
+# 跳过自动升级
+$env:LINPLAYER_SKIP_LIBMPV_UPGRADE = "1"; flutter build windows
 
-CMake 默认会在构建完成后调用 `windows/scripts/upgrade_libmpv_for_pgs.ps1`，
-从 shinchiro 发布页下载完整版 `mpv-dev` 包并提取 `libmpv-2.dll`。
-如果目标 DLL 已经包含 `hdmv_pgs_subtitle`，脚本会自动跳过，不会重复下载。
-如果下载、解压、替换或校验失败，Windows 构建会直接失败，避免继续产出一个
-“能启动但 PGS/SUP 一定不显示”的残缺包。
-
-如需关闭自动升级：
-
-```powershell
-$env:LINPLAYER_SKIP_LIBMPV_UPGRADE = "1"
-flutter build windows
-```
-
-或手动运行：
-
-```powershell
+# 手动运行
 .\windows\scripts\upgrade_libmpv_for_pgs.ps1
-```
-
-脚本成功后会在构建目录额外写入 `libmpv-upgrade.json` 作为校验记录。
-替换后，MPV 内核即可正常解码并渲染 PGS/SUP 图形字幕。
-
-## 项目结构
-
-```
-lib/
-├── core/
-│   ├── api/              # Emby API 接口
-│   ├── providers/        # Riverpod 状态管理
-│   └── services/         # 播放器服务
-│       ├── exo_player_adapter.dart    # ExoPlayer 内核
-│       ├── mpv_player_adapter.dart    # MPV 内核 (media_kit)
-│       ├── subtitle_processor.dart    # 字幕处理
-│       └── video_player_service.dart  # 播放器服务
-├── ui/
-│   └── screens/          # 页面
-│       └── player/       # 播放器页面
-└── main.dart
-
-android/
-├── app/                  # Android 应用模块
-│   └── src/main/kotlin/  # 原生插件
-│       └── ExoPlayerPlugin.kt
-└── app/                  # Android 应用模块
 ```
 
 ## 技术栈
 
-- **Flutter** - 跨平台 UI 框架
-- **Riverpod** - 状态管理
-- **media_kit** - libmpv 封装播放器
-- **ExoPlayer** - Android 原生播放器
-- **Emby API** - 媒体服务器通信
+- **Flutter** — 跨平台 UI 框架
+- **Riverpod** — 状态管理，**go_router** — 路由
+- **media_kit / libmpv** — MPV 播放内核，**ExoPlayer** — Android 原生内核
+- **fluent_ui / macos_ui** — 桌面端原生风格，**TDesign** — 三端统一组件
+- **flutter_qjs (QuickJS)** — 插件脚本引擎
+- **dio** — 网络，**Emby API** — 媒体服务器通信
 
 ## 许可证
 
@@ -142,6 +86,41 @@ android/
 
 ## 致谢
 
-- [media-kit](https://github.com/media-kit/media-kit) - 跨平台媒体播放器
-- [ExoPlayer](https://github.com/androidx/media) - Android 媒体播放器
-- [Emby](https://emby.media/) - 媒体服务器
+感谢以下开源项目、媒体服务与内核，LinPlayer 站在它们的肩膀上：
+
+### 播放内核
+
+- [media-kit](https://github.com/media-kit/media-kit) — 跨平台媒体播放器（libmpv 封装）
+- [mpv](https://github.com/mpv-player/mpv) / [libmpv](https://github.com/mpv-player/mpv) — 全格式播放核心
+- [ExoPlayer / androidx media](https://github.com/androidx/media) — Android 原生播放器
+- [MPVKit](https://github.com/mpvkit/MPVKit) — tvOS 端 libmpv 集成
+- [shinchiro mpv-winbuild](https://github.com/shinchiro/mpv-winbuild-cmake) — Windows 完整版 libmpv 预编译
+- [Anime4K](https://github.com/bloc97/Anime4K) — 实时超分辨率 GLSL 着色器
+
+### UI 与框架
+
+- [Flutter](https://flutter.dev) / [Riverpod](https://riverpod.dev) / [go_router](https://pub.dev/packages/go_router)
+- [TDesign Flutter](https://github.com/Tencent/tdesign-flutter) — 腾讯 TDesign 组件库（仓库内 vendored 打补丁）
+- [fluent_ui](https://github.com/bdlukaa/fluent_ui) — Windows Fluent 风格
+- [macos_ui](https://github.com/GroovinChip/macos_ui) — macOS 原生风格
+- [flutter_animate](https://pub.dev/packages/flutter_animate) — 三端统一动效
+
+### 服务与数据源
+
+- [Emby](https://emby.media/) — 媒体服务器
+- [弹弹play (DanDanPlay)](https://www.dandanplay.com/) — 弹幕与动漫排行榜数据
+- [TMDB](https://www.themoviedb.org/) — 影视排行榜数据
+- [OpenList](https://github.com/OpenListTeam/OpenList) — 网盘聚合源
+
+### 网络与代理
+
+- [mihomo (Clash.Meta)](https://github.com/MetaCubeX/mihomo) — Android TV 内置代理内核
+- [zashboard](https://github.com/Zephyruso/zashboard) — mihomo 控制面板
+- [socks5_proxy](https://pub.dev/packages/socks5_proxy) — SOCKS 代理支持
+
+### 脚本与工具
+
+- [flutter_qjs](https://github.com/ekibun/flutter_qjs) / [QuickJS](https://bellard.org/quickjs/) — 插件脚本引擎（仓库内 vendored 打补丁）
+- [dio](https://github.com/cfug/dio) / [extended_image](https://github.com/fluttercandies/extended_image) / [archive](https://pub.dev/packages/archive) 等 pub.dev 生态包
+
+> 数据来源 TMDB 与弹弹play 的内容版权归各自所有；本项目仅作聚合展示，不存储或分发受版权保护的媒体。
