@@ -12,6 +12,7 @@ import '../../../core/utils/color_extractor.dart';
 import '../../../core/widgets/app_shimmer.dart';
 import '../../utils/media_helpers.dart';
 import '../../utils/image_size_helper.dart';
+import '../../widgets/common/double_back_exit.dart';
 import '../../widgets/common/dynamic_background.dart';
 import '../../widgets/common/media_widgets.dart';
 import '../../../plugins/manager/plugin_manager.dart';
@@ -76,6 +77,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _lastScrollOffset = offset;
   }
 
+  /// 下拉刷新：失效首页各数据源，解决首次进服务器媒体库加载不全、需要手动重拉的问题。
+  Future<void> _refresh() async {
+    ref.invalidate(librariesProvider);
+    ref.invalidate(resumeItemsProvider);
+    ref.invalidate(randomRecommendationsProvider);
+    ref.invalidate(collectionsProvider);
+    // 等媒体库重新拉到再收起指示器；其余栏目随 provider 失效各自刷新。
+    await ref.read(librariesProvider.future);
+  }
+
   void _onBackgroundColorChanged(Color color) {
     if (_carouselColor != color) {
       setState(() {
@@ -110,7 +121,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ? scrimBase
         : (brightness == Brightness.light ? themeBg : null);
 
-    return Scaffold(
+    return DoubleBackToExit(
+      child: Scaffold(
       backgroundColor: hasWallpaper ? scrimBase : pageBg,
       body: Stack(
         children: [
@@ -145,8 +157,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             opaque: !hasWallpaper,
             child: Stack(
               children: [
-                CustomScrollView(
+                RefreshIndicator(
+                  onRefresh: () => _refresh(),
+                  edgeOffset: MediaQuery.of(context).padding.top + 8,
+                  child: CustomScrollView(
                   controller: _scrollController,
+                  // 内容不足一屏时也允许下拉，保证「上滑刷新」始终可用。
+                  physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     // 随机推荐轮播（可被隐藏）- 直接顶到最上方
                     if (!hideDailyRecommendations)
@@ -154,6 +171,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         child: RandomRecommendationCarousel(
                           onColorChanged: _onBackgroundColorChanged,
                           fadeToColor: carouselFade,
+                        ),
+                      )
+                    else
+                      // 隐藏轮播后，首屏内容会顶到悬浮顶栏下方被遮挡，垫出顶栏高度。
+                      SliverToBoxAdapter(
+                        child: SizedBox(
+                          height: MediaQuery.of(context).padding.top + 56,
                         ),
                       ),
 
@@ -174,6 +198,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                 const SliverPadding(padding: EdgeInsets.only(bottom: 32)),
               ],
+            ),
             ),
             // 顶部栏（悬浮，透明背景）
             Positioned(
@@ -199,6 +224,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
           ],
         ),
+      ),
     );
   }
 }
@@ -595,6 +621,14 @@ class _HomeAppBarState extends ConsumerState<_HomeAppBar> {
                 ),
               ),
               const Spacer(),
+              // 收藏按钮（从底部 Tab 移到顶栏，点开收藏页）
+              IconButton(
+                icon: const Icon(Icons.favorite_rounded),
+                tooltip: '收藏',
+                onPressed: () {
+                  context.push('/favorites');
+                },
+              ),
               // 媒体库按钮
               IconButton(
                 icon: const Icon(Icons.collections_bookmark),

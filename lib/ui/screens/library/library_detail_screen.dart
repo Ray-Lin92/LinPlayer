@@ -50,6 +50,7 @@ class _LibraryDetailScreenState extends ConsumerState<LibraryDetailScreen> {
               facets: facets,
               value: _filter,
               currentYear: DateTime.now().year,
+              compact: true, // 移动端：类型/标签走搜索弹窗，避免筛选面板占满屏幕
               onChanged: (v) => setState(() => _filter = v),
             ),
             orElse: () => const SizedBox.shrink(),

@@ -14,12 +14,17 @@ class LibraryFilterBar extends StatelessWidget {
   final int currentYear;
   final ValueChanged<LibraryFilterValue> onChanged;
 
+  /// 紧凑模式（移动端）：类型/标签不再整行平铺胶囊（会占满屏幕），改为一行回显
+  /// 当前值、点开带搜索的弹窗选择。桌面端宽屏保持平铺，传 false。
+  final bool compact;
+
   const LibraryFilterBar({
     super.key,
     required this.facets,
     required this.value,
     required this.currentYear,
     required this.onChanged,
+    this.compact = false,
   });
 
   @override
@@ -41,20 +46,39 @@ class LibraryFilterBar extends StatelessWidget {
           }),
       ]));
     }
-    // 类型/标签项不多，直接一行行铺开成可点选胶囊（单选，再点取消）。
+    // 类型/标签：桌面平铺可点选胶囊；移动端（compact）改为回显行 + 搜索弹窗选一个。
     if (f.genres.isNotEmpty) {
-      rows.add(_chipRow(theme, '类型', [
-        for (final g in f.genres)
-          _chip(theme, g, v.genre == g,
-              () => onChanged(v.withGenre(v.genre == g ? null : g))),
-      ]));
+      if (compact) {
+        rows.add(_pickerRow(theme, '类型', v.genre, () async {
+          final picked = await _pick(context, '类型', f.genres, v.genre);
+          if (picked != null) {
+            onChanged(v.withGenre(picked.isEmpty ? null : picked));
+          }
+        }));
+      } else {
+        rows.add(_chipRow(theme, '类型', [
+          for (final g in f.genres)
+            _chip(theme, g, v.genre == g,
+                () => onChanged(v.withGenre(v.genre == g ? null : g))),
+        ]));
+      }
     }
     if (f.tags.isNotEmpty) {
-      rows.add(_chipRow(theme, '标签', [
-        for (final t in f.tags)
-          _chip(theme, t, v.tag == t,
-              () => onChanged(v.withTag(v.tag == t ? null : t))),
-      ]));
+      if (compact) {
+        rows.add(_pickerRow(theme, '标签', v.tag, () async {
+          final picked =
+              await _pick(context, '标签', sortByPinyin(f.tags), v.tag);
+          if (picked != null) {
+            onChanged(v.withTag(picked.isEmpty ? null : picked));
+          }
+        }));
+      } else {
+        rows.add(_chipRow(theme, '标签', [
+          for (final t in f.tags)
+            _chip(theme, t, v.tag == t,
+                () => onChanged(v.withTag(v.tag == t ? null : t))),
+        ]));
+      }
     }
     // 评分区间始终可用（与分面无关）。
     rows.add(_RatingRow(value: v, onChanged: onChanged));

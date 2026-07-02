@@ -162,18 +162,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             preload: true,
             routes: [
               GoRoute(
-                path: '/favorites',
-                pageBuilder: (context, state) => _buildBranchRootPage(
-                  child: const FavoritesScreen(),
-                  state: state,
-                ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            preload: true,
-            routes: [
-              GoRoute(
                 path: '/settings',
                 pageBuilder: (context, state) => _buildBranchRootPage(
                   child: const SettingsScreen(),
@@ -235,6 +223,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/downloads',
         builder: (context, state) => const DownloadScreen(),
+      ),
+      // 收藏改由首页顶栏入口 push 进入（不再占底部 Tab），保留独立页 + 返回键。
+      GoRoute(
+        path: '/favorites',
+        builder: (context, state) => const FavoritesScreen(),
       ),
       GoRoute(
         path: '/rankings',
@@ -431,7 +424,7 @@ class _MainShellState extends State<MainShell> {
   bool get _isHomePage => widget.currentPath == '/home';
   bool get _isServerListPage => widget.currentPath == '/';
   bool get _supportsFloatingTabBar => switch (widget.currentPath) {
-        '/' || '/home' || '/resume' || '/favorites' || '/settings' => true,
+        '/' || '/home' || '/resume' || '/settings' => true,
         _ => false,
       };
 
@@ -539,15 +532,14 @@ class _FloatingTabBar extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildNavItem(0, Icons.dns_rounded, '服务器'),
-            const SizedBox(width: 24),
-            _buildNavItem(1, Icons.favorite_rounded, '收藏'),
             if (showRanking) ...[
               const SizedBox(width: 24),
               _buildPushItem(
                   context, Icons.leaderboard_rounded, '排行榜', '/rankings'),
             ],
             const SizedBox(width: 24),
-            _buildNavItem(2, Icons.settings_rounded, '设置'),
+            // 收藏移到首页顶栏后，设置分支索引由 2 变为 1。
+            _buildNavItem(1, Icons.settings_rounded, '设置'),
           ],
         ),
       ),
