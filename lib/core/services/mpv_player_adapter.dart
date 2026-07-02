@@ -577,9 +577,11 @@ class MpvPlayerAdapter implements PlayerAdapter {
       // media_kit 在 libass=false 时会把 sub-visibility 预设为 no，
       // 这会让内封/外挂 PGS/SUP 即便选中轨道也无法稳定显示。
       _player = Player(
-        configuration: const PlayerConfiguration(
+        configuration: PlayerConfiguration(
           libass: true,
-          logLevel: MPVLogLevel.warn,
+          // macOS 临时提到 info：抓「有声无画」时的 vo/hwdec interop 报错，
+          // 其余平台仍用 warn 避免日志噪音。定位到问题后回退。
+          logLevel: Platform.isMacOS ? MPVLogLevel.info : MPVLogLevel.warn,
         ),
       );
       _videoController = VideoController(_player!);
@@ -606,7 +608,15 @@ class MpvPlayerAdapter implements PlayerAdapter {
           _subtitleBlendMode = await CacheService.getPgsBlendMode();
           await np.setProperty('blend-subtitles', _subtitleBlendMode);
           await np.setProperty('sub-visibility', 'yes');
-          await np.setProperty('hwdec', hardwareDecoding ? 'auto-safe' : 'no');
+          // macOS 有声无画修复：media_kit 走 libmpv 渲染 API，硬解直通
+          // (videotoolbox)产出的 CVPixelBuffer 映射不进纹理，表现为音频正常、
+          // 画面全黑(硬解 HEVC/10bit 时才触发，故"时好时坏")。改用 copy-back
+          // 变体：仍走 GPU 硬解，但把帧拷回内存再上传，画面稳定；其余平台仍用
+          // auto-safe(直通零拷贝更省)。
+          final hwdecValue = !hardwareDecoding
+              ? 'no'
+              : (Platform.isMacOS ? 'videotoolbox-copy' : 'auto-safe');
+          await np.setProperty('hwdec', hwdecValue);
           // 安全加固 · CVE-2026-8461 (PixelSmash)：libavcodec 的 magicyuv 解码器
           // 存在堆越界写（攻击者构造的 slice_height 多写一行 chroma 越界），恶意
           // AVI/MKV/MOV 即可触发崩溃乃至 RCE。修复随 FFmpeg 8.1.2(2026-06-17)发布，
@@ -1705,7 +1715,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
         await np.setProperty('sub-ass', 'yes');
         await np.setProperty('sub-ass-override', 'strip');
         await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
-        await np.setProperty('sub-pos', _subtitlePosition.toStringAsFixed(1));
+        // mpv 的 sub-pos 只接受整数，传 "100.0" 会报错并让字幕位置失效。
+        await np.setProperty('sub-pos', _subtitlePosition.round().toString());
         if (_subtitleFont != null &&
             _subtitleFont!.isNotEmpty &&
             _subtitleFont != '默认') {
@@ -1882,11 +1893,12 @@ class MpvPlayerAdapter implements PlayerAdapter {
     if (np != null) {
       // PGS/SUP 与 ASS 保留轨道自身布局，只有普通文本字幕才覆盖位置。
       if (!_hasBitmapSubtitle && !_currentSubIsAss) {
-        await np.setProperty('sub-pos', _subtitlePosition.toStringAsFixed(1));
+        // mpv 的 sub-pos 只接受整数，传小数会报错并让字幕位置失效。
+        await np.setProperty('sub-pos', _subtitlePosition.round().toString());
       }
     }
     await _configManager.updateConfigValue(
-        'sub-pos', _subtitlePosition.toStringAsFixed(1));
+        'sub-pos', _subtitlePosition.round().toString());
   }
 
   @override

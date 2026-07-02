@@ -92,7 +92,7 @@ class MpvConfigManager {
     // 字幕位置
     if (subtitlePosition != 100.0) {
       buffer.writeln('# 字幕位置 (0=顶部, 100=底部)');
-      buffer.writeln('sub-pos=${subtitlePosition.toStringAsFixed(1)}');
+      buffer.writeln('sub-pos=${subtitlePosition.round()}'); // mpv sub-pos 只收整数
     }
 
     // 字幕延迟
