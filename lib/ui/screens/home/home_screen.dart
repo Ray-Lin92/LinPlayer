@@ -14,6 +14,10 @@ import '../../utils/media_helpers.dart';
 import '../../utils/image_size_helper.dart';
 import '../../widgets/common/dynamic_background.dart';
 import '../../widgets/common/media_widgets.dart';
+import '../../../plugins/manager/plugin_manager.dart';
+import '../../../plugins/models/plugin_extension_point.dart';
+import '../../../plugins/providers/plugin_providers.dart';
+import '../../../plugins/ui/plugin_home_stats.dart';
 
 /// 首页构建性能优化
 ///
@@ -152,6 +156,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           fadeToColor: carouselFade,
                         ),
                       ),
+
+                // 插件首页统计（如流量/线路信息），无 homeStats 插件时自动隐藏
+                const SliverToBoxAdapter(child: _PluginHomeStatsStrip()),
 
                 // 继续观看
                 const SliverToBoxAdapter(child: ContinueWatchingSection()),
@@ -1682,6 +1689,36 @@ class _LibraryLatestSection extends ConsumerWidget {
       },
       loading: () => const SizedBox.shrink(),
       error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// 首页插件统计条（homeStats 扩展）。无 homeStats 插件时整条隐藏，对普通用户零影响；
+/// 有插件（流量统计 / addon 线路信息等）时在首页顶部显示一小条指标。
+class _PluginHomeStatsStrip extends ConsumerWidget {
+  const _PluginHomeStatsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(pluginRegistryProvider);
+    final hasStats = PluginManager.instance.registry
+        .byType(PluginExtensionType.homeStats)
+        .isNotEmpty;
+    if (!hasStats) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: PluginHomeStatsView(
+          labelStyle:
+              theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+          valueStyle: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w600),
+          dividerColor: theme.dividerColor,
+        ),
+      ),
     );
   }
 }

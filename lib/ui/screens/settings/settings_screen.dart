@@ -32,6 +32,7 @@ import '../../../core/providers/ranking_providers.dart';
 import '../../../core/providers/proxy_providers.dart';
 import '../../../core/network/proxy_settings.dart';
 import '../../../core/network/proxy_http_client.dart';
+import '../../../core/network/cf_proxy/cf_proxy_panel_page.dart';
 import '../../../core/services/update/app_update_service.dart';
 import '../../../core/services/watch_history/watch_history_writeback_service.dart';
 import '../../widgets/common/app_update_gate.dart';
