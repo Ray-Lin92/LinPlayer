@@ -146,6 +146,14 @@ $env:LINPLAYER_SKIP_LIBMPV_UPGRADE = "1"; flutter build windows
 
 ![Alt](https://repobeats.axiom.co/api/embed/4858243f2148dfeaa4e82f119fa918f3ec581a11.svg "Repobeats analytics image")
 
+## 赞助
+
+感谢在 [爱发电](https://afdian.com/a/zzzwannasleep) 支持 LinPlayer 的各位（名单实时更新）：
+
+<p align="center">
+  <a href="https://afdian.com/a/zzzwannasleep"><img src="https://291277.xyz/afdian/sponsors.svg" alt="爱发电赞助者"></a>
+</p>
+
 ## 加入频道
 
 Telegram 频道 [**@MikudesuChannels**](https://t.me/MikudesuChannels) —— 版本发布、更新预告与讨论。
