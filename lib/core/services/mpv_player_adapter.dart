@@ -584,7 +584,18 @@ class MpvPlayerAdapter implements PlayerAdapter {
           logLevel: Platform.isMacOS ? MPVLogLevel.info : MPVLogLevel.warn,
         ),
       );
-      _videoController = VideoController(_player!);
+      // macOS 黑屏(有声无画)根因：硬件纹理走 TextureHW(OpenGL 渲染上下文)，
+      // 反复 create/dispose 播放器后 GL 上下文泄漏/损坏→第 N 次播放纹理不出帧→
+      // 黑屏(音频不受影响)，老 macOS(12.x/Intel)尤甚。改用软件纹理 TextureSW
+      // (CVPixelBuffer 拷贝，不用 GL 上下文)彻底免疫该泄漏；解码仍是硬解
+      // (videotoolbox-copy)，只是最终一帧上传走 CPU，代价可接受。其余平台不变。
+      _videoController = VideoController(
+        _player!,
+        configuration: Platform.isMacOS
+            ? const VideoControllerConfiguration(
+                enableHardwareAcceleration: false)
+            : const VideoControllerConfiguration(),
+      );
       _videoWidget = null; // 新控制器，丢弃旧的缓存 Video 实例
       _setupStreamListeners();
 
