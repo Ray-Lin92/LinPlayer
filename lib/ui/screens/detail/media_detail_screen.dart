@@ -651,35 +651,24 @@ class _SeasonsSection extends ConsumerWidget {
       data: (seasons) {
         if (seasons.isEmpty) return const SizedBox.shrink();
         
+        // 紧凑胶囊条：左对齐贴边、无留白、可横滑。取代原先一排 196px 大海报卡
+        //（季少时右侧大片空白、整块偏笨重）。
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SectionHeader(title: '季度选择'),
-            HorizontalList(
-              height: 182,
-              children: seasons.map((season) {
-                return SizedBox(
-                  width: 196,
-                  child: InkWell(
-                    onTap: () => onSeasonTap(season),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: _SeasonCard(season: season),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          season.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
+            SizedBox(
+              height: 40,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: seasons.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) => _SeasonChip(
+                  season: seasons[i],
+                  onTap: () => onSeasonTap(seasons[i]),
+                ),
+              ),
             ),
           ],
         );
@@ -690,47 +679,30 @@ class _SeasonsSection extends ConsumerWidget {
   }
 }
 
-class _SeasonCard extends ConsumerWidget {
+/// 季度胶囊：贴边、紧凑、可横滑。点击进入对应季详情页。
+class _SeasonChip extends StatelessWidget {
   final Season season;
+  final VoidCallback onTap;
 
-  const _SeasonCard({required this.season});
+  const _SeasonChip({required this.season, required this.onTap});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final api = ref.read(apiClientProvider);
-    final imageUrls = resolveSeasonImageUrls(api, season, maxWidth: 480);
-
-    if (imageUrls.isNotEmpty) {
-      return AspectRatio(
-        aspectRatio: 2 / 3,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: MediaImage(
-            imageUrl: imageUrls.first,
-            imageUrls: imageUrls.length > 1 ? imageUrls.sublist(1) : null,
-            width: 196,
-            height: 294,
-            fit: BoxFit.cover,
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
-    }
-
-    return AspectRatio(
-      aspectRatio: 2 / 3,
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF5B8DEF).withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Text(
-            'S${season.indexNumber}',
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF5B8DEF),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Center(
+            child: Text(
+              season.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
         ),

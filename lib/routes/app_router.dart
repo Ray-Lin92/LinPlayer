@@ -33,6 +33,7 @@ import '../core/sources/source_playback.dart';
 import '../core/sources/source_kind.dart';
 import '../ui/utils/image_size_helper.dart';
 import '../ui/utils/media_helpers.dart';
+import '../ui/widgets/common/double_back_exit.dart';
 import '../ui/widgets/common/media_widgets.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -81,7 +82,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/',
                 pageBuilder: (context, state) => _buildHorizontalPage(
-                  child: const ServerListScreen(),
+                  // 服务器列表是分支根：系统返回先回首页，无服务器才两次退出。
+                  child: const PopToHome(
+                    guardServer: true,
+                    child: ServerListScreen(),
+                  ),
                   state: state,
                 ),
                 routes: [
@@ -164,7 +169,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/settings',
                 pageBuilder: (context, state) => _buildBranchRootPage(
-                  child: const SettingsScreen(),
+                  // 设置是分支根：系统返回/手势返回先回首页，而非退出应用。
+                  child: const PopToHome(child: SettingsScreen()),
                   state: state,
                 ),
               ),
