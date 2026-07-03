@@ -378,6 +378,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     ref.read(currentPlayingItemProvider.notifier).state = item;
     ref.read(selectedMediaSourceProvider.notifier).state = mediaSource?.id;
 
+    // 播放即自动匹配加载弹幕（动漫走弹弹Play+自定义源，非动漫仅自定义源）。
+    unawaited(DanmakuAutoLoader.run(ref, api, item));
+
     // 自动跳过片头/片尾：联网识别本集片段（仅剧集，受设置开关控制）。
     unawaited(_introSkip.loadForItem(
       item,
@@ -575,7 +578,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
       final play =
           await backend.resolvePlay(sp.server, sp.entry, qualityId: qualityId);
       final cfg = resolveSourcePlayerConfig(ref);
-      ref.read(currentPlayingItemProvider.notifier).state = sp.toMediaItem();
+      final spItem = sp.toMediaItem();
+      ref.read(currentPlayingItemProvider.notifier).state = spItem;
+      unawaited(DanmakuAutoLoader.run(ref, null, spItem));
       ref.read(sourcePlayQualitiesProvider.notifier).state = play.qualities;
       if (ref.read(sourceSelectedQualityProvider) == null) {
         ref.read(sourceSelectedQualityProvider.notifier).state =

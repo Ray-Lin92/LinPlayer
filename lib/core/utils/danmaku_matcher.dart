@@ -44,16 +44,37 @@ class DanmakuMatcher {
     return ticks / 10000000.0;
   }
 
+  /// 是否动漫（决定是否放行官方弹弹Play）。剧集自身常缺 genres → 回退用 series
+  /// 判定；[fetchItem] 传 api.media.getItemDetails，缺省则只看条目自身。
+  static Future<bool> resolveIsAnime(
+    MediaItem item, {
+    Future<MediaItem> Function(String id)? fetchItem,
+  }) async {
+    if (item.isAnime) return true;
+    if (fetchItem == null) return false;
+    // 剧集回退：拿 series 的 genres 判定（动漫元数据通常挂在剧上）。
+    final seriesId = item.seriesId;
+    if ((item.type == 'Episode' || item.type == 'Season') &&
+        seriesId != null &&
+        seriesId.isNotEmpty) {
+      try {
+        return (await fetchItem(seriesId)).isAnime;
+      } catch (_) {}
+    }
+    return false;
+  }
+
   /// 并行向所有启用源做智能匹配，返回按可信度排序的候选列表。
   static Future<List<DanmakuMatchCandidate>> matchAll(
     DanmakuService service,
-    MediaItem item,
-  ) async {
+    MediaItem item, {
+    bool allowOfficial = true,
+  }) async {
     final title = resolveTitle(item);
     if (title.isEmpty) return const [];
     final epNum = resolveEpisodeNumber(item);
 
-    final futures = service.allSources.map(
+    final futures = service.sourcesFor(allowOfficial: allowOfficial).map(
       (source) => _matchOne(source, title, epNum, item),
     );
     final perSource = await Future.wait(futures);

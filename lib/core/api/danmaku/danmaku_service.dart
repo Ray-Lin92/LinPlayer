@@ -59,9 +59,16 @@ class DanmakuService {
 
   /// 参与查询的源：自定义源（已启用）+ 有凭据的官方弹弹Play。
   /// 官方源无凭据时不参与，避免 401 噪音（普通用户主用自建源）。
-  List<DanmakuSource> get allSources {
+  List<DanmakuSource> get allSources => sourcesFor();
+
+  /// [allowOfficial]=false 时剔除官方弹弹Play（动漫专库，非动漫内容不该用它，
+  /// 否则给电视剧/电影匹配出乱七八糟的动漫弹幕）。自定义聚合源始终保留（它们
+  /// 覆盖电视剧/电影）。
+  List<DanmakuSource> sourcesFor({bool allowOfficial = true}) {
     final list = <DanmakuSource>[];
-    if (_dandanplaySource != null && _dandanplaySource!.hasCredentials) {
+    if (allowOfficial &&
+        _dandanplaySource != null &&
+        _dandanplaySource!.hasCredentials) {
       list.add(_dandanplaySource!);
     }
     list.addAll(_sources.where((s) => s.config.enabled));
@@ -94,9 +101,10 @@ class DanmakuService {
 
   /// 流式分源搜索：每个源各自查询，**谁先返回谁先发**（按出现速度从前往后）。
   /// 用于搜索面板边搜边显示，无需等最慢的源。全部完成后关闭流。
-  Stream<DanmakuSourceGroup> searchAllStreamed(String keyword) {
+  Stream<DanmakuSourceGroup> searchAllStreamed(String keyword,
+      {bool allowOfficial = true}) {
     final controller = StreamController<DanmakuSourceGroup>();
-    final srcs = allSources;
+    final srcs = sourcesFor(allowOfficial: allowOfficial);
     if (srcs.isEmpty) {
       controller.close();
       return controller.stream;

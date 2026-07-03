@@ -190,6 +190,7 @@ final libraryItemsProvider = FutureProvider.autoDispose.family<
     final api = ref.watch(apiClientProvider);
     return await api.library.getLibraryItems(
       libraryId: params.libraryId,
+      limit: 0, // 媒体库详情：拉全部（不再截 50），支持一直下滑浏览
       sortBy: params.sortBy,
       sortOrder: params.sortOrder,
       genres: params.genres,

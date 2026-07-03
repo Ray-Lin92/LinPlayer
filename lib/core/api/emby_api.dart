@@ -548,11 +548,14 @@ class EmbyLibraryApi implements LibraryApi {
       'ParentId': libraryId,
       'UserId': uid,
       'StartIndex': startIndex,
-      'Limit': limit,
       'Recursive': true,
       'IncludeItemTypes': 'Movie,Series',
       'Fields': _libraryItemFields,
     };
+    // limit<=0 表示不设上限（Emby 省略 Limit 即返回全部），避免媒体库详情
+    // 被截成 50 条不能继续浏览。ponytail: 一次拉全量，若超大库(上万条)出现卡顿
+    // 再换游标分页(StartIndex 增量 + 触底加载)。
+    if (limit > 0) params['Limit'] = limit;
     if (sortBy != null) {
       params['SortBy'] = sortBy;
       params['SortOrder'] = sortOrder ?? 'Ascending';

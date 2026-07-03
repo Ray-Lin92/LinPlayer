@@ -465,6 +465,7 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
       _item = item;
       _mediaSource = null;
       ref.read(currentPlayingItemProvider.notifier).state = item;
+      unawaited(_autoLoadDanmaku(item));
       await _service.play();
       if (mounted) {
         setState(() => _ready = true);
@@ -519,10 +520,19 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
   Future<void> _autoLoadDanmaku(MediaItem item) async {
     try {
       final service = ref.read(danmakuServiceProvider);
-      final candidates = await DanmakuMatcher.matchAll(service, item);
+      // 官方弹弹Play 是动漫专库：非动漫内容剔除，避免乱匹配（电视剧/电影只用自定义源）。
+      final allowOfficial = await DanmakuMatcher.resolveIsAnime(
+        item,
+        fetchItem: (id) => ref.read(apiClientProvider).media.getItemDetails(id),
+      );
+      final candidates = await DanmakuMatcher.matchAll(service, item,
+          allowOfficial: allowOfficial);
       if (!mounted) return;
       setState(() => _danmakuCandidates = candidates);
-      if (candidates.isNotEmpty && ref.read(danmakuEnabledProvider)) {
+      // 阈值过滤：低可信度不自动上屏（用户仍可在弹幕面板手动挑）。
+      if (candidates.isNotEmpty &&
+          candidates.first.score >= 0.5 &&
+          ref.read(danmakuEnabledProvider)) {
         final best = candidates.first;
         await _loadDanmakuFrom(best);
       }

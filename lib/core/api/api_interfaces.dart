@@ -348,6 +348,19 @@ class MediaItem {
   }
 
   bool get isWatched => userData?.played ?? false;
+
+  /// 是否动漫：按 genres/tags 关键词判定（弹弹Play 是动漫专库，非动漫不该用它）。
+  /// 剧集自身常无 genres，会退回 series 判定（见 DanmakuMatcher.resolveIsAnime）。
+  bool get isAnime {
+    const kw = ['动画', '动漫', '動畫', '動漫', '番剧', '番劇', '二次元', '卡通',
+        'anime', 'アニメ', 'animation'];
+    bool hit(List<String>? xs) => xs != null &&
+        xs.any((g) {
+          final l = g.toLowerCase();
+          return kw.any(l.contains);
+        });
+    return hit(genres) || hit(tags);
+  }
   String? get tmdbId {
     final ids = providerIds;
     if (ids == null || ids.isEmpty) return null;
