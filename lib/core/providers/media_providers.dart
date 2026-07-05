@@ -306,6 +306,76 @@ final aggregateSearchResultsProvider =
   };
 });
 
+/// 排行榜条目在某台服务器上的最佳命中。
+class ServerMatchInfo {
+  final String serverName;
+
+  /// 最佳匹配项（已打 sourceServerId），供点按跳转。
+  final MediaItem item;
+
+  /// 总集数（剧集用 recursiveItemCount/childCount；电影为 null）。
+  final int? episodeCount;
+
+  const ServerMatchInfo({
+    required this.serverName,
+    required this.item,
+    this.episodeCount,
+  });
+}
+
+/// 按标题跨服务器聚合搜索：遍历**每台已登录**服务器，各自挑出与标题最匹配的
+/// 一条并解析其总集数。供排行榜条目点按后的详情弹窗展示「哪些服务器有、共几集」。
+///
+/// 复用 [aggregateSearchResultsProvider] 的并行 + 单台失败隔离思路，但以标题
+/// 参数化，且每台只保留一条最佳匹配（避免弹窗信息过载）。不解析分辨率/码率——
+/// 剧集要逐集拉流才知道，太贵且意义不大。
+final rankingCrossServerMatchProvider = FutureProvider.autoDispose
+    .family<List<ServerMatchInfo>, String>((ref, title) async {
+  final query = title.trim();
+  if (query.isEmpty) return const <ServerMatchInfo>[];
+
+  final servers = ref.watch(serverListProvider);
+  final targets =
+      servers.where((s) => (s.authToken ?? '').isNotEmpty).toList();
+  if (targets.isEmpty) return const <ServerMatchInfo>[];
+
+  final results = await Future.wait(targets.map((server) async {
+    final client = ref.read(serverApiClientProvider(server.id));
+    if (client == null) return null;
+    try {
+      final items = await client.search.search(query);
+      if (items.isEmpty) return null;
+      // 打来源标记：让封面/点击解析到正确的服务器。
+      for (final item in items) {
+        item.sourceServerId = server.id;
+      }
+      // 挑最佳匹配：优先名称完全一致（忽略大小写），否则第一条剧集/电影，否则第一条。
+      final lower = query.toLowerCase();
+      final best = items.firstWhere(
+        (i) => i.name.toLowerCase() == lower,
+        orElse: () => items.firstWhere(
+          (i) => i.type == 'Series' || i.type == 'Movie',
+          orElse: () => items.first,
+        ),
+      );
+
+      final episodeCount = best.recursiveItemCount ?? best.childCount;
+
+      return ServerMatchInfo(
+        serverName: server.name,
+        item: best,
+        episodeCount: episodeCount,
+      );
+    } catch (e) {
+      AppLogger().w('RankingMatch', '服务器「${server.name}」搜索失败: $e');
+      return null;
+    }
+  }));
+
+  // 丢弃无命中的服务器，保留 serverListProvider 的顺序。
+  return results.whereType<ServerMatchInfo>().toList();
+});
+
 /// 搜索结果（平铺）。聚合开关打开时跨所有服务器搜索并合并，否则只搜当前服务器。
 final searchResultsProvider = FutureProvider.autoDispose<List<MediaItem>>((ref) async {
   final query = ref.watch(searchQueryProvider);

@@ -337,19 +337,48 @@ class _IconSelectScreenState extends ConsumerState<IconSelectScreen> {
     });
   }
 
+  /// 去掉 gh-proxy 反代前缀，拿到直连 gist 地址（反代挂了时退回直连）。
+  static String _stripGhProxy(String url) {
+    const prefixes = [
+      'https://v6.gh-proxy.org/',
+      'https://gh-proxy.org/',
+      'https://ghproxy.org/',
+      'https://ghproxy.net/',
+    ];
+    for (final p in prefixes) {
+      if (url.startsWith(p)) return url.substring(p.length);
+    }
+    return url;
+  }
+
   Future<NetworkIconLibrary> _fetchLibrary({
     required String name,
     required String url,
     required String id,
   }) async {
     // 图标库 CDN 多拒绝 App UA，用中立浏览器 UA 请求 JSON。
-    final response = await Dio().get(
-      url,
-      options: Options(
-        headers: const {'User-Agent': kDefaultBrowserUserAgent},
-      ),
-    );
-    final icons = _parseIconJson(jsonEncode(response.data));
+    Future<dynamic> fetch(String u) async {
+      final response = await Dio().get(
+        u,
+        options: Options(
+          headers: const {'User-Agent': kDefaultBrowserUserAgent},
+          sendTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 8),
+        ),
+      );
+      return response.data;
+    }
+
+    dynamic data;
+    try {
+      data = await fetch(url);
+    } catch (_) {
+      // 反代（gh-proxy）用不了就直接用默认直连链接，避免整个源 0/失败。
+      final direct = _stripGhProxy(url);
+      if (direct == url) rethrow;
+      data = await fetch(direct);
+    }
+    final icons = _parseIconJson(jsonEncode(data));
 
     return NetworkIconLibrary(
       id: id,

@@ -80,8 +80,16 @@ class _DetailContentState extends State<_DetailContent> {
             ),
           ),
 
+          // 简介（媒体信息栏）——放在剧集选择之上，方便先看剧情再选集。
+          if (widget.item.overview != null && widget.item.overview!.isNotEmpty)
+            SliverToBoxAdapter(
+              child: _OverviewSection(
+                overview: widget.item.overview!,
+                textColor: foregroundColor,
+              ),
+            ),
+
           // 剧集相关区块（季 + 集；集数走懒加载 Sliver，几百集也只构建可视项）。
-          // 放在「简介」之上，方便用户进集详情页就能直接切换集，不用先滑过信息区。
           if (widget.item.type == 'Series') ...[
             _SeasonsSliver(
               itemId: widget.itemId,
@@ -92,15 +100,6 @@ class _DetailContentState extends State<_DetailContent> {
               onEpisodeTap: (episode) => context.push('/episode/${episode.id}'),
             ),
           ],
-
-          // 简介（媒体信息栏）
-          if (widget.item.overview != null && widget.item.overview!.isNotEmpty)
-            SliverToBoxAdapter(
-              child: _OverviewSection(
-                overview: widget.item.overview!,
-                textColor: foregroundColor,
-              ),
-            ),
 
           // 电影播放选项 + 按钮
           if (widget.item.type == 'Movie') ...[
@@ -392,20 +391,22 @@ class _DetailHeaderState extends ConsumerState<_DetailHeader> {
                 ),
         ),
 
-        // 底部渐变
+        // 底部渐变：拉高并加多档 stops，让海报柔和融进页面背景，而不是一条硬色带。
         Positioned(
           bottom: 0,
           left: 0,
           right: 0,
           child: Container(
-            height: 150,
+            height: headerHeight * 0.6,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
+                stops: const [0.0, 0.5, 0.82, 1.0],
                 colors: [
                   Colors.transparent,
-                  backgroundColor.withValues(alpha: 0.9),
+                  backgroundColor.withValues(alpha: 0.55),
+                  backgroundColor.withValues(alpha: 0.92),
                   backgroundColor,
                 ],
               ),

@@ -1110,9 +1110,8 @@ class VideoPlayerService extends ChangeNotifier {
     }
   }
 
-  /// 显示/隐藏控制栏
+  /// 显示/隐藏控制栏。锁定态下仍可切换：只影响那颗解锁按钮的显隐（完整控制栏另有 !isLocked 门控）。
   void toggleControls() {
-    if (_isLocked) return;
     _showControls = !_showControls;
     if (_showControls) {
       _startHideControlsTimer();
@@ -1122,13 +1121,11 @@ class VideoPlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 锁定/解锁屏幕
+  /// 锁定/解锁屏幕。锁定/解锁后都短暂显示对应按钮再自动隐藏，避免解锁键长驻左上角破坏沉浸感。
   void toggleLock() {
     _isLocked = !_isLocked;
-    if (_isLocked) {
-      _showControls = false;
-      _cancelHideControlsTimer();
-    }
+    _showControls = true;
+    _startHideControlsTimer();
     notifyListeners();
   }
 

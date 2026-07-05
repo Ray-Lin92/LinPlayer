@@ -83,6 +83,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ref.invalidate(resumeItemsProvider);
     ref.invalidate(randomRecommendationsProvider);
     ref.invalidate(collectionsProvider);
+    // 各媒体库「最新内容」栏走 keepAlive 会话级缓存，不主动失效永远拉不到新数据；
+    // 媒体库详情网格同理。下拉刷新一并失效，真正重新获取。
+    ref.invalidate(latestItemsProvider);
+    ref.invalidate(libraryItemsProvider);
     // 等媒体库重新拉到再收起指示器；其余栏目随 provider 失效各自刷新。
     await ref.read(librariesProvider.future);
   }

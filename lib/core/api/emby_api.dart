@@ -810,7 +810,7 @@ class EmbySearchApi implements SearchApi {
       'Recursive': recursive,
       'Limit': 50,
       'Fields':
-          'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,ParentIndexNumber,ProviderIds,PresentationUniqueKey,Path',
+          'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,ParentIndexNumber,ProviderIds,PresentationUniqueKey,Path,ChildCount,RecursiveItemCount',
     });
     return _parseItemList(resp.data);
   }
