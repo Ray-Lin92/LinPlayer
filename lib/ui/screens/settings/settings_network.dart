@@ -91,20 +91,6 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         children: [
-          const _NetworkSectionLabel('线路加速'),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.bolt),
-              title: const Text('CF 优选加速'),
-              subtitle: const Text(
-                  '为走 Cloudflare 的服务器实测最快边缘 IP 并本地反代提速（原生，三端可用）'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CfProxyPanelPage()),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
           const _NetworkSectionLabel('代理协议'),
           Card(
             child: Column(
@@ -179,16 +165,19 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
             ),
             const SizedBox(height: 16),
             Card(
+              // 「仅代理请求」= proxyMedia 取反的显示层：默认关（proxyMedia=true，
+              // 代理全部含播放）；开启后 proxyMedia=false，播放直连、只代理 API 等请求。
               child: TdSwitchTile(
-                value: _proxyMedia,
-                title: const Text('代理媒体流播放'),
+                value: !_proxyMedia,
+                title: const Text('仅代理请求，不代理播放链接'),
                 subtitle: Text(
                   _type.isSocks
-                      ? '⚠️ 媒体播放器(libmpv)不支持 SOCKS，此项仅对 HTTP 代理生效；'
-                          'SOCKS 仅代理 API/图片/字幕等请求。'
-                      : '开启后视频播放也经代理；关闭则播放直连、仅代理 API 等请求。',
+                      ? '⚠️ 媒体播放器(libmpv)本就不支持 SOCKS，SOCKS 始终只代理 '
+                          'API/图片/字幕等请求；此开关对 SOCKS 无额外影响。'
+                      : '默认关＝代理全部（含视频播放）；开启后视频播放直连、仅 API/图片/'
+                          '字幕等请求走代理，适合“接口需翻墙但播放走直连 CDN”。',
                 ),
-                onChanged: (v) => setState(() => _proxyMedia = v),
+                onChanged: (v) => setState(() => _proxyMedia = !v),
               ),
             ),
           ],

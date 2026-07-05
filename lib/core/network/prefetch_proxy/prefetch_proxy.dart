@@ -47,6 +47,7 @@ class PrefetchProxy {
     required String upstreamUrl,
     required int threads,
     required int cacheLimitBytes,
+    Future<String?> Function()? onUpstreamInvalid,
   }) async {
     await stop();
     final t = threads.clamp(2, 4);
@@ -59,6 +60,7 @@ class PrefetchProxy {
         chunkSize: _chunkSize,
         readAheadBytes: readAhead,
         log: _log,
+        onInvalid: onUpstreamInvalid,
       );
       if (session == null) return null; // 取不到大小等 -> 放弃，直连
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -93,7 +95,7 @@ class PrefetchProxy {
 /// 一次播放会话：固定上游 URL，维护并发取数 + 有界读前缓冲 + 顺序供给。
 class _Session {
   _Session._({
-    required this.upstreamUrl,
+    required String upstreamUrl,
     required this.threads,
     required this.chunkSize,
     required this.totalSize,
@@ -101,11 +103,21 @@ class _Session {
     required this.readAheadChunks,
     required Dio dio,
     required AppLogger log,
-  })  : _dio = dio,
+    Future<String?> Function()? onInvalid,
+  })  : _upstreamUrl = upstreamUrl,
+        _dio = dio,
         _log = log,
+        _onInvalid = onInvalid,
         _totalChunks = (totalSize + chunkSize - 1) ~/ chunkSize;
 
-  final String upstreamUrl;
+  // 可变：上游签名链失效时由 [_refreshUpstream] 换成重签后的新地址。
+  String _upstreamUrl;
+  // 上游失效重签回调（播放页注入，重走 PlaybackInfo→拿新直传流地址）；null=不支持重签。
+  final Future<String?> Function()? _onInvalid;
+  // 合并并发重签：多个 worker 同时撞到过期只发一次。
+  Future<void>? _resignInFlight;
+  // 重签拿不到新地址/失败后停用，避免对死链无限刷。
+  bool _resignDisabled = false;
   final int threads;
   final int chunkSize;
   final int totalSize;
@@ -132,6 +144,7 @@ class _Session {
     required int chunkSize,
     required int readAheadBytes,
     required AppLogger log,
+    Future<String?> Function()? onInvalid,
   }) async {
     final dio = Dio(BaseOptions(
       connectTimeout: const Duration(seconds: 15),
@@ -178,6 +191,7 @@ class _Session {
       readAheadChunks: readAheadChunks,
       dio: dio,
       log: log,
+      onInvalid: onInvalid,
     );
     for (var i = 0; i < threads; i++) {
       unawaited(s._worker());
@@ -264,7 +278,7 @@ class _Session {
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
         final resp = await _dio.get<List<int>>(
-          upstreamUrl,
+          _upstreamUrl,
           options: Options(headers: {'Range': 'bytes=$start-$end'}),
         );
         final body = resp.data;
@@ -279,12 +293,40 @@ class _Session {
             requestOptions: resp.requestOptions, error: 'empty body');
       } on DioException catch (e) {
         last = e;
+        // 服务端返回 4xx/5xx = 上游拒绝该 URL（前后端分离的短效签名链常见 6 分钟到期），
+        // 与纯网络抖动不同：重发同一过期 URL 必然再失败。此时先重签换新地址，下一次
+        // attempt 用新 URL 即可续拉，无需断流回退。网络错误(response 为空)不触发重签。
+        if (e.response != null && !_resignDisabled) {
+          await _refreshUpstream();
+        }
         if (attempt < 2) {
           await Future<void>.delayed(Duration(milliseconds: 300 * (attempt + 1)));
         }
       }
     }
     throw last ?? StateError('fetch failed');
+  }
+
+  /// 上游签名链失效 → 调用注入的重签回调换新地址（并发合并、失败停用）。
+  Future<void> _refreshUpstream() {
+    if (_onInvalid == null || _resignDisabled) return Future<void>.value();
+    return _resignInFlight ??= () async {
+      try {
+        final fresh = await _onInvalid!.call();
+        if (fresh != null && fresh.isNotEmpty && fresh != _upstreamUrl) {
+          _upstreamUrl = fresh;
+          _log.i('Prefetch', '上游链接失效，已重签换新地址继续拉流');
+        } else {
+          _resignDisabled = true; // 拿不到有效新地址，停用重签避免刷接口
+          _log.w('Prefetch', '重签未拿到新地址，停用重签');
+        }
+      } catch (e) {
+        _resignDisabled = true;
+        _log.w('Prefetch', '重签失败，停用重签: $e');
+      } finally {
+        _resignInFlight = null;
+      }
+    }();
   }
 
   // 等待分段 c 就绪（由某个 worker 完成）。

@@ -101,7 +101,8 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
 
   /// 多线程加载预取代理：仅在「开关开 + 已确认服主允许 + 在线 http 源」时启动，
   /// 返回本地播放 URL（失败/不满足条件返回 null，调用方回退在线直链）。
-  Future<String?> _maybeStartPrefetch(String onlineUrl) async {
+  Future<String?> _maybeStartPrefetch(String onlineUrl,
+      {Future<String?> Function()? onExpired}) async {
     try {
       if (!onlineUrl.startsWith('http')) return null;
       // 仅对用户加入「多线程加载」白名单（已确认获服主允许）的当前服务器启用。
@@ -115,6 +116,7 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
         upstreamUrl: onlineUrl,
         threads: ref.read(multiThreadLoadingThreadsProvider),
         cacheLimitBytes: limitMb * 1024 * 1024,
+        onUpstreamInvalid: onExpired,
       );
     } catch (_) {
       return null;
@@ -307,26 +309,30 @@ class _TvPlayerScreenState extends ConsumerState<TvPlayerScreen> {
         versionRegex: ref.read(preferredVersionRegexProvider),
         playSessionId: '$_itemId-${DateTime.now().microsecondsSinceEpoch}',
       );
-      final req = selection.primaryRequest;
-      final videoUrl = api.playback.getVideoStreamUrl(
-        req.itemId,
-        mediaSourceId: req.mediaSourceId,
-        container: req.container,
-        playSessionId: req.playSessionId,
-        staticStream: req.staticStream,
-        allowDirectPlay: req.allowDirectPlay,
-        allowDirectStream: req.allowDirectStream,
-        allowTranscoding: req.allowTranscoding,
-        enableAutoStreamCopy: req.enableAutoStreamCopy,
-        enableAutoStreamCopyAudio: req.enableAutoStreamCopyAudio,
-        enableAutoStreamCopyVideo: req.enableAutoStreamCopyVideo,
-      );
+      final videoUrl =
+          buildStreamUrlFromRequest(api.playback, selection.primaryRequest);
       // STRM 直链：开启且解析出可用直链时优先用直链喂给内核。
       final directUrl = selection.directPlayUrl;
       final hasDirect = directUrl != null && directUrl.isNotEmpty;
       final onlineUrl = hasDirect ? directUrl : videoUrl;
+      // 预取代理上游重签：短效签名的服务端直传流到期时重走 PlaybackInfo 拿新地址续拉。
+      Future<String?> reResolveDirectStreamUrl() async {
+        final pi = await api.playback.getPlaybackInfo(_itemId);
+        final sel = buildPlaybackSelection(
+          playbackInfo: pi,
+          itemId: _itemId,
+          preferredMediaSourceId: ref.read(selectedMediaSourceProvider),
+          strmDirectPlay: ref.read(strmDirectPlayProvider),
+          versionRegex: ref.read(preferredVersionRegexProvider),
+          playSessionId: '$_itemId-${DateTime.now().microsecondsSinceEpoch}',
+        );
+        return buildStreamUrlFromRequest(api.playback, sel.primaryRequest);
+      }
       // 多线程加载：仅对 Emby 服务端直传流起本地缓存预取代理；直链/转码自动跳过。
-      final proxiedUrl = hasDirect ? null : await _maybeStartPrefetch(onlineUrl);
+      final proxiedUrl = hasDirect
+          ? null
+          : await _maybeStartPrefetch(onlineUrl,
+              onExpired: reResolveDirectStreamUrl);
       final effectiveUrl = proxiedUrl ?? onlineUrl;
       final coreType =
           switch (normalizePlayerCore(ref.read(playerCoreProvider))) {

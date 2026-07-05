@@ -50,13 +50,21 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: 'AI / 百度 / 腾讯翻译，Whisper 本地转写',
             onTap: () => _showTranslationSettings(context),
           ),
-          // 移动端只保留 CF 优选加速；通用代理(HTTP/SOCKS)仅 TV/PC 需要，移动端不再展示。
+          // 移动端只保留 CF 优选加速；通用代理(HTTP/SOCKS)仅 TV/PC 需要，移动端不再展示
+          //（移动端系统级代理软件已很完善，不需要 App 自带）。
           _SettingsCard(
             icon: Icons.bolt,
             title: 'CF 优选加速',
             subtitle: '实测最快 Cloudflare 边缘 IP 并本地反代提速',
             onTap: () => _showCfProxy(context),
           ),
+          if (isDesktopPlatform)
+            _SettingsCard(
+              icon: Icons.vpn_key,
+              title: '代理设置',
+              subtitle: 'HTTP/SOCKS 自定义代理，可仅代理请求不代理播放',
+              onTap: () => _showNetworkSettings(context),
+            ),
           _SettingsCard(
             icon: Icons.sync_alt,
             title: '同步记录',
@@ -126,6 +134,10 @@ class SettingsScreen extends ConsumerWidget {
 
   void _showCfProxy(BuildContext context) =>
       _openSubPage(context, const CfProxyPanelPage());
+
+  // 通用代理设置仅桌面端入口（移动端交给系统代理软件）。
+  void _showNetworkSettings(BuildContext context) =>
+      _openSubPage(context, const NetworkSettingsScreen());
 
   void _showResumeSync(BuildContext context) =>
       _openSubPage(context, const ResumeSyncScreen());
