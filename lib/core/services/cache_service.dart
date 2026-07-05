@@ -284,14 +284,14 @@ class CacheService {
   /// 都重新加载」。旧值桌面 96MB 甚至低于 Flutter 默认 100MB，媒体库封面（≈0.8MB）
   /// 加几张背景大图（1080p 解码≈8MB）就填满 → LRU 频繁淘汰 → 频繁重解码。
   ///
-  /// 桌面内存充足（8GB+），给到 512MB 让数百封面 + 几十张背景常驻，回看即时不重载；
-  /// 移动/TV 内存吃紧（TV 盒子常见 1–2GB），提到 128MB 兼顾复用与 OOM 安全。
+  /// 桌面 128MB / 800 张，足够数百封面 + 十几张背景常驻，回看即时不重载；
+  /// 移动/TV 内存吃紧（TV 盒子常见 1–2GB），128MB / 500 张兼顾复用与 OOM 安全。
   /// 单张解码已被 MediaImage 钳制在 1280 长边（≈3.7MB），按张数与字节双限。
   static void configureMemoryCache() {
     final cache = PaintingBinding.instance.imageCache;
     if (isDesktopPlatform) {
-      cache.maximumSize = 1500;
-      cache.maximumSizeBytes = 512 * 1024 * 1024;
+      cache.maximumSize = 800;
+      cache.maximumSizeBytes = 128 * 1024 * 1024;
     } else {
       cache.maximumSize = 500;
       cache.maximumSizeBytes = 128 * 1024 * 1024;
