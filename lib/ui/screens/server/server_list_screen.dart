@@ -520,7 +520,7 @@ class _ServerCard extends StatelessWidget {
                 child: server.iconUrl != null
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: MediaImage(imageUrl: server.iconUrl, width: 48, height: 48, fit: BoxFit.cover, useDefaultUserAgent: true),
+                        child: MediaImage(imageUrl: server.iconUrl, width: 48, height: 48, fit: BoxFit.contain, useDefaultUserAgent: true),
                       )
                     : const Icon(Icons.dns, color: Color(0xFF5B8DEF)),
               ),

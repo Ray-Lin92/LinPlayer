@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/emby_api.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/utils/server_batch_adder.dart';
 import '../../../core/providers/media_providers.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
@@ -67,6 +68,7 @@ class _TvAddServerScreenState extends ConsumerState<TvAddServerScreen> {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: info.serverName,
         baseUrl: url,
+        iconUrl: ServerBatchAdder.buildIconUrl(url),
         username: username,
         authToken: auth.accessToken,
         userId: auth.userId,

@@ -488,7 +488,7 @@ class _ServerGridCardState extends State<_ServerGridCard>
                               imageUrl: widget.server.iconUrl,
                               width: 34,
                               height: 34,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               useDefaultUserAgent: true,
                             ),
                           )
@@ -723,7 +723,7 @@ class _ServerListTileState extends State<_ServerListTile>
                             imageUrl: widget.server.iconUrl,
                             width: 36,
                             height: 36,
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
                             useDefaultUserAgent: true,
                           ),
                         )

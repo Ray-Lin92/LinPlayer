@@ -137,7 +137,7 @@ class TvServerScreen extends ConsumerWidget {
                 child: (server.iconUrl != null && server.iconUrl!.isNotEmpty)
                     ? MediaImage(
                         imageUrl: server.iconUrl,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                         useDefaultUserAgent: true,
                         errorWidget: Icon(Icons.storage,
                             color: online
