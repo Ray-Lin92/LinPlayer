@@ -161,6 +161,20 @@ class MediaImage extends StatelessWidget {
   }
 }
 
+/// 服务器图标取不到时的兜底：默认 Emby 图标。
+/// 用作各服务器卡片 MediaImage 的 errorWidget——touchicon 404（如关了 web 的纯 API 服）
+/// 也好歹显示个正常图标，而不是碎图占位。父容器已定尺寸，contain 自适应填充。
+class EmbyDefaultIcon extends StatelessWidget {
+  const EmbyDefaultIcon({super.key});
+
+  static const String asset = 'assets/images/emby_default.png';
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(asset, fit: BoxFit.contain);
+  }
+}
+
 class _FallbackNetworkImage extends StatefulWidget {
   final List<String> imageUrls;
   final double? width;
