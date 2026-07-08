@@ -18,6 +18,11 @@ class MpvPlayerAdapter implements PlayerAdapter {
   static final _logger = AppLogger();
   static final _configManager = MpvConfigManager();
   static const _subtitleTrackTypes = <String>{'subtitle', 'text', 'bitmap'};
+  static const _startupSeekAttemptLimit = 8;
+  static const _startupSeekRetryDelay = Duration(milliseconds: 120);
+  static const _startupSeekPollInterval = Duration(milliseconds: 40);
+  static const _startupSeekPollTimeout = Duration(milliseconds: 240);
+  static const _startupSeekTolerance = Duration(milliseconds: 750);
 
   Player? _player;
   VideoController? _videoController;
@@ -147,10 +152,36 @@ class MpvPlayerAdapter implements PlayerAdapter {
     // underlying player state and Flutter Video widget stay in sync.
     // Network edge cases are handled one layer above via playback URL
     // fallback instead of bypassing Player.open here.
+    final resumePosition =
+        (startPosition != null && startPosition > Duration.zero)
+            ? startPosition
+            : null;
+
+    // 续播：优先通过 mpv 的 start 选项让加载时直接定位到续播点，
+    // 避免 open 之后再 seek 的竞态（慢速/网络源下 seek 可能落空导致从头播放）。
+    final np = _nativePlayer;
+    if (resumePosition != null && np != null) {
+      final seconds = resumePosition.inMilliseconds / 1000.0;
+      try {
+        await np.setProperty('start', '$seconds');
+      } catch (_) {
+        // start 设置失败时继续走兜底 seek 流程。
+      }
+    }
+
     final media = Media(videoUrl);
     await _player!.open(media, play: false);
-    if (startPosition != null && startPosition > Duration.zero) {
-      await _player!.seek(startPosition);
+
+    if (resumePosition != null) {
+      // 兜底校正：部分协议/解码路径下 start 选项可能不生效，再用重试 seek 落位。
+      await _applyStartupSeek(resumePosition);
+    }
+
+    // 复位 start，避免 start 选项影响后续可能的加载（防御性处理）。
+    if (resumePosition != null && np != null) {
+      try {
+        await np.setProperty('start', 'none');
+      } catch (_) {}
     }
   }
 
@@ -159,6 +190,59 @@ class MpvPlayerAdapter implements PlayerAdapter {
   /// media-kit 的 Windows 预编译包为了体积会 `--disable-decoders` 并漏掉
   /// `hdmv_pgs_subtitle`，这是 PC 端不显示 PGS/SUP 的根因。
   /// 探测结果只用于日志/诊断，真正的修复需要替换为完整版 libmpv-2.dll。
+  Future<void> _applyStartupSeek(Duration startPosition) async {
+    Object? lastError;
+    StackTrace? lastStackTrace;
+
+    for (var attempt = 1; attempt <= _startupSeekAttemptLimit; attempt++) {
+      try {
+        await _player!.seek(startPosition);
+      } catch (error, stackTrace) {
+        lastError = error;
+        lastStackTrace = stackTrace;
+      }
+
+      if (await _waitForStartupSeekPosition(startPosition)) {
+        if (attempt > 1) {
+          _logger.i(
+            'MpvAdapter',
+            'media_kit 启动续播已命中，attempt=$attempt, position=${startPosition.inMilliseconds}ms',
+          );
+        }
+        return;
+      }
+
+      if (attempt < _startupSeekAttemptLimit) {
+        await Future.delayed(_startupSeekRetryDelay);
+      }
+    }
+
+    if (lastError != null && lastStackTrace != null) {
+      Error.throwWithStackTrace(lastError, lastStackTrace);
+    }
+
+    _logger.w(
+      'MpvAdapter',
+      'media_kit 启动续播未在预期时间内落位，target=${startPosition.inMilliseconds}ms, current=${_position.inMilliseconds}ms',
+    );
+  }
+
+  Future<bool> _waitForStartupSeekPosition(Duration target) async {
+    final stopwatch = Stopwatch()..start();
+    while (stopwatch.elapsed < _startupSeekPollTimeout) {
+      if (_isNearStartupSeekTarget(_position, target)) {
+        return true;
+      }
+      await Future.delayed(_startupSeekPollInterval);
+    }
+    return _isNearStartupSeekTarget(_position, target);
+  }
+
+  bool _isNearStartupSeekTarget(Duration current, Duration target) {
+    return (current - target).inMilliseconds.abs() <=
+        _startupSeekTolerance.inMilliseconds;
+  }
+
   Future<void> _probePgsDecoderAvailability() async {
     final np = _nativePlayer;
     if (np == null || !_isDesktopPlatform) {
@@ -368,8 +452,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
     bool useLibass = false,
     bool hardwareDecoding = true,
     String? preferredSubtitleLanguage,
-    int? surfaceViewId,  // Not used by media_kit, only for native mpv
-    bool useGpuNext = false,  // Not used by media_kit, only for native mpv
+    int? surfaceViewId, // Not used by media_kit, only for native mpv
+    bool useGpuNext = false, // Not used by media_kit, only for native mpv
   }) async {
     _logger.i('MpvAdapter', '开始初始化 media_kit 内核');
     try {
