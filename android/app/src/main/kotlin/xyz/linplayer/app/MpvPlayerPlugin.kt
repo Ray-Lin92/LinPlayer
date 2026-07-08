@@ -247,6 +247,53 @@ class MpvPlayerPlugin(
         }
     }
 
+    /**
+     * 关键（移动端内封文本字幕 SRT/ASS 不显示的**最终根因**）：
+     * 本 libmpv(v0.36) 的 libass 走 **fontconfig**（.so 内含 fontconfig/fonts.conf 符号），
+     * 且 mpv 的 `sub-font` / `sub-fonts-dir` 选项在这颗 .so 里**根本不存在**——
+     * 之前 `setOptionString("sub-fonts-dir","/system/fonts")` 是**未知选项、静默 no-op**，
+     * 字体目录从未生效。Android 默认无 fontconfig 配置 → fontconfig 找不到任何字体 →
+     * 文本字幕整段不渲染（位图 PGS 不依赖字体，另说）。
+     *
+     * 这里在 MPVLib.create() **之前**（fontconfig 初始化即读环境变量）生成一份指向
+     * /system/fonts 的 fonts.conf 并用 FONTCONFIG_FILE 指过去，让 fontconfig 扫到
+     * NotoSansCJK/Roboto/DroidSansFallback 等系统字体；泛族(sans-serif/serif/monospace)
+     * 与末位兜底都解析到实际存在的中日字体，覆盖 SRT(无样式默认 sans-serif) 与
+     * ASS(引用具体字体名，缺失时回退)。
+     */
+    private fun setupFontconfig(context: android.content.Context) {
+        try {
+            val fcDir = File(context.filesDir, "fontconfig")
+            fcDir.mkdirs()
+            val cacheDir = File(fcDir, "cache")
+            cacheDir.mkdirs()
+            val confFile = File(fcDir, "fonts.conf")
+            val conf = """<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <dir>/system/fonts</dir>
+  <dir>/product/fonts</dir>
+  <dir>/system/font</dir>
+  <dir>/data/fonts</dir>
+  <cachedir>${cacheDir.absolutePath}</cachedir>
+  <alias><family>sans-serif</family><prefer><family>Noto Sans CJK SC</family><family>Noto Sans</family><family>Roboto</family><family>Droid Sans Fallback</family></prefer></alias>
+  <alias><family>serif</family><prefer><family>Noto Serif CJK SC</family><family>Noto Serif</family><family>Droid Sans Fallback</family></prefer></alias>
+  <alias><family>monospace</family><prefer><family>Droid Sans Mono</family><family>Roboto Mono</family></prefer></alias>
+  <alias><family>Arial</family><prefer><family>Roboto</family><family>Noto Sans CJK SC</family></prefer></alias>
+  <match target="pattern"><edit name="family" mode="append_last" binding="strong"><string>Noto Sans CJK SC</string><string>Droid Sans Fallback</string><string>Roboto</string></edit></match>
+</fontconfig>
+"""
+            confFile.writeText(conf)
+            // 只设 FONTCONFIG_FILE/PATH；不动 HOME（fonts.conf 已显式给 <cachedir>，
+            // 无需 HOME，避免影响其它读 HOME 的原生库）。
+            android.system.Os.setenv("FONTCONFIG_FILE", confFile.absolutePath, true)
+            android.system.Os.setenv("FONTCONFIG_PATH", fcDir.absolutePath, true)
+            android.util.Log.i(TAG, "fontconfig ready: ${confFile.absolutePath}")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "setupFontconfig failed", e)
+        }
+    }
+
     private fun createPlayer(
         videoUrl: String,
         startPositionMs: Int,
@@ -306,6 +353,8 @@ class MpvPlayerPlugin(
             // Create mpv context.
             // 这一步会触发 MPVLib 的 init{}（首次访问时 System.loadLibrary("mpv"/"player")），
             // 从而把 libmpv.so 及其依赖 libavcodec.so 真正加载进进程。
+            // 必须在 create 之前配好 fontconfig（libass 走 fontconfig，否则文本字幕不渲染）。
+            setupFontconfig(context)
             MPVLib.create(context)
 
             // 注册 JavaVM 给 ffmpeg（av_jni_set_java_vm，mediacodec 硬解必需）。
@@ -950,6 +999,25 @@ class MpvPlayerPlugin(
                     android.util.Log.i(TAG, "  current sid: $currentSid")
                     android.util.Log.i(TAG, "  sub-visibility: $subVisibility")
                     android.util.Log.i(TAG, "  audio-channels: $audioChannels")
+
+                    // 把字幕关键诊断转发到 App 日志（logMessage 只转 mpv 自身消息，且常被
+                    // 缓冲区溢出丢弃；这条直发保证用户导出的日志里一定有，便于远程定位
+                    // "选了字幕轨仍不显示"到底卡在哪：sid 有没有生效 / 可见性 / 轨道 codec）。
+                    val subTracks = currentTracks.filter {
+                        it["type"] == "text" || it["type"] == "bitmap"
+                    }
+                    val subSummary = subTracks.joinToString("; ") {
+                        "id=${it["id"]} ${it["type"]} codec=${it["codec"]} sel=${it["isSelected"]}"
+                    }
+                    emitEvent(
+                        "log",
+                        mapOf(
+                            "level" to MPVLib.MpvLogLevel.WARN,
+                            "prefix" to "sub-diag",
+                            "text" to "sid=$currentSid sub-visibility=$subVisibility " +
+                                "共${subTracks.size}条字幕轨 [$subSummary]"
+                        )
+                    )
 
                     // 检查解码器列表
                     val decoderList = MPVLib.getPropertyString("decoder-list")
