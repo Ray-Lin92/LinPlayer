@@ -107,6 +107,12 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: '导出/导入服务器配置、WebDAV同步',
             onTap: () => _showBackupRestore(context),
           ),
+          _SettingsCard(
+            icon: Icons.qr_code_2,
+            title: '配置迁移',
+            subtitle: '扫码在设备间搬服务器配置（含登录凭据）',
+            onTap: () => _showConfigMigration(context),
+          ),
           // 线路同步已移至各服务器的线路管理页面
         ],
       ),
@@ -206,6 +212,9 @@ class SettingsScreen extends ConsumerWidget {
 
   void _showBackupRestore(BuildContext context) =>
       _openSubPage(context, const BackupRestoreScreen());
+
+  void _showConfigMigration(BuildContext context) =>
+      _openSubPage(context, const ConfigMigrationScreen());
 
   void _showPlugins(BuildContext context) =>
       _openSubPage(context, const PluginManagementScreen());
