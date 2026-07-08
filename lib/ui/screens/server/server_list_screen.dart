@@ -122,7 +122,8 @@ class _ServerListScreenState extends ConsumerState<ServerListScreen> {
     return ReorderableListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: servers.length,
-      onReorderItem: (oldIndex, newIndex) {
+      // ignore: deprecated_member_use
+      onReorder: (oldIndex, newIndex) {
         ref.read(serverListProvider.notifier).reorderServers(oldIndex, newIndex);
       },
       itemBuilder: (context, index) {
