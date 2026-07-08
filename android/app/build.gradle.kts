@@ -29,7 +29,9 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
-                arguments += "-DANDROID_STL=c++_shared"
+                // Keep the JNI bridge self-contained so packaging does not
+                // collide with the shared STL shipped by prebuilt native libs.
+                arguments += "-DANDROID_STL=c++_static"
             }
         }
 
@@ -43,6 +45,13 @@ android {
     }
 
     packagingOptions {
+        // Prefer a single shared STL copy when prebuilt dependencies bundle it.
+        pickFirsts += listOf(
+            "lib/arm64-v8a/libc++_shared.so",
+            "lib/armeabi-v7a/libc++_shared.so",
+            "lib/x86/libc++_shared.so",
+            "lib/x86_64/libc++_shared.so"
+        )
         // 优先使用 jniLibs 中的 libmpv.so（支持 PGS 的版本）
         // 覆盖 media_kit 内置的 libmpv.so
         pickFirsts += listOf(
