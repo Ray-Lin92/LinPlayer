@@ -252,63 +252,79 @@ class MpvPlayerPlugin(
     }
 
     /**
-     * 关键（移动端内封文本字幕 SRT/ASS 不显示的**最终根因**）：
-     * 本 libmpv(v0.36) 的 libass 走 **fontconfig**（.so 内含 fontconfig/fonts.conf 符号），
-     * 且 mpv 的 `sub-font` / `sub-fonts-dir` 选项在这颗 .so 里**根本不存在**——
-     * 之前 `setOptionString("sub-fonts-dir","/system/fonts")` 是**未知选项、静默 no-op**，
-     * 字体目录从未生效。Android 默认无 fontconfig 配置 → fontconfig 找不到任何字体 →
-     * 文本字幕整段不渲染（位图 PGS 不依赖字体，另说）。
+     * 移动端内封文本字幕 SRT/ASS 不显示的**真正根因**（grep -a libmpv.so 二进制核实，
+     * 推翻了之前"走 fontconfig"的想当然）：
+     *   - 这颗 libmpv(v0.36.0-549) 的 libass **没编 fontconfig**——FcInit/FcFontMatch/
+     *     FcConfigParse 等符号全为 0；
+     *   - mpv 的 `sub-font` / `sub-fonts-dir` / `sub-font-provider` 选项**在这颗 .so 里不存在**
+     *     （字符串全为 0），setOptionString 到它们是静默 no-op；
+     *   - libass 只剩 **"目录 provider"** 一条路：mpv 用 `ass_set_fonts_dir(config-dir/fonts)`
+     *     扫字体目录，并把 `config-dir/subfont.ttf` 当**默认字体**（SRT/无样式 ASS 的 sans-serif
+     *     最终落到这个默认字体）。
+     * 之前生成 fonts.conf + 设 FONTCONFIG_FILE **完全空转**（没有 fontconfig 引擎去读它）→
+     * libass 零可用字体 → 文本字幕整段不渲染；PGS 位图不吃字体，故一直正常。
      *
-     * 这里在 MPVLib.create() **之前**（fontconfig 初始化即读环境变量）生成一份**只加
-     * /system/fonts 目录 + 泛族解析**的 fonts.conf，并用 FONTCONFIG_FILE 指过去，让
-     * fontconfig 直接用系统自带字体（NotoSansCJK/Roboto 等），**不打包、不拷贝字体**。
-     *
-     * **绝不覆盖具名字体**：只给无样式 SRT/纯文本的泛族(sans-serif/serif/monospace)一个
-     * 真实字体解析；不写 Arial→X 之类的具名覆盖、不写末位强制 append。内封子集化特效 ASS
-     * 的字体是作为**容器附件**由 libass(embeddedfonts=yes)直接加载的，fontconfig 不参与，
-     * 故此配置不会把特效字幕"干到别的字体去"。fontconfig 对真正缺失的具名字体本就会返回
-     * 最接近的可用字体（其默认行为），无需我们强制。
+     * 修法：把 /system/fonts 里的字体**软链**进 `config-dir/fonts`（具名 ASS 字体可解析），
+     * 并挑一个含 CJK 的字体软链成 `config-dir/subfont.ttf`（无样式 SRT/中文默认字体）。软链
+     * 不拷贝、零额外包体；个别机型私有目录禁软链时退回硬拷贝兜底。config-dir 与 setMpvOptions
+     * 里的 `config-dir=<filesDir>/mpv` 必须一致，否则 libass 扫不到。内封子集化特效 ASS 的附件
+     * 字体仍由 libass(embeddedfonts=yes)从容器直接加载，不受此目录影响。
      */
-    private fun setupFontconfig(context: android.content.Context) {
+    private fun setupLibassFonts(context: android.content.Context) {
         try {
-            val fcDir = File(context.filesDir, "fontconfig")
-            fcDir.mkdirs()
-            val cacheDir = File(fcDir, "cache")
-            cacheDir.mkdirs()
-            val confFile = File(fcDir, "fonts.conf")
-            val conf = """<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
-<fontconfig>
-  <dir>/system/fonts</dir>
-  <dir>/product/fonts</dir>
-  <cachedir>${cacheDir.absolutePath}</cachedir>
-  <alias><family>sans-serif</family><prefer><family>Noto Sans CJK SC</family><family>Roboto</family><family>Noto Sans</family><family>Droid Sans Fallback</family></prefer></alias>
-  <alias><family>serif</family><prefer><family>Noto Serif CJK SC</family><family>Noto Serif</family></prefer></alias>
-  <alias><family>monospace</family><prefer><family>Droid Sans Mono</family><family>Roboto Mono</family></prefer></alias>
-</fontconfig>
-"""
-            confFile.writeText(conf)
-            // 只设 FONTCONFIG_FILE/PATH；不动 HOME（fonts.conf 已显式给 <cachedir>，
-            // 无需 HOME，避免影响其它读 HOME 的原生库）。
-            android.system.Os.setenv("FONTCONFIG_FILE", confFile.absolutePath, true)
-            android.system.Os.setenv("FONTCONFIG_PATH", fcDir.absolutePath, true)
-            // 采集诊断（转发进 App 日志，见 FILE_LOADED 的 sub-diag）：确认系统字体源是否真的
-            // 存在、有多少字体文件——若 /system/fonts 为空或不可读，才是 fontconfig 无字体的真因。
+            // 与 setMpvOptions 的 config-dir 保持一致：<filesDir>/mpv。
+            val mpvDir = File(context.filesDir, "mpv")
+            val fontsDir = File(mpvDir, "fonts")
+            fontsDir.mkdirs()
+
             val sysDir = File("/system/fonts")
-            val fontFiles = sysDir.listFiles { f ->
-                f.name.endsWith(".ttf", true) || f.name.endsWith(".ttc", true) ||
-                    f.name.endsWith(".otf", true)
+            val sysFiles = sysDir.listFiles { f ->
+                val n = f.name.lowercase()
+                n.endsWith(".ttf") || n.endsWith(".ttc") || n.endsWith(".otf")
+            } ?: emptyArray()
+
+            // 把系统字体逐个软链进 config-dir/fonts（幂等：已存在跳过）。
+            var linked = 0
+            for (src in sysFiles) {
+                val link = File(fontsDir, src.name)
+                if (link.exists()) { linked++; continue }
+                try {
+                    android.system.Os.symlink(src.absolutePath, link.absolutePath)
+                    linked++
+                } catch (_: Throwable) {
+                    try { src.copyTo(link, overwrite = false); linked++ } catch (_: Throwable) {}
+                }
             }
-            val hasCjk = fontFiles?.any {
-                it.name.contains("CJK", true) || it.name.contains("NotoSansSC", true) ||
-                    it.name.contains("DroidSansFallback", true)
-            } ?: false
-            lastFontStatus = "fontconfig conf=${confFile.exists()} " +
-                "/system/fonts=${sysDir.exists()}(${fontFiles?.size ?: 0}个,CJK=$hasCjk)"
-            android.util.Log.i(TAG, "fontconfig ready: $lastFontStatus")
+
+            // 默认字体：优先含 CJK 的字体，保证纯中文 SRT/无样式 ASS 有字可显。
+            val cjkFont = sysFiles.firstOrNull {
+                val n = it.name
+                n.contains("NotoSansCJK", true) || n.contains("NotoSansSC", true) ||
+                    n.contains("NotoSerifCJK", true) || n.contains("DroidSansFallback", true)
+            } ?: sysFiles.firstOrNull { it.name.contains("Roboto-Regular", true) }
+              ?: sysFiles.firstOrNull()
+
+            val defaultFont = File(mpvDir, "subfont.ttf")
+            var defaultName = "none"
+            if (defaultFont.exists()) {
+                defaultName = "exists"
+            } else if (cjkFont != null) {
+                try {
+                    android.system.Os.symlink(cjkFont.absolutePath, defaultFont.absolutePath)
+                    defaultName = cjkFont.name
+                } catch (_: Throwable) {
+                    try {
+                        cjkFont.copyTo(defaultFont, overwrite = false); defaultName = cjkFont.name
+                    } catch (_: Throwable) {}
+                }
+            }
+
+            lastFontStatus = "libass-fonts dir=${fontsDir.absolutePath}(${linked}/${sysFiles.size}链) " +
+                "default=$defaultName sys=${sysDir.exists()}"
+            android.util.Log.i(TAG, "libass fonts ready: $lastFontStatus")
         } catch (e: Exception) {
-            lastFontStatus = "fontconfig setup FAILED: ${e.message}"
-            android.util.Log.e(TAG, "setupFontconfig failed", e)
+            lastFontStatus = "libass-fonts setup FAILED: ${e.message}"
+            android.util.Log.e(TAG, "setupLibassFonts failed", e)
         }
     }
 
@@ -371,8 +387,9 @@ class MpvPlayerPlugin(
             // Create mpv context.
             // 这一步会触发 MPVLib 的 init{}（首次访问时 System.loadLibrary("mpv"/"player")），
             // 从而把 libmpv.so 及其依赖 libavcodec.so 真正加载进进程。
-            // 必须在 create 之前配好 fontconfig（libass 走 fontconfig，否则文本字幕不渲染）。
-            setupFontconfig(context)
+            // 必须在 create/loadfile 之前把字体软链进 config-dir/fonts + subfont.ttf，
+            // 否则 libass(无 fontconfig)零字体、文本字幕不渲染。见 setupLibassFonts 注释。
+            setupLibassFonts(context)
             MPVLib.create(context)
 
             // 注册 JavaVM 给 ffmpeg（av_jni_set_java_vm，mediacodec 硬解必需）。
@@ -440,6 +457,8 @@ class MpvPlayerPlugin(
             MPVLib.observeProperty("video-params/w", MPVLib.MpvFormat.INT64)
             MPVLib.observeProperty("video-params/h", MPVLib.MpvFormat.INT64)
             MPVLib.observeProperty("hwdec-current", MPVLib.MpvFormat.STRING)
+            // 诊断：观察当前应显示的字幕文本，上升沿写日志（见 eventProperty String 分支）。
+            MPVLib.observeProperty("sub-text", MPVLib.MpvFormat.STRING)
 
             players[playerId] = instance
 
@@ -585,13 +604,16 @@ class MpvPlayerPlugin(
 
         // Hardware decoding
         if (hardwareDecoding) {
-            // 盲修闪退：只用 mediacodec-copy（拷贝模式），不再优先 direct mediacodec。
-            // direct mediacodec 把解码帧直接交给 Android Surface，需要 vo 与解码器共享
-            // surface 并走 AImageReader 句柄，在部分机型/编码上首帧握手失败会原生 SIGSEGV，
-            // 是"每次播放必闪退"的常见根源。copy 模式把帧拷回 CPU 再走 GL 上传，自包含、
-            // 不依赖 surface 句柄交接，稳定得多；性能损失对流式直连可忽略。解码失败时 mpv
-            // 仍会自动回退软解。
-            MPVLib.setOptionString("hwdec", "mediacodec-copy")
+            // 零拷贝直连硬解（性能关键）：改回 direct `mediacodec`，不再用 copy 模式。
+            // 依据(decode-diag 实测 + 二进制核实)：copy 模式把每帧 GPU→CPU→GPU 拷贝一遍，
+            // 1080p 尚可(实测 0 丢帧)，但 4K/高码率(86Mbps/64G)电影下这份逐帧拷贝撑爆内存
+            // 带宽 → 严重卡顿；别的 MPV 播放器用的正是 direct(零拷贝) 故不卡。这颗 .so 有
+            // AImage_getHardwareBuffer/AImageReader 全套符号，direct + vo=gpu 走 AHardwareBuffer
+            // → EGLImage → GL 纹理的零拷贝导入，字幕/OSD 仍由 mpv 在 GL 层合成，不受影响。
+            // 当年切走 copy 是因"首帧 SIGSEGV"，但那更可能是 av_jni_set_java_vm 时序问题——现已
+            // 在 create() 之后显式注册 JavaVM（见 ensureJavaVmRegistered），根因已消除。解码失败
+            // 时 mpv 仍自动回退软解。
+            MPVLib.setOptionString("hwdec", "mediacodec")
             MPVLib.setOptionString("hwdec-codecs",
                 "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
         } else {
@@ -640,15 +662,15 @@ class MpvPlayerPlugin(
         // 不经 fontconfig、不被系统字体替换 → 特效字幕按作者字体渲染，不会"被干到别的字体"。
         MPVLib.setOptionString("embeddedfonts", "yes")
         MPVLib.setOptionString("sub-codepage", "utf-8")
-        // 关键：Android 上 libass 没有 fontconfig，必须显式给字体目录，否则内封/外挂的
-        // 文本字幕(SRT/ASS)因找不到任何字体而整段不渲染——表现为"选了字幕也不显示"。
-        // 指向系统字体目录，libass 可扫描到 NotoSansCJK / DroidSansFallback 等中文字体并
-        // 在请求的字体名缺失时回退到可用字体（位图 PGS/SUP 不依赖字体，本就不受影响）。
-        MPVLib.setOptionString("sub-fonts-dir", "/system/fonts")
+        // 字体来源不走选项：这颗 .so 无 fontconfig、也无 sub-fonts-dir 选项（二进制核实，
+        // 见 setupLibassFonts）。libass 走目录 provider，字体已在 setupLibassFonts 里软链进
+        // config-dir/fonts + config-dir/subfont.ttf，此处无需再设任何字体选项。
 
         // Cache
-        // 网络播放：按用户设置（300MB–8GB）把缓冲落到磁盘，避免大缓冲占满内存导致
-        // 低配机/TV OOM 闪退。videoCacheDir 为空（本地文件）时退回小额内存缓冲即可。
+        // 网络播放：缓冲落磁盘（内部存储,快），避免大缓冲占满内存导致低配机/TV OOM。
+        // 注：磁盘缓存**不是**大码率卡顿的瓶颈——实测缓存目录在内部存储(getApplicationCache-
+        // Directory=/data/user/0/...，非 FUSE)，写入 100MB/s+ 绰绰有余。真瓶颈是 302 跳转流的
+        // 分段请求开销(见 stream-lavf-o)。videoCacheDir 为空（本地文件）时退回小额内存缓冲。
         if (!videoCacheDir.isNullOrEmpty() && diskCacheForwardBytes > 0L) {
             File(videoCacheDir).mkdirs()
             MPVLib.setOptionString("cache", "yes")
@@ -660,9 +682,12 @@ class MpvPlayerPlugin(
             // L1 预防层：网络掉线时 libavformat 透明重连(连当前 URL)，瞬断在缓冲区内消化。
             // 只开 reconnect_on_network_error，不开 http_error——网盘 302 过期的 4xx/5xx 要
             // 上抛交给 Dart 层 L2 重解析重签，不能让 ffmpeg 死磕过期链把错误吞掉。
-            // multiple_requests=1：HTTP keep-alive，后续 Range/seek 复用同一连接不重握手。
+            // ⚠️ 绝不加 multiple_requests=1(大电影卡顿真凶,桌面早已删除,Android 之前漏同步)：
+            // 本意是 keep-alive 复用连接，但对 302 跳转的网盘流(strm→115 CDN)会诱发大量分段
+            // Range 请求，每段重走 302+重连+TLS 握手。curl 实测:连续流 28MB/s，分段 1.8MB/s(×15
+            // 慢)；桌面 ffprobe 实测同一 MKV 默认 1.6s、加该参数 3m35s(×130)。删掉后走单条连续流。
             MPVLib.setOptionString("stream-lavf-o",
-                "multiple_requests=1,reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=30")
+                "reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=30")
             android.util.Log.i(TAG, "mpv disk cache: dir=$videoCacheDir fwd=$diskCacheForwardBytes back=$diskCacheBackBytes")
         } else {
             // 本地文件：无需大缓冲，沿用小额内存缓冲。
@@ -686,7 +711,10 @@ class MpvPlayerPlugin(
         // (`log message buffer overflow: 194 messages skipped`)，把 libass/fontconfig 的真实
         // 报错一并丢掉 → 远程无法定位"选了字幕轨仍不显示"。转发回调本就只放行 warn+，故降到
         // all=warn：App 日志一条不少、且不再溢出，libass 字体类报错(warn/error)得以浮出。
-        MPVLib.setOptionString("msg-level", "all=warn")
+        // ass=v 单独放行 libass 的字体选择/字形渲染诊断（fontselect/glyph 等在 info/verbose
+        // 级），其余模块仍锁 warn——既不触发起播 all=v 的 ~200 条溢出，又能在"选了字幕轨仍
+        // 不显示"时看到 libass 到底是找不到字体、还是渲染了 0 个字形。定位后可撤回。
+        MPVLib.setOptionString("msg-level", "all=warn,ass=v")
     }
 
     private fun getPlayer(playerId: String): MpvPlayerInstance? = players[playerId]
@@ -720,6 +748,13 @@ class MpvPlayerPlugin(
 
         private var eventSink: EventChannel.EventSink? = null
         private var currentTracks: List<Map<String, Any>> = emptyList()
+        // 诊断（字幕不显示定位）：sub-text 上升沿计数，捕捉"mpv 认为此刻该显示的字幕文本"，
+        // 上限几条防刷屏。非空却看不见=渲染层(libass/OSD)问题；始终为空=解码/时间轴问题。
+        private var lastSubText: String = ""
+        private var subDiagCount = 0
+        // 诊断"画面卡"：每 ~5s 落一次丢帧/实际帧率，判定是否解码跟不上(软解高分辨率典型)。
+        private var lastDropLogSec = -100.0
+        private var dropLogCount = 0
 
         init {
             eventChannel.setStreamHandler(object : EventChannel.StreamHandler {
@@ -968,7 +1003,38 @@ class MpvPlayerPlugin(
         override fun eventProperty(property: String, value: String) {
             when (property) {
                 "hwdec-current" -> {
-                    // Available for stats
+                    // 诊断"画面卡"：把实际生效的解码路径落日志(warn 级，穿过起播后静默)。
+                    // no/空 = 软解(高分辨率会卡)；mediacodec/mediacodec-copy = 硬解生效。
+                    emitEvent(
+                        "log",
+                        mapOf(
+                            "level" to MPVLib.MpvLogLevel.WARN,
+                            "prefix" to "decode-diag",
+                            "text" to "hwdec-current=$value vd=${MPVLib.getPropertyString("video-codec")}"
+                        )
+                    )
+                }
+                "sub-text" -> {
+                    // 上升沿(空→非空)时，把 mpv 判定应显示的字幕文本 + 关键渲染几何一并落日志。
+                    // 若这里有文本但屏幕空白 → 字幕已解码、卡在渲染层(libass/OSD)。若整场从不触发
+                    // → 解码/时间轴问题(subrip 没产出文本 / sid 没真生效)。上限 3 条防刷屏。
+                    if (value.isNotEmpty() && lastSubText.isEmpty() && subDiagCount < 3) {
+                        subDiagCount++
+                        val subScale = MPVLib.getPropertyString("sub-scale")
+                        val subPos = MPVLib.getPropertyString("sub-pos")
+                        val subFont = MPVLib.getPropertyString("sub-font")
+                        val osdDim = MPVLib.getPropertyString("osd-dimensions")
+                        emitEvent(
+                            "log",
+                            mapOf(
+                                "level" to MPVLib.MpvLogLevel.WARN,
+                                "prefix" to "sub-text-diag",
+                                "text" to "#$subDiagCount 应显示=\"${value.take(40)}\" " +
+                                    "scale=$subScale pos=$subPos font=$subFont osd=$osdDim"
+                            )
+                        )
+                    }
+                    lastSubText = value
                 }
             }
         }
@@ -976,7 +1042,31 @@ class MpvPlayerPlugin(
         override fun eventProperty(property: String, value: Double) {
             android.util.Log.v(TAG, "property[$property] = $value")
             when (property) {
-                "time-pos" -> emitEvent("timePos", (value * 1000).toLong())
+                "time-pos" -> {
+                    emitEvent("timePos", (value * 1000).toLong())
+                    // 每 ~5s 采一次解码/丢帧诊断，前 6 次即可看出趋势(上限防刷屏)。
+                    if (value - lastDropLogSec >= 5.0 && dropLogCount < 6) {
+                        lastDropLogSec = value
+                        dropLogCount++
+                        emitEvent(
+                            "log",
+                            mapOf(
+                                "level" to MPVLib.MpvLogLevel.WARN,
+                                "prefix" to "decode-diag",
+                                // drop-* 高 → 解码/渲染跟不上；cache-* 空/paused-for-cache=yes
+                                // → 取流/缓存跟不上(网络或磁盘写回瓶颈)。两者区分"卡"的真因。
+                                "text" to "t=${value.toInt()}s ${MPVLib.getPropertyString("video-params/w")}x${MPVLib.getPropertyString("video-params/h")} " +
+                                    "hwdec=${MPVLib.getPropertyString("hwdec-current")} " +
+                                    "drop-dec=${MPVLib.getPropertyString("frame-drop-count")} " +
+                                    "drop-vo=${MPVLib.getPropertyString("decoder-frame-drop-count")} " +
+                                    "fps=${MPVLib.getPropertyString("estimated-vf-fps")} " +
+                                    "paused-cache=${MPVLib.getPropertyString("paused-for-cache")} " +
+                                    "cache-secs=${MPVLib.getPropertyString("demuxer-cache-duration")} " +
+                                    "cache-spd=${MPVLib.getPropertyString("cache-speed")}"
+                            )
+                        )
+                    }
+                }
                 "duration" -> emitEvent("duration", (value * 1000).toLong())
                 "speed" -> emitEvent("speed", value)
                 "volume" -> emitEvent("volume", value / 100.0) // normalize to 0-1
@@ -990,7 +1080,12 @@ class MpvPlayerPlugin(
         // 警告/错误/致命级别转发到 Flutter 侧 AppLogger 落盘，便于崩溃后取证。
         // mpv 级别：FATAL=10 ERROR=20 WARN=30 INFO=40 V=50 DEBUG=60 TRACE=70，数字越小越严重。
         override fun logMessage(prefix: String, level: Int, text: String) {
-            if (level > MPVLib.MpvLogLevel.WARN) return // 仅转发 warn/error/fatal，避免刷屏
+            // 默认只转 warn+ 避免刷屏；但 libass 的字体选择/字形诊断在 V(50) 级，配合
+            // msg-level=ass=v 时放行 ass 前缀到 V，定位"选了字幕轨仍不显示"。定位后连同
+            // msg-level 的 ass=v 一起撤回。
+            val allow = level <= MPVLib.MpvLogLevel.WARN ||
+                (prefix == "ass" && level <= MPVLib.MpvLogLevel.V)
+            if (!allow) return
             val trimmed = text.trimEnd()
             if (trimmed.isEmpty()) return
             emitEvent(

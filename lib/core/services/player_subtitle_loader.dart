@@ -153,7 +153,14 @@ class PlayerSubtitleLoader {
     return candidates.first['id']?.toString();
   }
 
-  /// MPV 副字幕：优先按 Emby 流序对齐，再标题，最后任一非位图轨。
+  /// MPV 副字幕匹配。
+  ///
+  /// 修复"切换副字幕永远显示第一个"：原实现先按 `extractEmbySubtitleIndex(id)==target.index`
+  /// 过滤，但**原生 mpv 的轨道 id 是纯数字("1"/"2")**（见 MpvPlayerPlugin.loadTracks 的
+  /// `id.toString()`），而 extractEmbySubtitleIndex 要求 "流序_轨道" 格式、对纯数字恒返回 null
+  /// → 过滤结果永远为空 → 标题没中时兜底 `return 第一条非位图轨`，于是无论选哪条副字幕都落到
+  /// 同一条。改为**直接复用主字幕匹配器**（标题→语言→Emby流序，主字幕能选对副字幕就能选对），
+  /// 仅在与主字幕撞轨时退选另一条。
   static String? matchMpvSecondarySubtitleTrack(
     List<Map<String, dynamic>> subtitleTracks,
     MediaStream target,
@@ -161,28 +168,18 @@ class PlayerSubtitleLoader {
   ) {
     if (subtitleTracks.isEmpty) return null;
     final codec = target.codec?.toLowerCase() ?? '';
-    if (isGraphicalSubtitleCodec(codec)) return null;
+    if (isGraphicalSubtitleCodec(codec)) return null; // 图形字幕不能做副字幕
 
-    final filtered = subtitleTracks.where((t) {
-      final isBitmap = t['type'] == 'bitmap' || t['isBitmap'] == true;
-      if (isBitmap) return false;
-      final embyIndex = extractEmbySubtitleIndex(t['id']?.toString());
-      return embyIndex != null && embyIndex == target.index;
-    }).toList();
-    if (filtered.isNotEmpty) return filtered.first['id']?.toString();
+    final matched = matchMpvSubtitleTrack(
+      subtitleTracks,
+      target.language,
+      target.displayTitle ?? target.title,
+      target.codec,
+      target.index,
+    );
+    if (matched != null && matched != primaryTrackId) return matched;
 
-    final title = target.displayTitle ?? target.title;
-    if (title != null && title.isNotEmpty) {
-      for (final t in subtitleTracks) {
-        if (t['id']?.toString() == primaryTrackId) continue;
-        final isBitmap = t['type'] == 'bitmap' || t['isBitmap'] == true;
-        if (isBitmap) continue;
-        final tTitle = t['title']?.toString() ?? '';
-        if (tTitle.isNotEmpty && titlesMatch(title, tTitle)) {
-          return t['id']?.toString();
-        }
-      }
-    }
+    // 与主字幕撞轨或没匹配到：退选一条非主、非位图的文本轨。
     for (final t in subtitleTracks) {
       if (t['id']?.toString() == primaryTrackId) continue;
       final isBitmap = t['type'] == 'bitmap' || t['isBitmap'] == true;
