@@ -1,11 +1,13 @@
-import 'package:flutter/material.dart';
 import 'package:extended_image/extended_image.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../utils/media_helpers.dart';
 
 class MediaImage extends StatelessWidget {
   final String? imageUrl;
+  final List<String>? imageUrls;
   final double? width;
   final double? height;
   final BoxFit fit;
@@ -15,10 +17,11 @@ class MediaImage extends StatelessWidget {
   final String? heroTag;
   final int? cacheWidth;
   final int? cacheHeight;
-  
+
   const MediaImage({
     super.key,
     required this.imageUrl,
+    this.imageUrls,
     this.width,
     this.height,
     this.fit = BoxFit.cover,
@@ -29,60 +32,44 @@ class MediaImage extends StatelessWidget {
     this.cacheWidth,
     this.cacheHeight,
   });
-  
+
   @override
   Widget build(BuildContext context) {
-    Widget image;
-    
-    if (imageUrl == null || imageUrl!.isEmpty) {
-      image = _buildPlaceholder(context);
-    } else {
-      final dpr = MediaQuery.of(context).devicePixelRatio;
-      final cw = cacheWidth ?? (width != null && width!.isFinite
-          ? (width! * dpr).ceil()
-          : null);
-      final ch = cacheHeight ?? (height != null && height!.isFinite
-          ? (height! * dpr).ceil()
-          : null);
+    final candidates = {
+      if (imageUrl != null && imageUrl!.isNotEmpty) imageUrl!,
+      ...?imageUrls?.where((url) => url.isNotEmpty),
+    }.toList();
 
-      image = ExtendedImage.network(
-        imageUrl!,
-        width: width,
-        height: height,
-        fit: fit,
-        cache: true,
-        cacheWidth: cw,
-        cacheHeight: ch,
-        loadStateChanged: (state) {
-          switch (state.extendedImageLoadState) {
-            case LoadState.loading:
-              return placeholder ?? _buildPlaceholder(context);
-            case LoadState.completed:
-              return state.completedWidget;
-            case LoadState.failed:
-              return errorWidget ?? _buildError(context);
-          }
-        },
-      );
-    }
-    
+    Widget image = candidates.isEmpty
+        ? _buildPlaceholder(context)
+        : _FallbackNetworkImage(
+            imageUrls: candidates,
+            width: width,
+            height: height,
+            fit: fit,
+            cacheWidth: cacheWidth,
+            cacheHeight: cacheHeight,
+            placeholderBuilder: () => placeholder ?? _buildPlaceholder(context),
+            errorBuilder: () => errorWidget ?? _buildError(context),
+          );
+
     if (borderRadius != null) {
       image = ClipRRect(
         borderRadius: borderRadius!,
         child: image,
       );
     }
-    
+
     if (heroTag != null) {
       image = Hero(
         tag: heroTag!,
         child: image,
       );
     }
-    
+
     return image;
   }
-  
+
   Widget _buildPlaceholder(BuildContext context) {
     return Container(
       width: width,
@@ -93,7 +80,7 @@ class MediaImage extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildError(BuildContext context) {
     return Container(
       width: width,
@@ -106,6 +93,77 @@ class MediaImage extends StatelessWidget {
   }
 }
 
+class _FallbackNetworkImage extends StatefulWidget {
+  final List<String> imageUrls;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final int? cacheWidth;
+  final int? cacheHeight;
+  final Widget Function() placeholderBuilder;
+  final Widget Function() errorBuilder;
+
+  const _FallbackNetworkImage({
+    required this.imageUrls,
+    required this.width,
+    required this.height,
+    required this.fit,
+    required this.cacheWidth,
+    required this.cacheHeight,
+    required this.placeholderBuilder,
+    required this.errorBuilder,
+  });
+
+  @override
+  State<_FallbackNetworkImage> createState() => _FallbackNetworkImageState();
+}
+
+class _FallbackNetworkImageState extends State<_FallbackNetworkImage> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final cw = widget.cacheWidth ??
+        (widget.width != null && widget.width!.isFinite
+            ? (widget.width! * dpr).ceil()
+            : null);
+    final ch = widget.cacheHeight ??
+        (widget.height != null && widget.height!.isFinite
+            ? (widget.height! * dpr).ceil()
+            : null);
+
+    return ExtendedImage.network(
+      widget.imageUrls[_currentIndex],
+      width: widget.width,
+      height: widget.height,
+      fit: widget.fit,
+      cache: true,
+      cacheWidth: cw,
+      cacheHeight: ch,
+      loadStateChanged: (state) {
+        switch (state.extendedImageLoadState) {
+          case LoadState.loading:
+            return widget.placeholderBuilder();
+          case LoadState.completed:
+            return state.completedWidget;
+          case LoadState.failed:
+            if (_currentIndex < widget.imageUrls.length - 1) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                setState(() {
+                  _currentIndex += 1;
+                });
+              });
+              return widget.placeholderBuilder();
+            }
+            return widget.errorBuilder();
+        }
+      },
+    );
+  }
+}
+
 /// 媒体封面组件 - 带有播放进度指示
 class MediaPoster extends ConsumerWidget {
   final MediaItem item;
@@ -113,7 +171,7 @@ class MediaPoster extends ConsumerWidget {
   final double height;
   final VoidCallback? onTap;
   final String? heroTag;
-  
+
   const MediaPoster({
     super.key,
     required this.item,
@@ -122,34 +180,31 @@ class MediaPoster extends ConsumerWidget {
     this.onTap,
     this.heroTag,
   });
-  
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.read(apiClientProvider);
-    final imageUrl = item.primaryImageTag != null
-        ? api.image.getPrimaryImageUrl(item.id, tag: item.primaryImageTag, maxWidth: 300)
-        : null;
-    
-    // 判断是否使用自适应填充（在GridView等场景中传入double.infinity）
+    final imageUrls = resolveMediaItemImageUrls(api, item, maxWidth: 300);
+
     final useFill = !width.isFinite || !height.isFinite;
-    
+
     Widget imageWidget = MediaImage(
-      imageUrl: imageUrl,
+      imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
+      imageUrls: imageUrls.length > 1 ? imageUrls.sublist(1) : null,
       width: width.isFinite ? width : null,
       height: height.isFinite ? height : null,
       fit: BoxFit.contain,
       borderRadius: BorderRadius.circular(8),
       heroTag: heroTag,
     );
-    
-    // 使用自适应填充时，固定图片比例为2:3（电影海报标准比例）
+
     if (useFill) {
       imageWidget = AspectRatio(
         aspectRatio: 2 / 3,
         child: imageWidget,
       );
     }
-    
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -162,17 +217,22 @@ class MediaPoster extends ConsumerWidget {
                   child: Stack(
                     children: [
                       imageWidget,
-                      if (item.userData?.playbackPositionTicks != null && item.runTimeTicks != null)
+                      if (item.userData?.playbackPositionTicks != null &&
+                          item.runTimeTicks != null)
                         Positioned(
                           bottom: 0,
                           left: 0,
                           right: 0,
                           child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
+                            borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(8),
+                            ),
                             child: LinearProgressIndicator(
                               value: item.progress,
                               backgroundColor: Colors.black.withValues(alpha: 0.3),
-                              valueColor: const AlwaysStoppedAnimation(Color(0xFF5B8DEF)),
+                              valueColor: const AlwaysStoppedAnimation(
+                                Color(0xFF5B8DEF),
+                              ),
                               minHeight: 3,
                             ),
                           ),
@@ -187,7 +247,11 @@ class MediaPoster extends ConsumerWidget {
                               color: Colors.black.withValues(alpha: 0.6),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.check, size: 14, color: Colors.white),
+                            child: const Icon(
+                              Icons.check,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                     ],
@@ -196,17 +260,22 @@ class MediaPoster extends ConsumerWidget {
               : Stack(
                   children: [
                     imageWidget,
-                    if (item.userData?.playbackPositionTicks != null && item.runTimeTicks != null)
+                    if (item.userData?.playbackPositionTicks != null &&
+                        item.runTimeTicks != null)
                       Positioned(
                         bottom: 0,
                         left: 0,
                         right: 0,
                         child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(8),
+                          ),
                           child: LinearProgressIndicator(
                             value: item.progress,
                             backgroundColor: Colors.black.withValues(alpha: 0.3),
-                            valueColor: const AlwaysStoppedAnimation(Color(0xFF5B8DEF)),
+                            valueColor: const AlwaysStoppedAnimation(
+                              Color(0xFF5B8DEF),
+                            ),
                             minHeight: 3,
                           ),
                         ),
@@ -221,7 +290,11 @@ class MediaPoster extends ConsumerWidget {
                             color: Colors.black.withValues(alpha: 0.6),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.check, size: 14, color: Colors.white),
+                          child: const Icon(
+                            Icons.check,
+                            size: 14,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                   ],
@@ -240,7 +313,7 @@ class MediaPoster extends ConsumerWidget {
             SizedBox(
               width: width.isFinite ? width : double.infinity,
               child: Text(
-                '${item.seriesName} · S${item.parentIndexNumber}E${item.indexNumber}',
+                '${item.seriesName} | S${item.parentIndexNumber}E${item.indexNumber}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -260,14 +333,14 @@ class Skeleton extends StatelessWidget {
   final double width;
   final double height;
   final BorderRadius? borderRadius;
-  
+
   const Skeleton({
     super.key,
     required this.width,
     required this.height,
     this.borderRadius,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -287,7 +360,7 @@ class HorizontalList extends StatelessWidget {
   final double spacing;
   final EdgeInsets padding;
   final double? height;
-  
+
   const HorizontalList({
     super.key,
     required this.children,
@@ -295,7 +368,7 @@ class HorizontalList extends StatelessWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 16),
     this.height,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -315,13 +388,13 @@ class HorizontalList extends StatelessWidget {
 class SectionHeader extends StatelessWidget {
   final String title;
   final VoidCallback? onMoreTap;
-  
+
   const SectionHeader({
     super.key,
     required this.title,
     this.onMoreTap,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -367,17 +440,17 @@ class SectionHeader extends StatelessWidget {
 class RatingBadge extends StatelessWidget {
   final double? rating;
   final double size;
-  
+
   const RatingBadge({
     super.key,
     this.rating,
     this.size = 14,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     if (rating == null) return const SizedBox.shrink();
-    
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -401,20 +474,21 @@ class TagBadge extends StatelessWidget {
   final String text;
   final Color? backgroundColor;
   final Color? textColor;
-  
+
   const TagBadge({
     super.key,
     required this.text,
     this.backgroundColor,
     this.textColor,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: backgroundColor ?? Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: backgroundColor ??
+            Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(

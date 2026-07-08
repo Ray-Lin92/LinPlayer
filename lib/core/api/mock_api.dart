@@ -341,6 +341,17 @@ class MockImageApi implements ImageApi {
   String getPrimaryImageUrl(String itemId, {String? tag, int? maxWidth}) {
     return getImageUrl(itemId: itemId, imageTag: tag, maxWidth: maxWidth);
   }
+
+  @override
+  String getThumbImageUrl(String itemId, {String? tag, int? maxWidth}) {
+    return getImageUrl(
+      itemId: itemId,
+      imageTag: tag,
+      imageType: 'Thumb',
+      maxWidth: maxWidth ?? 400,
+      maxHeight: ((maxWidth ?? 400) * 9 / 16).round(),
+    );
+  }
   
   @override
   String getBackdropImageUrl(String itemId, {String? tag, int? maxWidth}) {

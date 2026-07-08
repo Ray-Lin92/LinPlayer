@@ -5,6 +5,7 @@ import '../../../core/api/api_interfaces.dart';
 import '../../../core/api/emby_api.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../utils/media_helpers.dart';
 import '../../widgets/common/media_widgets.dart';
 
 /// 搜索页（含聚合搜索）
@@ -136,21 +137,32 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             itemBuilder: (context, index) {
               final item = items[index];
               final api = ref.read(apiClientProvider);
-              final imageUrl = item.primaryImageTag != null
-                  ? api.image.getPrimaryImageUrl(item.id, tag: item.primaryImageTag, maxWidth: 120)
-                  : null;
+              final imageUrls = resolveMediaItemImageUrls(
+                api,
+                item,
+                maxWidth: 120,
+                preferThumb: item.type == 'Episode',
+              );
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
-                  onTap: () => context.push('/detail/${item.id}'),
+                  onTap: () => context.push(mediaRouteForItem(item)),
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       width: 60,
                       height: 90,
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: imageUrl != null
-                          ? MediaImage(imageUrl: imageUrl, width: 60, height: 90, fit: BoxFit.cover)
+                      child: imageUrls.isNotEmpty
+                          ? MediaImage(
+                              imageUrl: imageUrls.first,
+                              imageUrls: imageUrls.length > 1
+                                  ? imageUrls.sublist(1)
+                                  : null,
+                              width: 60,
+                              height: 90,
+                              fit: BoxFit.contain,
+                            )
                           : const Icon(Icons.image),
                     ),
                   ),
@@ -237,7 +249,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ...items.map((item) => Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
-                    onTap: () => context.push('/detail/${item.id}'),
+                    onTap: () => context.push(mediaRouteForItem(item)),
                     title: Text(item.name),
                     subtitle: Text(item.type == 'Movie' ? '电影' : '剧集'),
                     trailing: item.communityRating != null

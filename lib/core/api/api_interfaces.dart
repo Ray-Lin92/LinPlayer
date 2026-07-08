@@ -177,6 +177,7 @@ class MediaItem {
   final String type; // 'Movie', 'Series', 'Episode', 'Season'
   final String? overview;
   final String? primaryImageTag;
+  final String? thumbImageTag;
   final String? backdropImageTag;
   final double? communityRating;
   final String? officialRating;
@@ -191,6 +192,12 @@ class MediaItem {
   final int? parentIndexNumber;
   final String? seriesId;
   final String? seasonId;
+  final String? parentThumbItemId;
+  final String? parentThumbImageTag;
+  final String? parentPrimaryImageItemId;
+  final String? parentPrimaryImageTag;
+  final String? seriesThumbImageTag;
+  final String? seriesPrimaryImageTag;
   final String? mediaType; // 'Video', 'Audio'
   final String? parentId; // 父级ID（可能是媒体库或文件夹）
 
@@ -200,6 +207,7 @@ class MediaItem {
     required this.type,
     this.overview,
     this.primaryImageTag,
+    this.thumbImageTag,
     this.backdropImageTag,
     this.communityRating,
     this.officialRating,
@@ -214,6 +222,12 @@ class MediaItem {
     this.parentIndexNumber,
     this.seriesId,
     this.seasonId,
+    this.parentThumbItemId,
+    this.parentThumbImageTag,
+    this.parentPrimaryImageItemId,
+    this.parentPrimaryImageTag,
+    this.seriesThumbImageTag,
+    this.seriesPrimaryImageTag,
     this.mediaType,
     this.parentId,
   });
@@ -254,14 +268,20 @@ class Season {
   final String name;
   final int? indexNumber;
   final String? primaryImageTag;
+  final String? thumbImageTag;
   final String seriesId;
+  final String? seriesPrimaryImageTag;
+  final String? seriesThumbImageTag;
   
   Season({
     required this.id,
     required this.name,
     this.indexNumber,
     this.primaryImageTag,
+    this.thumbImageTag,
     required this.seriesId,
+    this.seriesPrimaryImageTag,
+    this.seriesThumbImageTag,
   });
 }
 
@@ -270,8 +290,15 @@ class Episode {
   final String name;
   final int? indexNumber;
   final String? primaryImageTag;
+  final String? thumbImageTag;
   final String seriesId;
   final String seasonId;
+  final String? parentThumbItemId;
+  final String? parentThumbImageTag;
+  final String? parentPrimaryImageItemId;
+  final String? parentPrimaryImageTag;
+  final String? seriesThumbImageTag;
+  final String? seriesPrimaryImageTag;
   final int? runTimeTicks;
   final UserData? userData;
   final String? overview;
@@ -281,8 +308,15 @@ class Episode {
     required this.name,
     this.indexNumber,
     this.primaryImageTag,
+    this.thumbImageTag,
     required this.seriesId,
     required this.seasonId,
+    this.parentThumbItemId,
+    this.parentThumbImageTag,
+    this.parentPrimaryImageItemId,
+    this.parentPrimaryImageTag,
+    this.seriesThumbImageTag,
+    this.seriesPrimaryImageTag,
     this.runTimeTicks,
     this.userData,
     this.overview,
@@ -605,6 +639,9 @@ abstract class ImageApi {
   
   /// 获取主封面
   String getPrimaryImageUrl(String itemId, {String? tag, int? maxWidth});
+
+  /// 获取缩略图/横图
+  String getThumbImageUrl(String itemId, {String? tag, int? maxWidth});
   
   /// 获取背景图
   String getBackdropImageUrl(String itemId, {String? tag, int? maxWidth});
