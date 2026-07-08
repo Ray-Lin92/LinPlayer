@@ -12,8 +12,11 @@ import '../models/plugin_extension_point.dart';
 import '../models/plugin_info.dart';
 import '../models/plugin_manifest.dart';
 import '../models/plugin_permission.dart';
+import '../runtime/addon_plugin_runtime.dart';
+import '../runtime/data_plugin_runtime.dart';
 import '../runtime/plugin_context_bridge.dart';
 import '../runtime/plugin_runtime.dart';
+import '../runtime/plugin_runtime_base.dart';
 import '../runtime/plugin_storage.dart';
 import '../store/plugin_store.dart';
 import 'plugin_extension_registry.dart';
@@ -49,7 +52,7 @@ class PluginManager extends ChangeNotifier {
   late final PluginInstaller _installer;
 
   final Map<String, PluginInfo> _plugins = {};
-  final Map<String, PluginRuntime> _runtimes = {};
+  final Map<String, PluginRuntimeBase> _runtimes = {};
   Set<String> _enabledIds = {};
   // pluginId -> 用户启用时同意的权限 id 集合。
   Map<String, Set<String>> _approvedPerms = {};
@@ -62,7 +65,7 @@ class PluginManager extends ChangeNotifier {
   String get pluginsRootDir => _pluginsRootDir;
 
   PluginInfo? pluginById(String id) => _plugins[id];
-  PluginRuntime? runtimeOf(String id) => _runtimes[id];
+  PluginRuntimeBase? runtimeOf(String id) => _runtimes[id];
 
   /// 初始化目录、读取启用集合、扫描并激活已启用插件。
   static Future<PluginManager> ensureInitialized(
@@ -337,7 +340,7 @@ class PluginManager extends ChangeNotifier {
 
   /// 触发任意 handler 值（兼容 {__handler__:id} 与字符串函数名）。
   Future<dynamic> _invokeHandlerValue(
-      PluginRuntime runtime, dynamic handler, List<dynamic> args) async {
+      PluginRuntimeBase runtime, dynamic handler, List<dynamic> args) async {
     if (handler is Map && handler['__handler__'] != null) {
       return runtime.invokeHandler('${handler['__handler__']}', args);
     }
@@ -364,7 +367,6 @@ class PluginManager extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final source = await File(info.entryPath).readAsString();
       final permissions = PluginGrantedPermissions(info.manifest.permissions);
       final storage = PluginStorage(
         pluginId: info.id,
@@ -377,13 +379,37 @@ class PluginManager extends ChangeNotifier {
         registry: registry,
         httpAllowedHosts: _allowedHostsOf(info.manifest),
       );
-      final runtime = PluginRuntime(
-        manifest: info.manifest,
-        mainJsSource: source,
-        bridge: bridge,
-        permissions: permissions,
-        onFault: (reason) => _handleFault(info.id, reason),
-      );
+
+      // 按 runtime 形态分流：js=QuickJS 执行 main.js；data=内置解释器；addon=远程服务。
+      final PluginRuntimeBase runtime;
+      switch (info.manifest.runtime) {
+        case 'data':
+          runtime = DataPluginRuntime(
+            manifest: info.manifest,
+            bridge: bridge,
+            storage: storage,
+            permissions: permissions,
+            registry: registry,
+          );
+          break;
+        case 'addon':
+          runtime = AddonPluginRuntime(
+            manifest: info.manifest,
+            bridge: bridge,
+            permissions: permissions,
+            registry: registry,
+          );
+          break;
+        default: // 'js'
+          final source = await File(info.entryPath).readAsString();
+          runtime = PluginRuntime(
+            manifest: info.manifest,
+            mainJsSource: source,
+            bridge: bridge,
+            permissions: permissions,
+            onFault: (reason) => _handleFault(info.id, reason),
+          );
+      }
       _runtimes[info.id] = runtime;
 
       // 注册 manifest 静态声明的扩展点。

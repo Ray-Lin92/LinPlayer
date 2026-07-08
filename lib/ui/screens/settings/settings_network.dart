@@ -91,6 +91,20 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         children: [
+          const _NetworkSectionLabel('线路加速'),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.bolt),
+              title: const Text('CF 优选加速'),
+              subtitle: const Text(
+                  '为走 Cloudflare 的服务器实测最快边缘 IP 并本地反代提速（原生，三端可用）'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CfProxyPanelPage()),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           const _NetworkSectionLabel('代理协议'),
           Card(
             child: Column(

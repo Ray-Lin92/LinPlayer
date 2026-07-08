@@ -34,6 +34,10 @@ class PluginManifest {
   /// 入口 JS 文件名（相对插件目录），默认 `main.js`。
   final String main;
 
+  /// 运行时形态：`js`（默认，QuickJS 执行 main.js）/ `data`（声明式）/ `addon`（远程服务）。
+  /// data/addon 无 main.js，供 iOS App Store 合规使用。
+  final String runtime;
+
   /// 申请的权限 id 列表。
   final List<String> permissions;
 
@@ -59,6 +63,7 @@ class PluginManifest {
     required this.author,
     required this.description,
     required this.main,
+    this.runtime = 'js',
     required this.permissions,
     required this.extensions,
     this.icon,
@@ -98,6 +103,10 @@ class PluginManifest {
     final author = (json['author'] as String?)?.trim() ?? '未知作者';
     final description = (json['description'] as String?)?.trim() ?? '';
     final main = (json['main'] as String?)?.trim();
+    final runtime = (json['runtime'] as String?)?.trim();
+    if (runtime != null && !const {'js', 'data', 'addon'}.contains(runtime)) {
+      throw PluginManifestError('未知 runtime: $runtime（应为 js/data/addon）');
+    }
 
     // 权限：必须是字符串数组，且只能是已知权限。
     final permsRaw = json['permissions'];
@@ -148,6 +157,7 @@ class PluginManifest {
       author: author,
       description: description,
       main: (main == null || main.isEmpty) ? 'main.js' : main,
+      runtime: (runtime == null || runtime.isEmpty) ? 'js' : runtime,
       permissions: permissions,
       extensions: extensions,
       icon: (json['icon'] as String?)?.trim(),

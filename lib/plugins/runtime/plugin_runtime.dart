@@ -9,6 +9,7 @@ import '../models/plugin_permission.dart';
 import 'plugin_bootstrap_js.dart';
 import 'plugin_context_bridge.dart';
 import 'plugin_player_bridge.dart';
+import 'plugin_runtime_base.dart';
 
 /// 单个插件的运行时：持有独立的 JS 引擎 + ctx 桥，负责加载、事件转发、回调触发。
 ///
@@ -18,7 +19,7 @@ import 'plugin_player_bridge.dart';
 ///  - 任何 JS 异常都被捕获，不会冒泡到主程序；
 ///  - 同时启用的插件数由 `PluginManager.maxEnabledPlugins` 全局封顶，间接约束
 ///    总内存（每插件独立 isolate，堆上限约 64MB）。
-class PluginRuntime {
+class PluginRuntime implements PluginRuntimeBase {
   static final AppLogger _log = AppLogger();
 
   /// 单次进入 JS 的墙钟超时（失控/卡死保护）。
@@ -53,10 +54,13 @@ class PluginRuntime {
     _engine = engine ?? QjsPluginEngine(manifest.id);
   }
 
+  @override
   String get pluginId => manifest.id;
+  @override
   bool get isFaulted => _faulted;
 
   /// 启动引擎、执行 main.js、注入元信息、触发 onEnable，并订阅播放器事件。
+  @override
   Future<void> load() async {
     await _engine.start(
       bootstrapJs: kPluginBootstrapJs,
@@ -91,6 +95,7 @@ class PluginRuntime {
 
   /// 触发一个插件回调（actions/contextMenus/settingsPages 等的 handler）。
   /// 返回 handler 的结果（已解析的 JSON），失败返回 null。
+  @override
   Future<dynamic> invokeHandler(String handlerId, List<dynamic> args) async {
     if (_disposed || _faulted) return null;
     final payload = jsonEncode([handlerId, args]);
@@ -100,6 +105,7 @@ class PluginRuntime {
   }
 
   /// 触发一个全局命名函数（manifest 静态扩展点声明的字符串 handler）。
+  @override
   Future<dynamic> invokeNamed(String fnName, List<dynamic> args) async {
     if (_disposed || _faulted) return null;
     final payload = jsonEncode([fnName, args]);
@@ -146,6 +152,7 @@ class PluginRuntime {
     onFault?.call(reason);
   }
 
+  @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

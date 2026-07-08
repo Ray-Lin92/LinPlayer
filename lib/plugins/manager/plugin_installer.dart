@@ -79,8 +79,9 @@ class PluginInstaller {
       await outFile.writeAsBytes(entry.content as List<int>);
     }
 
+    // data/addon 形态无 main.js（iOS 合规），仅 js 需要入口文件。
     final entryPath = p.join(targetDir.path, manifest.main);
-    if (!await File(entryPath).exists()) {
+    if (manifest.runtime == 'js' && !await File(entryPath).exists()) {
       await targetDir.delete(recursive: true);
       throw PluginInstallError('包内缺少入口文件: ${manifest.main}');
     }
@@ -103,7 +104,7 @@ class PluginInstaller {
     final manifest =
         PluginManifest.fromJson(_decodeJson(await manifestFile.readAsBytes()));
     final entryPath = p.join(dir, manifest.main);
-    if (!await File(entryPath).exists()) {
+    if (manifest.runtime == 'js' && !await File(entryPath).exists()) {
       throw PluginInstallError('目录缺少入口文件 ${manifest.main}: $dir');
     }
     return PluginInfo(
