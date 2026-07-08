@@ -1,10 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/providers/sync_providers.dart';
+import '../../../core/services/sync/sync_models.dart';
+import '../../../core/services/sync/trakt_sync_service.dart';
 import '../../../core/services/webdav_service.dart';
 import '../../../core/services/app_logger.dart';
 import '../../../core/services/cache_service.dart';
@@ -12,6 +17,11 @@ import '../../../core/utils/danmaku_filter.dart';
 import '../../../core/utils/platform_utils.dart';
 import '../../../core/api/danmaku/danmaku_source.dart';
 import '../../../core/api/danmaku/danmaku_service.dart';
+import '../../../core/services/translation/translation_engine.dart';
+import '../../../core/services/translation/subtitle_document.dart';
+import '../../../core/services/translation/whisper/desktop_binary_manager.dart';
+import '../../../core/services/translation/whisper/whisper_model.dart';
+import '../../../core/services/translation/whisper/whisper_model_manager.dart';
 import '../../../plugins/ui/plugin_management_screen.dart';
 
 part 'settings_backup_restore.dart';
@@ -19,6 +29,8 @@ part 'settings_danmaku.dart';
 part 'settings_general.dart';
 part 'settings_home.dart';
 part 'settings_player.dart';
+part 'settings_sync.dart';
+part 'settings_translation.dart';
 
 Map<String, dynamic> _buildBackupPayload(WidgetRef ref) {
   return {
