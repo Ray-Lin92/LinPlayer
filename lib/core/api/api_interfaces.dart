@@ -186,8 +186,8 @@ abstract class LibraryApi {
     String? years,
   });
 
-  /// 获取筛选条件
-  /// GET /Items/Filters
+  /// 获取筛选条件（类型/年份/标签/工作室/分级）
+  /// GET /Genres /Years /Tags /Studios /OfficialRatings（分面专用端点，并行取）
   Future<Filters> getFilters(String libraryId);
 
   /// 获取全部合集（BoxSet）。合集不挂在媒体库下，单独一次查询即可。
