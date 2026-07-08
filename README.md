@@ -138,12 +138,12 @@ $env:LINPLAYER_SKIP_LIBMPV_UPGRADE = "1"; flutter build windows
 
 ## Star History
 
-<a href="https://star-history.com/#zzzwannasleep/LinPlayer&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=zzzwannasleep/linplayer&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=zzzwannasleep/linplayer&type=Date" />
-    <img src="https://api.star-history.com/svg?repos=zzzwannasleep/linplayer&type=Date" alt="Star History Chart" width="600" />
-  </picture>
+<a href="https://www.star-history.com/?type=date&repos=zzzwannasleep%2FLinPlayer">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=zzzwannasleep/linplayer&type=date&theme=dark&legend=top-left&sealed_token=YzGbSgSFzLcAXL2bfZUBGY625cNArNjNErV_fzvJkGSGpr_Xo8X3sXD8xRJf0Nehyt_OzmkyLq61xHqLXMn2i9APoG2uXgW_Z7nNRZArCQ-HjjGtU6fMFg" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=zzzwannasleep/linplayer&type=date&legend=top-left&sealed_token=YzGbSgSFzLcAXL2bfZUBGY625cNArNjNErV_fzvJkGSGpr_Xo8X3sXD8xRJf0Nehyt_OzmkyLq61xHqLXMn2i9APoG2uXgW_Z7nNRZArCQ-HjjGtU6fMFg" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=zzzwannasleep/linplayer&type=date&legend=top-left&sealed_token=YzGbSgSFzLcAXL2bfZUBGY625cNArNjNErV_fzvJkGSGpr_Xo8X3sXD8xRJf0Nehyt_OzmkyLq61xHqLXMn2i9APoG2uXgW_Z7nNRZArCQ-HjjGtU6fMFg" />
+ </picture>
 </a>
 
 ## 项目活跃度
