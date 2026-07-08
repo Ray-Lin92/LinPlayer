@@ -370,19 +370,28 @@ class EmbyHomeApi implements HomeApi {
 
   @override
   Future<MediaCounts> getMediaCounts() async {
-    final uid = _currentUserAliasForScopedRequest(_client);
+    final uid = _requireUserId(_client);
     debugPrint(
         '[EmbyAPI] getMediaCounts: baseUrl=${_client.currentLine}, userId=$uid');
-    final resp = await _client.get('/Items/Counts', queryParameters: {
-      'UserId': uid,
-    });
-    final data = resp.data as Map<String, dynamic>;
-    debugPrint('[EmbyAPI] getMediaCounts success: $data');
-    return MediaCounts(
-      movieCount: (data['MovieCount'] as num?)?.toInt() ?? 0,
-      episodeCount: (data['EpisodeCount'] as num?)?.toInt() ?? 0,
-      itemCount: (data['ItemCount'] as num?)?.toInt(),
-    );
+
+    try {
+      final resp = await _client.get('/Items/Counts', queryParameters: {
+        'UserId': uid,
+      });
+      final data = resp.data as Map<String, dynamic>;
+      debugPrint('[EmbyAPI] getMediaCounts success: $data');
+      return MediaCounts(
+        movieCount: (data['MovieCount'] as num?)?.toInt() ?? 0,
+        episodeCount: (data['EpisodeCount'] as num?)?.toInt() ?? 0,
+        itemCount: (data['ItemCount'] as num?)?.toInt(),
+      );
+    } on DioException catch (e) {
+      debugPrint('[EmbyAPI] getMediaCounts failed: ${e.type} | ${e.message}');
+      debugPrint('[EmbyAPI] request URL: ${e.requestOptions.uri}');
+      debugPrint(
+          '[EmbyAPI] response: ${e.response?.statusCode} | ${e.response?.data}');
+      rethrow;
+    }
   }
 
   @override

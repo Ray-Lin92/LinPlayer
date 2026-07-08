@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api_interfaces.dart';
 import '../providers/app_providers.dart';
@@ -59,13 +60,22 @@ final randomRecommendationsProvider = FutureProvider<List<MediaItem>>((ref) asyn
 final embyMediaCountsProvider = FutureProvider<EmbyMediaCounts>((ref) async {
   ref.keepAlive();
   final api = ref.watch(apiClientProvider);
-  final counts = await api.home.getMediaCounts();
 
-  return EmbyMediaCounts(
-    movieCount: counts.movieCount,
-    episodeCount: counts.episodeCount,
-    itemCount: counts.itemCount,
-  );
+  try {
+    final counts = await api.home.getMediaCounts();
+    return EmbyMediaCounts(
+      movieCount: counts.movieCount,
+      episodeCount: counts.episodeCount,
+      itemCount: counts.itemCount,
+    );
+  } catch (error, stackTrace) {
+    debugPrint('[MediaCountsProvider] Failed to load media counts: $error');
+    debugPrintStack(
+      label: '[MediaCountsProvider] Stack trace',
+      stackTrace: stackTrace,
+    );
+    Error.throwWithStackTrace(error, stackTrace);
+  }
 });
 
 /// ==========================================
