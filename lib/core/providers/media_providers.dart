@@ -109,6 +109,32 @@ final filtersProvider = FutureProvider.family<Filters, String>((ref, libraryId) 
 });
 
 /// ==========================================
+/// 收藏 Providers
+/// ==========================================
+
+final favoritesRefreshTickProvider = StateProvider<int>((ref) => 0);
+
+final favoriteItemsProvider = FutureProvider<List<MediaItem>>((ref) async {
+  ref.keepAlive();
+  ref.watch(favoritesRefreshTickProvider);
+  final hiddenLibraries = ref.watch(hiddenLibrariesProvider);
+  final api = ref.watch(apiClientProvider);
+  final items = await api.favorite.getFavorites();
+
+  return items.where((item) {
+    if (item.parentId != null && hiddenLibraries.contains(item.parentId)) {
+      return false;
+    }
+    return item.userData?.isFavorite ?? true;
+  }).toList();
+});
+
+void refreshFavorites(WidgetRef ref) {
+  ref.read(favoritesRefreshTickProvider.notifier).state++;
+  ref.invalidate(favoriteItemsProvider);
+}
+
+/// ==========================================
 /// 搜索Providers
 /// ==========================================
 

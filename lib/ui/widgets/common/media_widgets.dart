@@ -123,9 +123,16 @@ class _FallbackNetworkImageState extends State<_FallbackNetworkImage> {
   int _currentIndex = 0;
 
   @override
+  void didUpdateWidget(covariant _FallbackNetworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameUrls(oldWidget.imageUrls, widget.imageUrls) ||
+        _currentIndex >= widget.imageUrls.length) {
+      _currentIndex = 0;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // 使用 PersistentNetworkImageProvider 替代默认的 ExtendedNetworkImageProvider
-    // 将缓存目录从临时目录改为应用文档目录，确保图片缓存持久化
     return ExtendedImage(
       image: PersistentNetworkImageProvider(
         widget.imageUrls[_currentIndex],
@@ -135,16 +142,14 @@ class _FallbackNetworkImageState extends State<_FallbackNetworkImage> {
       width: widget.width,
       height: widget.height,
       fit: widget.fit,
+      gaplessPlayback: true,
       enableMemoryCache: true,
-      clearMemoryCacheIfFailed: true,
-      // 保持旧图直到新图加载完成，避免切换时闪烁黑屏
+      clearMemoryCacheIfFailed: false,
       enableLoadState: true,
       loadStateChanged: (state) {
         switch (state.extendedImageLoadState) {
           case LoadState.loading:
-            // 如果有缓存，先尝试展示内存缓存中的图片（extended_image自动处理）
-            // 首次加载才显示placeholder
-            if (state.wasSynchronouslyLoaded) {
+            if (state.extendedImageInfo != null || state.wasSynchronouslyLoaded) {
               return state.completedWidget;
             }
             return widget.placeholderBuilder();
@@ -158,16 +163,26 @@ class _FallbackNetworkImageState extends State<_FallbackNetworkImage> {
                   _currentIndex += 1;
                 });
               });
-              return widget.placeholderBuilder();
+              return state.extendedImageInfo != null
+                  ? state.completedWidget
+                  : widget.placeholderBuilder();
             }
             return widget.errorBuilder();
         }
       },
     );
   }
+
+  bool _sameUrls(List<String> previous, List<String> next) {
+    if (identical(previous, next)) return true;
+    if (previous.length != next.length) return false;
+    for (var i = 0; i < previous.length; i++) {
+      if (previous[i] != next[i]) return false;
+    }
+    return true;
+  }
 }
 
-/// 媒体封面组件 - 带有播放进度指示
 class MediaPoster extends ConsumerWidget {
   final MediaItem item;
   final double width;
@@ -187,17 +202,16 @@ class MediaPoster extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.read(apiClientProvider);
-    final imageUrls = resolveMediaItemImageUrls(api, item, maxWidth: 300);
-
+    final imageUrls = resolveMediaItemImageUrls(api, item, maxWidth: 320);
     final useFill = !width.isFinite || !height.isFinite;
-    final borderRadius = BorderRadius.circular(12);
+    final borderRadius = BorderRadius.circular(18);
 
     Widget imageWidget = MediaImage(
       imageUrl: imageUrls.isNotEmpty ? imageUrls.first : null,
       imageUrls: imageUrls.length > 1 ? imageUrls.sublist(1) : null,
       width: width.isFinite ? width : null,
       height: height.isFinite ? height : null,
-      fit: BoxFit.contain,
+      fit: BoxFit.cover,
       borderRadius: borderRadius,
       heroTag: heroTag,
     );
@@ -209,7 +223,6 @@ class MediaPoster extends ConsumerWidget {
       );
     }
 
-    // 构建年份和评分信息
     final List<Widget> infoWidgets = [];
     if (item.productionYear != null) {
       infoWidgets.add(
@@ -228,7 +241,7 @@ class MediaPoster extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
-              '·',
+              '路',
               style: TextStyle(
                 fontSize: 11,
                 color: Theme.of(context).textTheme.bodySmall?.color,
@@ -256,9 +269,8 @@ class MediaPoster extends ConsumerWidget {
       );
     }
 
-    // 是否为剧集（显示集数角标）
     final isSeries = item.type == 'Series' || item.type == 'Season';
-    final episodeCount = item.childCount;
+    final episodeCount = item.recursiveItemCount ?? item.childCount;
 
     return InkWell(
       onTap: onTap,
@@ -309,26 +321,11 @@ class MediaPoster extends ConsumerWidget {
                             ),
                           ),
                         ),
-                      // 剧集集数角标
                       if (isSeries && episodeCount != null && episodeCount > 0)
                         Positioned(
                           top: 8,
                           right: item.isWatched ? 32 : 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.7),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '$episodeCount',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
+                          child: _CountBadge(count: episodeCount),
                         ),
                     ],
                   ),
@@ -373,31 +370,15 @@ class MediaPoster extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    // 剧集集数角标
                     if (isSeries && episodeCount != null && episodeCount > 0)
                       Positioned(
                         top: 8,
                         right: item.isWatched ? 32 : 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '$episodeCount',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+                        child: _CountBadge(count: episodeCount),
                       ),
                   ],
                 ),
           const SizedBox(height: 6),
-          // 标题居中
           SizedBox(
             width: width.isFinite ? width : double.infinity,
             child: Text(
@@ -408,7 +389,6 @@ class MediaPoster extends ConsumerWidget {
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             ),
           ),
-          // 年份和评分（居中）
           if (infoWidgets.isNotEmpty) ...[
             const SizedBox(height: 2),
             SizedBox(
@@ -440,7 +420,31 @@ class MediaPoster extends ConsumerWidget {
   }
 }
 
-/// 骨架屏组件
+class _CountBadge extends StatelessWidget {
+  const _CountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$count',
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
 class Skeleton extends StatelessWidget {
   final double width;
   final double height;
@@ -460,13 +464,12 @@ class Skeleton extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: borderRadius ?? BorderRadius.circular(8),
+        borderRadius: borderRadius ?? BorderRadius.circular(12),
       ),
     );
   }
 }
 
-/// 横向滑条组件
 class HorizontalList extends StatelessWidget {
   final List<Widget> children;
   final double spacing;
@@ -489,8 +492,6 @@ class HorizontalList extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: padding,
         itemCount: children.length,
-        addAutomaticKeepAlives: false,
-        addRepaintBoundaries: false,
         separatorBuilder: (_, __) => SizedBox(width: spacing),
         itemBuilder: (_, index) => RepaintBoundary(
           child: children[index],
@@ -500,7 +501,6 @@ class HorizontalList extends StatelessWidget {
   }
 }
 
-/// 带标题的横向滑条区块
 class SectionHeader extends StatelessWidget {
   final String title;
   final VoidCallback? onMoreTap;
@@ -552,7 +552,6 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
-/// 评分组件
 class RatingBadge extends StatelessWidget {
   final double? rating;
   final double size;
@@ -585,7 +584,6 @@ class RatingBadge extends StatelessWidget {
   }
 }
 
-/// 标签组件
 class TagBadge extends StatelessWidget {
   final String text;
   final Color? backgroundColor;
@@ -605,7 +603,7 @@ class TagBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor ??
             Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         text,

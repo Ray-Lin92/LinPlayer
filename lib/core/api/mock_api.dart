@@ -319,6 +319,57 @@ class MockPlaybackApi implements PlaybackApi {
 
 class MockFavoriteApi implements FavoriteApi {
   @override
+  Future<List<MediaItem>> getFavorites() async {
+    await Future.delayed(const Duration(milliseconds: 250));
+    return _generateMockItems(18, type: 'Movie')
+        .asMap()
+        .entries
+        .map((entry) {
+          final index = entry.key;
+          final item = entry.value;
+          return MediaItem(
+            id: item.id,
+            name: item.name,
+            type: index.isEven ? 'Movie' : 'Series',
+            overview: item.overview,
+            primaryImageTag: item.primaryImageTag,
+            thumbImageTag: item.thumbImageTag,
+            backdropImageTag: index.isEven ? 'favorite_backdrop_$index' : item.backdropImageTag,
+            communityRating: item.communityRating,
+            officialRating: item.officialRating,
+            premiereDate: item.premiereDate,
+            runTimeTicks: item.runTimeTicks,
+            productionYear: item.productionYear,
+            genres: item.genres,
+            tags: item.tags,
+            userData: UserData(
+              playbackPositionTicks: item.userData?.playbackPositionTicks,
+              played: item.userData?.played,
+              isFavorite: true,
+              playCount: item.userData?.playCount,
+            ),
+            seriesName: item.seriesName,
+            indexNumber: item.indexNumber,
+            parentIndexNumber: item.parentIndexNumber,
+            seriesId: item.seriesId,
+            seasonId: item.seasonId,
+            parentThumbItemId: item.parentThumbItemId,
+            parentThumbImageTag: item.parentThumbImageTag,
+            parentPrimaryImageItemId: item.parentPrimaryImageItemId,
+            parentPrimaryImageTag: item.parentPrimaryImageTag,
+            seriesThumbImageTag: item.seriesThumbImageTag,
+            seriesPrimaryImageTag: item.seriesPrimaryImageTag,
+            mediaType: item.mediaType,
+            parentId: item.parentId,
+            childCount: index.isEven ? null : 12 + index,
+            recursiveItemCount: index.isEven ? null : 12 + index,
+            canDownload: true,
+          );
+        })
+        .toList();
+  }
+
+  @override
   Future<void> addFavorite(String itemId) async {}
   
   @override

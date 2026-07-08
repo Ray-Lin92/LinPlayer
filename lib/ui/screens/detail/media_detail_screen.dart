@@ -727,6 +727,10 @@ class _MoviePlayButtons extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mediaSourceId = ref.watch(selectedMediaSourceProvider);
+    final canDownload = ref.watch(mediaItemProvider(itemId)).maybeWhen(
+          data: (item) => item.canDownload ?? false,
+          orElse: () => false,
+        );
     return Row(
       children: [
         Expanded(
@@ -748,7 +752,7 @@ class _MoviePlayButtons extends ConsumerWidget {
         Expanded(
           flex: 1,
           child: OutlinedButton(
-            onPressed: () => _showMoreMenu(context, ref),
+            onPressed: () => _showMoreMenu(context, ref, canDownload: canDownload),
             child: const Icon(Icons.more_vert),
           ),
         ),
@@ -756,7 +760,7 @@ class _MoviePlayButtons extends ConsumerWidget {
     );
   }
   
-  void _showMoreMenu(BuildContext context, WidgetRef ref) {
+  void _showMoreMenu(BuildContext context, WidgetRef ref, {required bool canDownload}) {
     final api = ref.read(apiClientProvider);
     showModalBottomSheet(
       context: context,
@@ -778,15 +782,18 @@ class _MoviePlayButtons extends ConsumerWidget {
               title: const Text('搜索其他播放源'),
               onTap: () {
                 Navigator.pop(context);
-                context.go('/search');
+                context.push('/search');
               },
             ),
             ListTile(
               leading: const Icon(Icons.download),
               title: const Text('下载'),
+              enabled: canDownload,
               onTap: () {
                 Navigator.pop(context);
-                _addToDownload(context, ref);
+                if (canDownload) {
+                  _addToDownload(context, ref);
+                }
               },
             ),
             ListTile(
@@ -831,6 +838,7 @@ class _MoviePlayButtons extends ConsumerWidget {
                   } else {
                     await api.favorite.addFavorite(itemId);
                   }
+                  refreshFavorites(ref);
                   ref.invalidate(mediaItemProvider(itemId));
                 } catch (_) {}
               },
@@ -843,8 +851,16 @@ class _MoviePlayButtons extends ConsumerWidget {
 
   void _addToDownload(BuildContext context, WidgetRef ref) async {
     final api = ref.read(apiClientProvider);
-    final videoUrl = api.playback.getVideoStreamUrl(itemId);
     final item = await api.media.getItemDetails(itemId);
+    if (!(item.canDownload ?? false)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('当前服务器未开放下载权限')),
+        );
+      }
+      return;
+    }
+    final videoUrl = api.playback.getVideoStreamUrl(itemId);
     
     final taskId = await ref.read(downloadServiceProvider).addDownload(
       itemId: itemId,

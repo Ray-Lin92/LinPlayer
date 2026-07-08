@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/painting.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CacheService {
@@ -9,8 +9,8 @@ class CacheService {
   static const _videoCacheMaxSizeMBKey = 'linplayer_video_cache_max_size_mb';
 
   static Future<String> get _imageCacheDirPath async {
-    final tempDir = await getTemporaryDirectory();
-    return path.join(tempDir.path, 'libCachedImageData');
+    final appDir = await getApplicationDocumentsDirectory();
+    return path.join(appDir.path, 'persistent_image_cache');
   }
 
   static Future<String> get _videoCacheDirPath async {
@@ -148,8 +148,8 @@ class CacheService {
   }
 
   static Future<void> configureMemoryCache() async {
-    PaintingBinding.instance.imageCache.maximumSize = 100;
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 80 * 1024 * 1024;
+    PaintingBinding.instance.imageCache.maximumSize = 300;
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 200 * 1024 * 1024;
   }
 
   static String formatBytes(int bytes) {
