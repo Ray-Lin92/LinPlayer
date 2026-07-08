@@ -36,6 +36,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
   bool _subtitleBackground = false;
   String? _secondarySid;
   bool _hasBitmapSubtitle = false;
+  bool _currentSubIsAss = false;
 
   List<Map<String, dynamic>> _tracks = [];
   List<SubtitleTrack> _subtitleTracks = [];
@@ -211,13 +212,16 @@ class MpvPlayerAdapter implements PlayerAdapter {
         final codec = track.codec?.toLowerCase() ?? '';
         final isBitmap = codec.contains('pgs') || codec.contains('hdmv') ||
             codec.contains('dvd') || codec.contains('vobsub') ||
-            codec.contains('dvbsub') || codec.contains('ass') == false && codec.contains('sub');
+            codec.contains('dvbsub') ||
+            (codec.contains('sub') && !codec.contains('ass') && !codec.contains('srt') && !codec.contains('subrip'));
+        final isAss = codec.contains('ass') || codec.contains('ssa');
         if (isBitmap) _hasBitmapSubtitle = true;
         trackList.add({
           'id': track.id, 'type': 'text',
           'title': track.title ?? '', 'language': track.language ?? '',
           'codec': track.codec ?? '',
           'isBitmap': isBitmap,
+          'isAss': isAss,
         });
       }
       _tracks = trackList;
@@ -245,7 +249,8 @@ class MpvPlayerAdapter implements PlayerAdapter {
         final codec = target.codec?.toLowerCase() ?? '';
         _hasBitmapSubtitle = codec.contains('pgs') || codec.contains('hdmv') ||
             codec.contains('dvd') || codec.contains('vobsub') || codec.contains('dvbsub');
-        _logger.i('MpvAdapter', '字幕轨道已选择: id=${target.id}, title=${target.title}, lang=${target.language}, codec=${target.codec}, bitmap=$_hasBitmapSubtitle');
+        _currentSubIsAss = codec.contains('ass') || codec.contains('ssa');
+        _logger.i('MpvAdapter', '字幕轨道已选择: id=${target.id}, title=${target.title}, lang=${target.language}, codec=${target.codec}, bitmap=$_hasBitmapSubtitle, ass=$_currentSubIsAss');
         await _player!.setSubtitleTrack(target);
       } else {
         _logger.w('MpvAdapter', '未找到字幕轨道: id=$trackId, 可用: ${_subtitleTracks.map((t) => '${t.id}/${t.language}').toList()}');
@@ -299,6 +304,9 @@ class MpvPlayerAdapter implements PlayerAdapter {
     try {
       if (_isHttpUrl(path)) {
         _logger.i('MpvAdapter', 'HTTP URL字幕，直接传给mpv加载');
+        final ext = _extractExtension(path);
+        _currentSubIsAss = ext == 'ass' || ext == 'ssa';
+        _hasBitmapSubtitle = ext == 'pgs' || ext == 'sup';
         await _player!.setSubtitleTrack(SubtitleTrack.uri(path));
         await _applySubtitleRuntimeProperties();
         _logger.i('MpvAdapter', 'HTTP外挂字幕加载成功');
@@ -310,6 +318,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
       if (ext == 'pgs' || ext == 'sup') {
         _logger.i('MpvAdapter', '图形字幕 (PGS/SUP)，直接加载');
         _hasBitmapSubtitle = true;
+        _currentSubIsAss = false;
         await _player!.setSubtitleTrack(SubtitleTrack.uri(path));
         await _applySubtitleRuntimeProperties();
         _logger.i('MpvAdapter', '图形字幕加载成功');
@@ -323,12 +332,17 @@ class MpvPlayerAdapter implements PlayerAdapter {
       }
 
       if (ext == 'ass' || ext == 'ssa') {
+        _currentSubIsAss = true;
+        _hasBitmapSubtitle = false;
         if (_subtitleFont != null && _subtitleFont != '默认') {
           processedPath = await SubtitleProcessor.modifyAssStyle(
             processedPath,
             fontName: _subtitleFont,
           );
         }
+      } else {
+        _currentSubIsAss = false;
+        _hasBitmapSubtitle = false;
       }
 
       await _player!.setSubtitleTrack(SubtitleTrack.uri(processedPath));
@@ -352,10 +366,15 @@ class MpvPlayerAdapter implements PlayerAdapter {
       await np.setProperty('sub-back-color',
           _subtitleBackground ? '#000000C0' : '#00000000');
       await np.setProperty('sub-delay', _subtitleDelay.toStringAsFixed(3));
+      await np.setProperty('sub-visibility', 'yes');
 
       if (_hasBitmapSubtitle) {
         await np.setProperty('sub-ass-override', 'no');
-        await np.setProperty('sub-visibility', 'yes');
+      } else if (_currentSubIsAss) {
+        await np.setProperty('sub-ass-override', 'no');
+        if (_subtitleFont != null && _subtitleFont!.isNotEmpty && _subtitleFont != '默认') {
+          await np.setProperty('sub-ass-override', 'scale');
+        }
       } else {
         await np.setProperty('sub-ass-override', 'yes');
       }

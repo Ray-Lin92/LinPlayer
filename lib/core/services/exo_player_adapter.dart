@@ -32,7 +32,6 @@ class ExoPlayerAdapter implements PlayerAdapter {
   double _subtitlePosition = 0.0;
   bool _subtitleBackground = false;
   String _subtitleFont = '默认';
-  String? _lastRenderedBitmapB64;
   bool _isBitmapSubtitle = false;
 
   PlayerStateCallbacks? _callbacks;
@@ -483,23 +482,20 @@ class ExoPlayerAdapter implements PlayerAdapter {
         fit: StackFit.expand,
         children: [
           Texture(textureId: _textureId!),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 20.0 + (_subtitlePosition * 180.0),
-            child: ValueListenableBuilder<int>(
-              valueListenable: _subtitleSettingsVersion,
-              builder: (context, _, __) {
-                return ValueListenableBuilder<String?>(
-                  valueListenable: bitmapNotifier,
-                  builder: (context, bitmapB64, _) {
-                    if (bitmapB64 != null && bitmapB64.isNotEmpty) {
-                      final isDuplicate = bitmapB64 == _lastRenderedBitmapB64;
-                      _lastRenderedBitmapB64 = bitmapB64;
-                      if (isDuplicate) return const SizedBox.shrink();
-                      try {
-                        final bytes = base64Decode(bitmapB64);
-                        return Center(
+          ValueListenableBuilder<int>(
+            valueListenable: _subtitleSettingsVersion,
+            builder: (context, _, __) {
+              return ValueListenableBuilder<String?>(
+                valueListenable: bitmapNotifier,
+                builder: (context, bitmapB64, _) {
+                  if (bitmapB64 != null && bitmapB64.isNotEmpty) {
+                    try {
+                      final bytes = base64Decode(bitmapB64);
+                      return Positioned(
+                        left: 24,
+                        right: 24,
+                        bottom: 20.0 + (_subtitlePosition * 180.0),
+                        child: Center(
                           child: ConstrainedBox(
                             constraints: BoxConstraints(
                               maxWidth: MediaQuery.of(context).size.width - 48,
@@ -512,17 +508,23 @@ class ExoPlayerAdapter implements PlayerAdapter {
                               filterQuality: FilterQuality.medium,
                             ),
                           ),
-                        );
-                      } catch (_) {
-                        return const SizedBox.shrink();
-                      }
+                        ),
+                      );
+                    } catch (_) {
+                      return const SizedBox.shrink();
                     }
-                    return ValueListenableBuilder<String>(
-                      valueListenable: subtitleNotifier,
-                      builder: (context, text, _) {
-                        if (text.isEmpty) return const SizedBox.shrink();
-                        final fontSize = 14.0 + (_subtitleSize * 18.0);
-                        return Center(
+                  }
+                  return ValueListenableBuilder<String>(
+                    valueListenable: subtitleNotifier,
+                    builder: (context, text, _) {
+                      if (text.isEmpty) return const SizedBox.shrink();
+                      final cleanText = _stripAssTags(text);
+                      final fontSize = 14.0 + (_subtitleSize * 18.0);
+                      return Positioned(
+                        left: 24,
+                        right: 24,
+                        bottom: 20.0 + (_subtitlePosition * 180.0),
+                        child: Center(
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: _subtitleBackground
@@ -532,7 +534,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
                                   )
                                 : null,
                             child: Text(
-                              text,
+                              cleanText,
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white,
@@ -567,18 +569,27 @@ class ExoPlayerAdapter implements PlayerAdapter {
                               ),
                             ),
                           ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
           ),
         ],
       );
     }
     return const Center(child: CircularProgressIndicator());
+  }
+
+  static String _stripAssTags(String text) {
+    var result = text;
+    result = RegExp(r'\{[^}]*\}').allMatches(result).fold<String>(result, (acc, match) {
+      return acc.replaceAll(match.group(0)!, '');
+    });
+    result = result.replaceAll(RegExp(r'\\[nN]'), '\n');
+    return result.trim();
   }
 
   @override

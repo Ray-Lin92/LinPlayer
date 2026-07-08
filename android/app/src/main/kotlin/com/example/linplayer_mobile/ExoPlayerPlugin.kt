@@ -2,6 +2,8 @@ package com.example.linplayer_mobile
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -394,6 +396,11 @@ class ExoPlayerPlugin(
                     .setSubtitleConfigurations(allSubtitles)
                     .build()
 
+                val paramsBuilder = trackSelector.buildUponParameters()
+                paramsBuilder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                paramsBuilder.setSelectUndeterminedTextLanguage(true)
+                trackSelector.parameters = paramsBuilder.build()
+
                 exoPlayer.playWhenReady = playWhenReady
                 exoPlayer.setMediaItem(newMediaItem, currentPosition)
                 exoPlayer.prepare()
@@ -459,8 +466,6 @@ class ExoPlayerPlugin(
             }
         }
 
-        private var lastBitmapBase64: String? = null
-        private var lastBitmapHash: Int = 0
         private var isBitmapSubtitle: Boolean = false
 
         override fun onCues(cueGroup: CueGroup) {
@@ -477,14 +482,8 @@ class ExoPlayerPlugin(
                 if (bmp != null) {
                     hasBitmap = true
                     try {
-                        val hash = bmp.hashCode()
-                        if (hash == lastBitmapHash && lastBitmapBase64 != null) {
-                            bitmapParts.add(lastBitmapBase64!!)
-                            bmp.recycle()
-                            continue
-                        }
-
                         var src = bmp
+
                         val maxDim = 720
                         if (src.width > maxDim || src.height > maxDim) {
                             val scale = minOf(maxDim.toFloat() / src.width, maxDim.toFloat() / src.height)
@@ -497,13 +496,16 @@ class ExoPlayerPlugin(
                             src = scaled
                         }
 
+                        val processed = makeBlackPixelsTransparent(src)
+                        if (processed != src) {
+                            src.recycle()
+                        }
+
                         val stream = ByteArrayOutputStream()
-                        src.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                        processed.compress(Bitmap.CompressFormat.PNG, 100, stream)
                         val bytes = stream.toByteArray()
-                        src.recycle()
+                        processed.recycle()
                         val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                        lastBitmapBase64 = base64
-                        lastBitmapHash = hash
                         bitmapParts.add(base64)
                     } catch (_: Exception) {
                     }
@@ -534,6 +536,35 @@ class ExoPlayerPlugin(
                     emitEvent("subtitle", "")
                 }
             }
+        }
+
+        private fun makeBlackPixelsTransparent(src: Bitmap): Bitmap {
+            if (!src.hasAlpha()) {
+                val result = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(result)
+                val paint = Paint()
+                canvas.drawBitmap(src, 0f, 0f, paint)
+                return result
+            }
+
+            val w = src.width
+            val h = src.height
+            val pixels = IntArray(w * h)
+            src.getPixels(pixels, 0, w, 0, 0, w, h)
+
+            for (i in pixels.indices) {
+                val pixel = pixels[i]
+                val r = (pixel shr 16) and 0xFF
+                val g = (pixel shr 8) and 0xFF
+                val b = pixel and 0xFF
+                if (r < 10 && g < 10 && b < 10) {
+                    pixels[i] = 0
+                }
+            }
+
+            val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            result.setPixels(pixels, 0, w, 0, 0, w, h)
+            return result
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
