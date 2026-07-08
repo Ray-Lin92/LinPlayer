@@ -11,9 +11,6 @@ val ciTargetAbis = providers.gradleProperty("linplayerTargetAbis")
     ?.map(String::trim)
     ?.filter(String::isNotEmpty)
     ?: emptyList()
-val isSplitPerAbiBuild = providers.gradleProperty("split-per-abi")
-    .orNull
-    ?.toBoolean() == true
 val knownNativeAbis = listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 val excludedCiAbis = if (ciTargetAbis.isNotEmpty()) {
     knownNativeAbis.filterNot(ciTargetAbis::contains)
@@ -52,8 +49,7 @@ android {
         }
 
         ndk {
-            // Flutter configures ABI splits itself for --split-per-abi builds.
-            if (ciTargetAbis.isNotEmpty() && !isSplitPerAbiBuild) {
+            if (ciTargetAbis.isNotEmpty()) {
                 abiFilters.addAll(ciTargetAbis)
             }
         }
