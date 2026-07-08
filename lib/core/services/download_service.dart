@@ -205,9 +205,7 @@ class DownloadService extends ChangeNotifier {
           url: task.url,
           status: task.status.toString(),
           progress: task.progress,
-          localPath: task.savedDir != null
-              ? path.join(task.savedDir, task.filename ?? '')
-              : null,
+          localPath: path.join(task.savedDir, task.filename ?? ''),
         );
       }
       notifyListeners();

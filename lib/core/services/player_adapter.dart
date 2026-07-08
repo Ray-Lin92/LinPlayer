@@ -1,10 +1,11 @@
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 
 /// 播放器适配器接口
 ///
 /// 抽象所有播放器内核的通用操作。
-/// 视频渲染统一通过 [textureId] 交给 Flutter Texture widget，
-/// 不再由 adapter 自行构建 widget。
+/// 视频渲染可通过 [buildVideo] 获取渲染 Widget，
+/// 旧版本通过 [textureId] 获取 Texture ID（ExoPlayer 等）。
 abstract class PlayerAdapter {
   /// 是否已初始化
   bool get isInitialized;
@@ -42,8 +43,14 @@ abstract class PlayerAdapter {
   /// libass 是否已就绪
   bool get libassReady => false;
 
-  /// Flutter Texture ID（渲染视频用）
+  /// Flutter Texture ID（渲染视频用，旧架构）
   int? get textureId;
+
+  /// 构建视频渲染 Widget
+  ///
+  /// media_kit 等封装库返回自己的 Video Widget，
+  /// ExoPlayer 等返回 Texture widget。
+  Widget buildVideo();
 
   /// 初始化播放器
   Future<void> initialize({

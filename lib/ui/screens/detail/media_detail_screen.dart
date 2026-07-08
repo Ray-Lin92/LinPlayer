@@ -209,7 +209,7 @@ class _DetailHeader extends ConsumerWidget {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.9),
+                  Theme.of(context).scaffoldBackgroundColor.withOpacity(0.9),
                   Theme.of(context).scaffoldBackgroundColor,
                 ],
               ),
@@ -222,7 +222,7 @@ class _DetailHeader extends ConsumerWidget {
           child: Padding(
             padding: const EdgeInsets.all(8),
             child: CircleAvatar(
-              backgroundColor: Colors.black.withValues(alpha: 0.4),
+              backgroundColor: Colors.black.withOpacity(0.4),
               child: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => context.pop(),
@@ -372,7 +372,7 @@ class _SeasonsSection extends StatelessWidget {
                         Expanded(
                           child: Container(
                             decoration: BoxDecoration(
-                              color: const Color(0xFF5B8DEF).withValues(alpha: 0.1),
+                              color: const Color(0xFF5B8DEF).withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Center(
@@ -468,7 +468,7 @@ class _EpisodesSectionState extends State<_EpisodesSection> {
                         height: 60,
                         decoration: BoxDecoration(
                           color: isWatched
-                              ? const Color(0xFF5B8DEF).withValues(alpha: 0.1)
+                              ? const Color(0xFF5B8DEF).withOpacity(0.1)
                               : Theme.of(context).colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(8),
                         ),

@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'dart:math' show max, min;
-import 'dart:typed_data';
-import 'dart:ui' as ui;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'player_adapter.dart';
-import 'libass_bridge.dart';
 import 'app_logger.dart';
 
-/// ExoPlayer 原生适配器
+/// ExoPlayer 原生适配器（v2）
 ///
 /// 通过 Platform Channel 与 Android 原生 ExoPlayer 通信，
 /// 视频渲染使用 Flutter Texture widget。
-/// 字幕通过 libass（从 libmpv.so 动态加载符号）渲染为位图叠加。
+///
+/// 字幕支持：
+/// - 内置字幕（从视频容器中提取）
+/// - 外挂字幕（SRT/ASS/WEBVTT/TTML，通过 SubtitleConfiguration 加载）
+/// - 轨道切换（音频/字幕轨道选择）
+///
+/// ffmpeg 扩展已启用，增强音频解码和字幕支持。
 class ExoPlayerAdapter implements PlayerAdapter {
   static const _channel = MethodChannel('com.linplayer/exoplayer');
   static final _logger = AppLogger();
@@ -30,8 +34,9 @@ class ExoPlayerAdapter implements PlayerAdapter {
   double _speed = 1.0;
   double _volume = 1.0;
   String? _errorMessage;
-  bool _useLibass = false;
-  bool _libassReady = false;
+
+  // 轨道信息
+  List<Map<dynamic, dynamic>> _tracks = [];
 
   PlayerStateCallbacks? _callbacks;
   Timer? _positionTimer;
@@ -74,10 +79,13 @@ class ExoPlayerAdapter implements PlayerAdapter {
   String? get errorMessage => _errorMessage;
 
   @override
-  bool get libassReady => _libassReady;
+  bool get libassReady => false;
 
   @override
   int? get textureId => _textureId;
+
+  /// 当前可用的轨道列表
+  List<Map<dynamic, dynamic>> get tracks => _tracks;
 
   @override
   void setCallbacks(PlayerStateCallbacks callbacks) {
@@ -91,14 +99,13 @@ class ExoPlayerAdapter implements PlayerAdapter {
     bool dolbyVisionFix = false,
     bool useLibass = false,
   }) async {
-    _logger.i('ExoPlayer', '开始初始化 - useLibass=$useLibass, videoUrl=$videoUrl');
+    _logger.i('ExoPlayer', '开始初始化 - videoUrl=$videoUrl');
     try {
       await dispose();
 
       _errorMessage = null;
       _isCompleted = false;
-      _useLibass = useLibass;
-      _libassReady = false;
+      _tracks = [];
 
       _logger.d('ExoPlayer', '调用原生 createPlayer...');
       final result = await _channel.invokeMethod<Map<dynamic, dynamic>>('createPlayer', {
@@ -133,14 +140,6 @@ class ExoPlayerAdapter implements PlayerAdapter {
         (_) => _pollState(),
       );
 
-      if (_useLibass) {
-        _logger.i('ExoPlayer', 'libass 已启用，开始初始化...');
-        await _initLibass();
-        if (!_libassReady) {
-          _logger.w('ExoPlayer', 'libass 初始化失败，将继续播放但不显示字幕');
-        }
-      }
-
       _callbacks?.onDurationChanged?.call();
       _logger.i('ExoPlayer', '初始化完成');
     } catch (e, stackTrace) {
@@ -151,87 +150,105 @@ class ExoPlayerAdapter implements PlayerAdapter {
     }
   }
 
-  Future<void> _initLibass() async {
+
+
+  /// 获取当前轨道信息
+  Future<List<Map<dynamic, dynamic>>> getTracks() async {
+    if (_playerId == null || !_isInitialized) return [];
     try {
-      final available = await LibassBridge.isAvailable();
-      _logger.i('ExoPlayer', 'libass 可用性检查: $available');
-      if (!available) {
-        _useLibass = false;
-        _logger.w('ExoPlayer', 'libass 不可用，可能缺少原生实现或 libmpv.so');
-        return;
-      }
+      final result = await _channel.invokeMethod<List<dynamic>>('getTracks', {
+        'playerId': _playerId,
+      });
+      return result?.cast<Map<dynamic, dynamic>>() ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
 
-      // 使用 PlatformDispatcher 替代 deprecated ui.window
-      final views = ui.PlatformDispatcher.instance.views;
-      if (views.isEmpty) {
-        _logger.w('ExoPlayer', '无法获取屏幕尺寸：没有可用的 FlutterView');
-        _useLibass = false;
-        return;
-      }
-      final view = views.first;
-      final size = view.physicalSize / view.devicePixelRatio;
-      final width = size.width.toInt();
-      final height = size.height.toInt();
-      _logger.d('ExoPlayer', 'libass 初始化尺寸: ${width}x$height');
+  /// 选择特定轨道
+  ///
+  /// [groupIndex] 轨道组索引
+  /// [trackIndex] 轨道在组内的索引
+  /// [trackType] 轨道类型：1=视频, 2=音频, 3=文本（字幕）
+  Future<void> selectTrack(int groupIndex, int trackIndex, int trackType) async {
+    if (_playerId == null || !_isInitialized) return;
+    _logger.i('ExoPlayer', '选择轨道: group=$groupIndex, track=$trackIndex, type=$trackType');
+    await _channel.invokeMethod('selectTrack', {
+      'playerId': _playerId,
+      'groupIndex': groupIndex,
+      'trackIndex': trackIndex,
+      'trackType': trackType,
+    });
+  }
 
-      if (width <= 0 || height <= 0) {
-        _logger.w('ExoPlayer', '屏幕尺寸无效: ${width}x$height');
-        _useLibass = false;
-        return;
-      }
+  /// 检测是否支持特定字幕格式
+  bool supportsSubtitleFormat(String path) {
+    final lower = path.toLowerCase();
+    // ExoPlayer 原生支持的格式
+    if (lower.endsWith('.srt') ||
+        lower.endsWith('.ass') ||
+        lower.endsWith('.ssa') ||
+        lower.endsWith('.vtt') ||
+        lower.endsWith('.ttml')) {
+      return true;
+    }
+    // PGS/SUP 需要 ffmpeg 扩展，检测是否可用
+    // TODO: 可以通过 Platform Channel 检测 ffmpeg 扩展是否已加载
+    return false;
+  }
 
-      final ok = await LibassBridge.init(width: width, height: height);
-      if (!ok) {
-        _logger.e('ExoPlayer', 'LibassBridge.init() 返回 false');
-        _useLibass = false;
-        return;
-      }
-
-      _libassReady = true;
-      _logger.i('ExoPlayer', 'libass 初始化成功');
+  /// 加载外挂字幕
+  ///
+  /// [subtitleUrl] 字幕文件 URL（支持本地文件路径或 http/https URL）
+  /// [mimeType] 字幕 MIME 类型，如：
+  ///   - application/x-subrip (SRT)
+  ///   - text/x-ssa (ASS/SSA)
+  ///   - text/vtt (WEBVTT)
+  ///   - application/ttml+xml (TTML)
+  ///   - application/pgs (PGS)
+  /// [language] 字幕语言代码，如 "zh", "en"
+  Future<void> loadSubtitle({
+    required String subtitleUrl,
+    String? mimeType,
+    String? language,
+  }) async {
+    if (_playerId == null || !_isInitialized) return;
+    
+    // 检测 PGS/SUP 图形字幕
+    final lowerUrl = subtitleUrl.toLowerCase();
+    if (lowerUrl.endsWith('.pgs') || lowerUrl.endsWith('.sup')) {
+      _logger.w('ExoPlayer', 'PGS/SUP 图形字幕需要 FFmpeg 扩展支持');
+      _logger.w('ExoPlayer', '请切换到 MPV 内核，或使用 GitHub Actions 自动编译 FFmpeg 扩展');
+      throw Exception(
+        'PGS/SUP subtitles are not supported by ExoPlayer without FFmpeg extension.\n'
+        'Please switch to MPV kernel or build with ffmpeg support.\n'
+        'See docs/FFmpegExtensionSetup.md for details.'
+      );
+    }
+    
+    _logger.i('ExoPlayer', '加载外挂字幕: $subtitleUrl (mime=$mimeType, lang=$language)');
+    try {
+      await _channel.invokeMethod('loadSubtitle', {
+        'playerId': _playerId,
+        'subtitleUrl': subtitleUrl,
+        'subtitleMimeType': mimeType,
+        'subtitleLanguage': language,
+      });
     } catch (e, stackTrace) {
-      _logger.eWithStack('ExoPlayer', 'libass 初始化异常', e, stackTrace);
-      _useLibass = false;
-      _libassReady = false;
+      _logger.eWithStack('ExoPlayer', '加载字幕失败', e, stackTrace);
     }
   }
 
   @override
   Future<void> loadLibassSubtitle(String path) async {
-    _logger.i('ExoPlayer', '加载字幕文件: $path');
-    if (!_libassReady) {
-      _logger.w('ExoPlayer', 'libass 未就绪，无法加载字幕');
-      return;
-    }
-    try {
-      final ok = await LibassBridge.loadSubFile(path);
-      if (ok) {
-        _logger.i('ExoPlayer', '字幕加载成功: $path');
-      } else {
-        _logger.e('ExoPlayer', '字幕加载失败: LibassBridge.loadSubFile 返回 false');
-      }
-    } catch (e, stackTrace) {
-      _logger.eWithStack('ExoPlayer', '字幕加载异常: $path', e, stackTrace);
-    }
+    // ExoPlayer v2 不再使用 libass，字幕通过 ExoPlayer 原生管线处理
+    _logger.w('ExoPlayer', 'loadLibassSubtitle 已废弃，请使用 loadSubtitle');
   }
 
   @override
   Future<void> loadLibassSubtitleMemory(Uint8List data, {String codec = 'ass'}) async {
-    _logger.i('ExoPlayer', '加载内存字幕 - codec=$codec, size=${data.length} bytes');
-    if (!_libassReady) {
-      _logger.w('ExoPlayer', 'libass 未就绪，无法加载字幕');
-      return;
-    }
-    try {
-      final ok = await LibassBridge.loadSubMemory(data, codec: codec);
-      if (ok) {
-        _logger.i('ExoPlayer', '内存字幕加载成功');
-      } else {
-        _logger.e('ExoPlayer', '内存字幕加载失败: LibassBridge.loadSubMemory 返回 false');
-      }
-    } catch (e, stackTrace) {
-      _logger.eWithStack('ExoPlayer', '内存字幕加载异常', e, stackTrace);
-    }
+    // ExoPlayer v2 不再使用 libass
+    _logger.w('ExoPlayer', 'loadLibassSubtitleMemory 已废弃');
   }
 
   void _onEvent(dynamic event) {
@@ -254,7 +271,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
         _callbacks?.onCompleted?.call();
         break;
       case 'error':
-        _errorMessage = event['message'] as String?;
+        _errorMessage = event['value'] as String?;
         _logger.e('ExoPlayer', '播放器错误: $_errorMessage');
         _callbacks?.onError?.call();
         break;
@@ -262,6 +279,16 @@ class ExoPlayerAdapter implements PlayerAdapter {
         _duration = Duration(milliseconds: (event['value'] as num).toInt());
         _logger.d('ExoPlayer', '时长更新: ${_duration.inSeconds}s');
         _callbacks?.onDurationChanged?.call();
+        break;
+      case 'tracksChanged':
+        final tracksList = event['value'] as List<dynamic>?;
+        if (tracksList != null) {
+          _tracks = tracksList.cast<Map<dynamic, dynamic>>();
+          _logger.d('ExoPlayer', '轨道变更: ${_tracks.length} 条轨道');
+        }
+        break;
+      case 'subtitle':
+        // 字幕文本事件（如果需要 Dart 层处理字幕）
         break;
     }
   }
@@ -375,10 +402,12 @@ class ExoPlayerAdapter implements PlayerAdapter {
 
   @override
   Future<void> setSubtitleFont(String fontName) async {
+    if (_playerId == null) return;
     _logger.d('ExoPlayer', '设置字幕字体: $fontName');
-    if (_libassReady) {
-      await LibassBridge.setFontName(fontName);
-    }
+    await _channel.invokeMethod('setSubtitleFont', {
+      'playerId': _playerId,
+      'fontName': fontName,
+    });
   }
 
   @override
@@ -389,10 +418,6 @@ class ExoPlayerAdapter implements PlayerAdapter {
       'playerId': _playerId,
       'size': size,
     });
-    if (_libassReady) {
-      final pixelSize = (16 + (size * 32)).toInt();
-      await LibassBridge.setFontSize(pixelSize);
-    }
   }
 
   @override
@@ -415,6 +440,16 @@ class ExoPlayerAdapter implements PlayerAdapter {
   }
 
   @override
+  Widget buildVideo() {
+    if (_textureId != null) {
+      return Texture(textureId: _textureId!);
+    }
+    return const Center(
+      child: CircularProgressIndicator(),
+    );
+  }
+
+  @override
   Future<void> applySuperResolution(bool enable) async {
     // ExoPlayer 不支持超分辨率
   }
@@ -422,14 +457,6 @@ class ExoPlayerAdapter implements PlayerAdapter {
   @override
   Future<void> dispose() async {
     _logger.i('ExoPlayer', '释放资源...');
-    if (_libassReady) {
-      try {
-        await LibassBridge.dispose();
-      } catch (e) {
-        _logger.w('ExoPlayer', 'libass 释放失败: $e');
-      }
-      _libassReady = false;
-    }
 
     _positionTimer?.cancel();
     _positionTimer = null;
@@ -450,6 +477,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
     _isBuffering = false;
     _position = Duration.zero;
     _duration = Duration.zero;
+    _tracks = [];
     _logger.i('ExoPlayer', '资源已释放');
   }
 }

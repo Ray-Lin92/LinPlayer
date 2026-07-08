@@ -1,9 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:media_kit/media_kit.dart';
+import 'core/services/app_logger.dart';
 import 'app.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 初始化 media_kit（libmpv 封装库）
+  MediaKit.ensureInitialized();
+  log.i('Main', 'media_kit 初始化完成');
+
+  // 初始化日志系统
+  log.i('Main', '应用启动');
+  log.i('Main', 'Flutter ${WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio}x');
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    log.eWithStack('Flutter', '未捕获的Flutter错误', details.exception, details.stack);
+    FlutterError.presentError(details);
+  };
 
   runApp(
     const ProviderScope(

@@ -6,14 +6,12 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val LIBASS_CHANNEL = "com.linplayer/libass"
     private var exoPlayerPlugin: ExoPlayerPlugin? = null
-    private var mpvTexturePlugin: MpvTexturePlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // 注册 ExoPlayer 插件
+        // 注册 ExoPlayer 插件（v2 - 支持字幕轨道、ffmpeg 扩展）
         exoPlayerPlugin = ExoPlayerPlugin(
             this,
             flutterEngine.dartExecutor.binaryMessenger,
@@ -22,66 +20,14 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.linplayer/exoplayer")
             .setMethodCallHandler(exoPlayerPlugin)
 
-        // 注册 MPV Texture 插件
-        mpvTexturePlugin = MpvTexturePlugin.registerWith(flutterEngine)
-
-        // 注册 libass MethodChannel
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LIBASS_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "isLibassAvailable" -> {
-                        result.success(LibassBridge.isAvailable(this))
-                    }
-                    "initLibass" -> {
-                        val width = call.argument<Int>("width") ?: 0
-                        val height = call.argument<Int>("height") ?: 0
-                        LibassBridge.init(this, width, height)
-                        result.success(true)
-                    }
-                    "loadSubFile" -> {
-                        val path = call.argument<String>("path") ?: ""
-                        LibassBridge.loadSubFile(path)
-                        result.success(true)
-                    }
-                    "loadSubMemory" -> {
-                        val data = call.argument<ByteArray>("data") ?: ByteArray(0)
-                        val codec = call.argument<String>("codec") ?: "ass"
-                        LibassBridge.loadSubMemory(data, codec)
-                        result.success(true)
-                    }
-                    "setFontSize" -> {
-                        val size = call.argument<Int>("size") ?: 48
-                        LibassBridge.setFontSize(size)
-                        result.success(true)
-                    }
-                    "setFontName" -> {
-                        val name = call.argument<String>("name") ?: ""
-                        LibassBridge.setFontName(name)
-                        result.success(true)
-                    }
-                    "renderFrame" -> {
-                        val ptsMs = call.argument<Int>("ptsMs") ?: 0
-                        val changed = IntArray(1)
-                        val bitmap = LibassBridge.renderFrame(ptsMs.toLong(), changed)
-                        if (bitmap != null) {
-                            result.success(bitmap)
-                        } else {
-                            result.success(null)
-                        }
-                    }
-                    "dispose" -> {
-                        LibassBridge.dispose()
-                        result.success(true)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
+        // 注意：MPV 内核已迁移到 media_kit（Dart 封装库），
+        // 不再使用 FFI 直调 libmpv.so，因此不再注册 MpvTexturePlugin。
+        // libass 也已通过 ExoPlayer 原生字幕管线和 media_kit 内置支持，
+        // 不再使用自定义 libass JNI。
     }
 
     override fun onDestroy() {
         exoPlayerPlugin?.disposeAll()
-        mpvTexturePlugin?.disposeAll()
-        LibassBridge.dispose()
         super.onDestroy()
     }
 }

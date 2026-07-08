@@ -25,27 +25,28 @@ class LogEntry {
   }
 }
 
-/// 应用日志系统
+/// 应用日志系统 - 全局单例
 /// 
-/// 收集所有运行时日志，支持导出为文件。
-/// 在设置页中可导出完整日志用于问题排查。
+/// 使用方法:
+/// ```dart
+/// import 'app_logger.dart';
+/// 
+/// // 记录日志
+/// log.i('Tag', '信息');
+/// log.e('Tag', '错误', error, stackTrace);
+/// 
+/// // 导出日志
+/// final path = await log.exportToFile();
+/// ```
 class AppLogger {
   static final AppLogger _instance = AppLogger._internal();
   factory AppLogger() => _instance;
-  AppLogger._internal();
+  AppLogger._internal() {
+    i('AppLogger', '日志系统已初始化');
+  }
 
   final List<LogEntry> _logs = [];
-  static const int _maxLogs = 5000;
-
-  final List<void Function(LogEntry)> _listeners = [];
-
-  void addListener(void Function(LogEntry) listener) {
-    _listeners.add(listener);
-  }
-
-  void removeListener(void Function(LogEntry) listener) {
-    _listeners.remove(listener);
-  }
+  static const int _maxLogs = 10000;
 
   void _log(LogLevel level, String tag, String message) {
     final entry = LogEntry(
@@ -57,9 +58,6 @@ class AppLogger {
     _logs.add(entry);
     if (_logs.length > _maxLogs) {
       _logs.removeAt(0);
-    }
-    for (final listener in _listeners) {
-      listener(entry);
     }
     if (kDebugMode) {
       debugPrint(entry.toString());
@@ -73,8 +71,17 @@ class AppLogger {
   void e(String tag, String message) => _log(LogLevel.error, tag, message);
 
   void eWithStack(String tag, String message, Object error, [StackTrace? stackTrace]) {
-    final fullMessage = '$message\n  Error: $error${stackTrace != null ? '\n$stackTrace' : ''}';
-    _log(LogLevel.error, tag, fullMessage);
+    final buffer = StringBuffer();
+    buffer.writeln(message);
+    buffer.writeln('  Error: $error');
+    if (stackTrace != null) {
+      buffer.writeln('  StackTrace:');
+      final lines = stackTrace.toString().split('\n');
+      for (var i = 0; i < lines.length && i < 20; i++) {
+        buffer.writeln('    ${lines[i]}');
+      }
+    }
+    _log(LogLevel.error, tag, buffer.toString());
   }
 
   List<LogEntry> getLogs({LogLevel? minLevel}) {
@@ -84,23 +91,32 @@ class AppLogger {
 
   void clear() => _logs.clear();
 
-  /// 导出日志为字符串
+  /// 导出日志为字符串，包含所有系统信息
   String exportAsString() {
     final buffer = StringBuffer();
-    buffer.writeln('============================================');
-    buffer.writeln('  LinPlayer 日志导出');
-    buffer.writeln('  时间: ${DateTime.now().toIso8601String()}');
-    buffer.writeln('  平台: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}');
-    buffer.writeln('  日志条数: ${_logs.length}');
-    buffer.writeln('============================================');
+    buffer.writeln('╔════════════════════════════════════════════════════════════╗');
+    buffer.writeln('║                   LinPlayer 日志导出                       ║');
+    buffer.writeln('╠════════════════════════════════════════════════════════════╣');
+    buffer.writeln('║ 导出时间: ${DateTime.now().toIso8601String()}');
+    buffer.writeln('║ 平台: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}');
+    buffer.writeln('║ 本地名: ${Platform.localeName}');
+    buffer.writeln('║ 日志条数: ${_logs.length} / $_maxLogs');
+    buffer.writeln('╚════════════════════════════════════════════════════════════╝');
     buffer.writeln();
+    
+    if (_logs.isEmpty) {
+      buffer.writeln('[警告] 当前没有日志记录。请在播放视频后重试导出。');
+      buffer.writeln();
+    }
+    
     for (final entry in _logs) {
       buffer.writeln(entry.toString());
     }
+    
     buffer.writeln();
-    buffer.writeln('============================================');
-    buffer.writeln('  日志结束');
-    buffer.writeln('============================================');
+    buffer.writeln('╔════════════════════════════════════════════════════════════╗');
+    buffer.writeln('║                      日志结束                              ║');
+    buffer.writeln('╚════════════════════════════════════════════════════════════╝');
     return buffer.toString();
   }
 
@@ -118,7 +134,9 @@ class AppLogger {
         i('AppLogger', '日志已导出到: ${file.path}');
         return file.path;
       }
-    } catch (_) {}
+    } catch (e) {
+      w('AppLogger', '保存到 Download 失败: $e');
+    }
 
     // 回退到应用文档目录
     final appDir = await getApplicationDocumentsDirectory();
@@ -129,3 +147,6 @@ class AppLogger {
     return file.path;
   }
 }
+
+/// 全局日志便捷函数
+final log = AppLogger();
