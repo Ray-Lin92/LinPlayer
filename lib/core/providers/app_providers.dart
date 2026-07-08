@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_interfaces.dart';
 import '../api/emby_api.dart';
 import '../api/mock_api.dart';
@@ -24,7 +26,54 @@ final authStateProvider = StateProvider<AuthState>((ref) => AuthState.unauthenti
 enum AuthState { unauthenticated, authenticating, authenticated, error }
 
 /// 当前服务器Provider
-final currentServerProvider = StateProvider<ServerConfig?>((ref) => null);
+final currentServerProvider = StateNotifierProvider<CurrentServerNotifier, ServerConfig?>((ref) {
+  return CurrentServerNotifier();
+});
+
+class CurrentServerNotifier extends StateNotifier<ServerConfig?> {
+  CurrentServerNotifier() : super(null);
+
+  static const _currentServerKey = 'linplayer_current_server_id';
+
+  Future<void> loadFromSaved(List<ServerConfig> servers) async {
+    if (state != null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final serverId = prefs.getString(_currentServerKey);
+      if (serverId != null) {
+        final saved = servers.where((s) => s.id == serverId).firstOrNull;
+        if (saved != null) {
+          super.state = saved;
+        }
+      }
+    } catch (e) {
+      // 加载失败
+    }
+  }
+
+  Future<void> _saveCurrentServer() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (state != null) {
+        await prefs.setString(_currentServerKey, state!.id);
+      } else {
+        await prefs.remove(_currentServerKey);
+      }
+    } catch (e) {
+      // 保存失败
+    }
+  }
+
+  @override
+  set state(ServerConfig? value) {
+    super.state = value;
+    _saveCurrentServer();
+  }
+
+  void clear() {
+    state = null;
+  }
+}
 
 class ServerConfig {
   final String id;
@@ -100,20 +149,50 @@ final serverListProvider = StateNotifierProvider<ServerListNotifier, List<Server
 });
 
 class ServerListNotifier extends StateNotifier<List<ServerConfig>> {
-  ServerListNotifier() : super([]);
-  
+  ServerListNotifier() : super([]) {
+    _loadServers();
+  }
+
+  static const _serversKey = 'linplayer_servers';
+
+  Future<void> _loadServers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString(_serversKey);
+      if (jsonStr != null) {
+        final List<dynamic> jsonList = jsonDecode(jsonStr);
+        state = jsonList.map((e) => _serverConfigFromJson(e as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      // 加载失败时保持空列表
+    }
+  }
+
+  Future<void> _saveServers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = state.map((s) => _serverConfigToJson(s)).toList();
+      await prefs.setString(_serversKey, jsonEncode(jsonList));
+    } catch (e) {
+      // 保存失败时静默处理
+    }
+  }
+
   void addServer(ServerConfig server) {
     state = [...state, server];
+    _saveServers();
   }
-  
+
   void removeServer(String id) {
     state = state.where((s) => s.id != id).toList();
+    _saveServers();
   }
-  
+
   void updateServer(ServerConfig server) {
     state = state.map((s) => s.id == server.id ? server : s).toList();
+    _saveServers();
   }
-  
+
   void reorderServers(int oldIndex, int newIndex) {
     final servers = List<ServerConfig>.from(state);
     if (oldIndex < newIndex) {
@@ -122,8 +201,9 @@ class ServerListNotifier extends StateNotifier<List<ServerConfig>> {
     final server = servers.removeAt(oldIndex);
     servers.insert(newIndex, server);
     state = servers;
+    _saveServers();
   }
-  
+
   void setActiveLine(String serverId, int lineIndex) {
     state = state.map((s) {
       if (s.id == serverId) {
@@ -131,7 +211,48 @@ class ServerListNotifier extends StateNotifier<List<ServerConfig>> {
       }
       return s;
     }).toList();
+    _saveServers();
   }
+}
+
+Map<String, dynamic> _serverConfigToJson(ServerConfig s) {
+  return {
+    'id': s.id,
+    'name': s.name,
+    'baseUrl': s.baseUrl,
+    'iconUrl': s.iconUrl,
+    'remark': s.remark,
+    'lines': s.lines.map((l) => {
+      'id': l.id,
+      'name': l.name,
+      'url': l.url,
+      'remark': l.remark,
+    }).toList(),
+    'activeLineIndex': s.activeLineIndex,
+    'username': s.username,
+    'authToken': s.authToken,
+    'userId': s.userId,
+  };
+}
+
+ServerConfig _serverConfigFromJson(Map<String, dynamic> json) {
+  return ServerConfig(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    baseUrl: json['baseUrl'] as String,
+    iconUrl: json['iconUrl'] as String?,
+    remark: json['remark'] as String?,
+    lines: (json['lines'] as List<dynamic>?)?.map((l) => ServerLine(
+      id: l['id'] as String,
+      name: l['name'] as String,
+      url: l['url'] as String,
+      remark: l['remark'] as String?,
+    )).toList() ?? [],
+    activeLineIndex: json['activeLineIndex'] as int? ?? 0,
+    username: json['username'] as String?,
+    authToken: json['authToken'] as String?,
+    userId: json['userId'] as String?,
+  );
 }
 
 /// 当前用户Provider
@@ -256,12 +377,66 @@ final impellerEnabledProvider = StateProvider<bool>((ref) => false);
 /// EXO播放器使用libass渲染ASS字幕Provider
 final exoLibassProvider = StateProvider<bool>((ref) => false);
 
+/// 画面比例Provider
+final aspectRatioProvider = StateProvider<String>((ref) => '自动');
+
+/// 跳过片头开始时间（秒）
+final skipOpeningStartProvider = StateProvider<int>((ref) => 0);
+
+/// 跳过片头结束时间（秒）
+final skipOpeningEndProvider = StateProvider<int>((ref) => 0);
+
+/// 跳过片尾开始时间（秒）
+final skipEndingStartProvider = StateProvider<int>((ref) => 0);
+
+/// 跳过片尾结束时间（秒）
+final skipEndingEndProvider = StateProvider<int>((ref) => 0);
+
+/// 跳过模式：true=自动跳过, false=显示按钮
+final skipAutoModeProvider = StateProvider<bool>((ref) => false);
+
+/// 定时关闭剩余时间Provider
+final sleepTimerRemainingProvider = StateProvider<Duration?>((ref) => null);
+
+/// 字幕同步偏移Provider（秒）
+final subtitleDelayProvider = StateProvider<double>((ref) => 0.0);
+
+/// 音频同步偏移Provider（秒）
+final audioDelayProvider = StateProvider<double>((ref) => 0.0);
+
+/// 字幕大小Provider（0.0 - 1.0）
+final subtitleSizeProvider = StateProvider<double>((ref) => 0.5);
+
+/// 字幕位置Provider（0.0 - 1.0）
+final subtitlePositionProvider = StateProvider<double>((ref) => 0.5);
+
 /// ==========================================
 /// 外观设置Providers
 /// ==========================================
 
 /// 隐藏每日推荐Provider
 final hideDailyRecommendationsProvider = StateProvider<bool>((ref) => false);
+
+/// 屏蔽的媒体库ID列表Provider
+final hiddenLibrariesProvider = StateNotifierProvider<HiddenLibrariesNotifier, Set<String>>((ref) {
+  return HiddenLibrariesNotifier();
+});
+
+class HiddenLibrariesNotifier extends StateNotifier<Set<String>> {
+  HiddenLibrariesNotifier() : super({});
+
+  void toggle(String libraryId) {
+    if (state.contains(libraryId)) {
+      state = Set.from(state)..remove(libraryId);
+    } else {
+      state = Set.from(state)..add(libraryId);
+    }
+  }
+
+  void clear() {
+    state = {};
+  }
+}
 
 /// ==========================================
 /// WebDAV备份Providers

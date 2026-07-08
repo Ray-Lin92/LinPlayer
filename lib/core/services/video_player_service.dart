@@ -228,6 +228,46 @@ class VideoPlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 截图
+  Future<Uint8List?> screenshot() async {
+    return await _adapter?.screenshot();
+  }
+
+  /// 设置字幕同步偏移
+  Future<void> setSubtitleDelay(double seconds) async {
+    await _adapter?.setSubtitleDelay(seconds);
+  }
+
+  /// 设置音频同步偏移
+  Future<void> setAudioDelay(double seconds) async {
+    await _adapter?.setAudioDelay(seconds);
+  }
+
+  /// 设置字幕字体
+  Future<void> setSubtitleFont(String fontName) async {
+    await _adapter?.setSubtitleFont(fontName);
+  }
+
+  /// 设置字幕大小
+  Future<void> setSubtitleSize(double size) async {
+    await _adapter?.setSubtitleSize(size);
+  }
+
+  /// 设置字幕位置
+  Future<void> setSubtitlePosition(double position) async {
+    await _adapter?.setSubtitlePosition(position);
+  }
+
+  /// 设置画面比例
+  Future<void> setAspectRatio(String ratio) async {
+    await _adapter?.setAspectRatio(ratio);
+  }
+
+  /// 应用超分辨率
+  Future<void> applySuperResolution(bool enable) async {
+    await _adapter?.applySuperResolution(enable);
+  }
+
   /// 设置亮度
   void setBrightness(double brightness) {
     _currentBrightness = brightness.clamp(0.1, 1.0);
@@ -390,11 +430,11 @@ class VideoPlayerService extends ChangeNotifier {
   
   /// 释放资源
   @override
-  void dispose() {
+  Future<void> dispose() async {
     _reportStop();
     _stopProgressTimer();
     _cancelHideControlsTimer();
-    _adapter?.dispose();
+    await _adapter?.dispose();
     _adapter = null;
     super.dispose();
   }

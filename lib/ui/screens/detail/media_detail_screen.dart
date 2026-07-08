@@ -57,7 +57,7 @@ class _DetailContent extends StatelessWidget {
           SliverToBoxAdapter(
             child: _SeasonsAndEpisodesSection(
               itemId: itemId,
-              onEpisodeTap: (episode) => context.push('/player/${episode.id}'),
+              onEpisodeTap: (episode) => context.push('/episode/${episode.id}'),
               onSeasonTap: (season) => context.push('/season/${season.id}'),
             ),
           ),
@@ -174,12 +174,13 @@ class _DetailHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final headerHeight = screenWidth * 0.5;
+    final headerHeight = screenWidth * 0.55;
     final api = ref.read(apiClientProvider);
-    final imageUrl = item.backdropImageTag != null
-        ? api.image.getBackdropImageUrl(item.id, tag: item.backdropImageTag)
-        : item.primaryImageTag != null
-            ? api.image.getPrimaryImageUrl(item.id, tag: item.primaryImageTag, maxWidth: 800)
+    // 使用Primary封面图作为背景（2:3海报比例，显示效果更好）
+    final imageUrl = item.primaryImageTag != null
+        ? api.image.getPrimaryImageUrl(item.id, tag: item.primaryImageTag, maxWidth: 600)
+        : item.backdropImageTag != null
+            ? api.image.getBackdropImageUrl(item.id, tag: item.backdropImageTag, maxWidth: 800)
             : null;
     
     return Stack(
@@ -191,6 +192,7 @@ class _DetailHeader extends ConsumerWidget {
             imageUrl: imageUrl,
             width: double.infinity,
             height: headerHeight,
+            fit: BoxFit.cover,
           ),
         ),
         
@@ -362,8 +364,9 @@ class _SeasonsSection extends StatelessWidget {
               children: seasons.map((season) {
                 return SizedBox(
                   width: 120,
-                  child: GestureDetector(
+                  child: InkWell(
                     onTap: () => onSeasonTap(season),
+                    borderRadius: BorderRadius.circular(8),
                     child: Column(
                       children: [
                         Expanded(
@@ -506,23 +509,27 @@ class _EpisodeListTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isWatched = episode.userData?.played ?? false;
     final api = ref.read(apiClientProvider);
+    // 剧集缩略图使用Primary类型，如果没有则尝试使用Thumb
     final imageUrl = episode.primaryImageTag != null
-        ? api.image.getPrimaryImageUrl(episode.id, tag: episode.primaryImageTag, maxWidth: 160)
+        ? api.image.getPrimaryImageUrl(episode.id, tag: episode.primaryImageTag, maxWidth: 300)
         : null;
     
     return ListTile(
       onTap: onTap,
       leading: Container(
-        width: 80,
-        height: 50,
+        width: 100,
+        height: 60,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(6),
         ),
+        clipBehavior: Clip.antiAlias,
         child: imageUrl != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.network(imageUrl, fit: BoxFit.cover),
+            ? MediaImage(
+                imageUrl: imageUrl,
+                width: 100,
+                height: 60,
+                fit: BoxFit.cover,
               )
             : const Center(child: Icon(Icons.play_arrow)),
       ),

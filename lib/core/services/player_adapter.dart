@@ -76,6 +76,30 @@ abstract class PlayerAdapter {
   /// 设置状态回调
   void setCallbacks(PlayerStateCallbacks callbacks);
   
+  /// 截图（返回图片字节数据，如支持）
+  Future<Uint8List?> screenshot() async => null;
+
+  /// 设置字幕同步偏移（秒）
+  Future<void> setSubtitleDelay(double seconds) async {}
+
+  /// 设置音频同步偏移（秒）
+  Future<void> setAudioDelay(double seconds) async {}
+
+  /// 设置字幕字体
+  Future<void> setSubtitleFont(String fontName) async {}
+
+  /// 设置字幕大小（0.0 - 1.0）
+  Future<void> setSubtitleSize(double size) async {}
+
+  /// 设置字幕位置（0.0 - 1.0）
+  Future<void> setSubtitlePosition(double position) async {}
+
+  /// 设置画面比例
+  Future<void> setAspectRatio(String ratio) async {}
+
+  /// 应用超分辨率（Anime4K）
+  Future<void> applySuperResolution(bool enable) async {}
+
   /// 释放资源
   Future<void> dispose();
 }

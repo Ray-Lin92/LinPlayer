@@ -12,6 +12,7 @@ import '../ui/screens/detail/media_detail_screen.dart';
 import '../ui/screens/detail/season_detail_screen.dart';
 // Episode detail is in season_detail_screen.dart
 import '../ui/screens/library/library_detail_screen.dart';
+import '../ui/screens/library/libraries_screen.dart';
 import '../ui/screens/player/player_screen.dart';
 import '../ui/screens/download/download_screen.dart';
 
@@ -21,6 +22,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
+    onException: (context, state, router) {
+      // 处理导航异常，防止根路由pop导致闪退
+      if (state.uri.path == '/' || state.uri.path == '/home') {
+        // 在根路由时不做任何操作，避免闪退
+        return;
+      }
+      router.go('/');
+    },
     routes: [
       // 主页（含底部Tab）
       StatefulShellRoute.indexedStack(
@@ -106,6 +115,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       
+      // 媒体库列表
+      GoRoute(
+        path: '/libraries',
+        builder: (context, state) => const LibrariesScreen(),
+      ),
+
       // 媒体库详情
       GoRoute(
         path: '/library/:id',

@@ -165,6 +165,7 @@ class GeneralSettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('通用设置')),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 120),
         children: [
           ListTile(
             title: const Text('外观'),
@@ -367,6 +368,7 @@ class PlayerSettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('播放器设置')),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 120),
         children: [
           // 播放器内核
           ListTile(
@@ -772,6 +774,7 @@ class DanmakuSettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('弹幕设置')),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 120),
         children: [
           SwitchListTile(
             title: const Text('弹幕开关'),
@@ -1054,7 +1057,7 @@ class BackupRestoreScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('备份与恢复')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16).copyWith(bottom: 120),
         children: [
           // 本地备份
           const Padding(

@@ -387,13 +387,28 @@ class EmbyMediaApi implements MediaApi {
 
   @override
   Future<MediaItem> getItemDetails(String itemId) async {
+    if (itemId.isEmpty) {
+      throw Exception('无效的媒体ID');
+    }
     final uid = _client._userId;
     final params = <String, dynamic>{
       'Fields': 'Overview,Genres,CommunityRating,OfficialRating,PremiereDate,RunTimeTicks,ProductionYear,Tags,SeriesName,IndexNumber,ParentIndexNumber,People,Studios',
     };
     if (uid != null) params['UserId'] = uid;
-    final resp = await _client.get('/Items/$itemId', queryParameters: params);
-    return _parseMediaItem(resp.data as Map<String, dynamic>);
+    try {
+      final resp = await _client.get('/Items/$itemId', queryParameters: params);
+      return _parseMediaItem(resp.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404 && uid != null) {
+        try {
+          final resp = await _client.get('/Users/$uid/Items/$itemId', queryParameters: params);
+          return _parseMediaItem(resp.data as Map<String, dynamic>);
+        } catch (_) {
+          // fallback 失败，继续抛出原始错误
+        }
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -791,6 +806,7 @@ MediaItem _parseMediaItem(Map<String, dynamic> d) {
     seriesId: d['SeriesId']?.toString(),
     seasonId: d['SeasonId']?.toString(),
     mediaType: d['MediaType']?.toString(),
+    parentId: d['ParentId']?.toString(),
   );
 }
 

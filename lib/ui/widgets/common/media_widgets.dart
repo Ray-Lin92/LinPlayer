@@ -117,54 +117,104 @@ class MediaPoster extends ConsumerWidget {
         ? api.image.getPrimaryImageUrl(item.id, tag: item.primaryImageTag, maxWidth: 300)
         : null;
     
-    return GestureDetector(
+    // 判断是否使用自适应填充（在GridView等场景中传入double.infinity）
+    final useFill = !width.isFinite || !height.isFinite;
+    
+    Widget imageWidget = MediaImage(
+      imageUrl: imageUrl,
+      width: width.isFinite ? width : null,
+      height: height.isFinite ? height : null,
+      borderRadius: BorderRadius.circular(8),
+      heroTag: heroTag,
+    );
+    
+    // 使用自适应填充时，固定图片比例为2:3（电影海报标准比例）
+    if (useFill) {
+      imageWidget = AspectRatio(
+        aspectRatio: 2 / 3,
+        child: imageWidget,
+      );
+    }
+    
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: useFill ? MainAxisSize.max : MainAxisSize.min,
         children: [
-          Stack(
-            children: [
-              MediaImage(
-                imageUrl: imageUrl,
-                width: width,
-                height: height,
-                borderRadius: BorderRadius.circular(8),
-                heroTag: heroTag,
-              ),
-              if (item.userData?.playbackPositionTicks != null && item.runTimeTicks != null)
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
-                    child: LinearProgressIndicator(
-                      value: item.progress,
-                      backgroundColor: Colors.black.withValues(alpha: 0.3),
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFF5B8DEF)),
-                      minHeight: 3,
-                    ),
+          useFill
+              ? Expanded(
+                  child: Stack(
+                    children: [
+                      imageWidget,
+                      if (item.userData?.playbackPositionTicks != null && item.runTimeTicks != null)
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
+                            child: LinearProgressIndicator(
+                              value: item.progress,
+                              backgroundColor: Colors.black.withValues(alpha: 0.3),
+                              valueColor: const AlwaysStoppedAnimation(Color(0xFF5B8DEF)),
+                              minHeight: 3,
+                            ),
+                          ),
+                        ),
+                      if (item.isWatched)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.check, size: 14, color: Colors.white),
+                          ),
+                        ),
+                    ],
                   ),
+                )
+              : Stack(
+                  children: [
+                    imageWidget,
+                    if (item.userData?.playbackPositionTicks != null && item.runTimeTicks != null)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
+                          child: LinearProgressIndicator(
+                            value: item.progress,
+                            backgroundColor: Colors.black.withValues(alpha: 0.3),
+                            valueColor: const AlwaysStoppedAnimation(Color(0xFF5B8DEF)),
+                            minHeight: 3,
+                          ),
+                        ),
+                      ),
+                    if (item.isWatched)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.check, size: 14, color: Colors.white),
+                        ),
+                      ),
+                  ],
                 ),
-              if (item.isWatched)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.check, size: 14, color: Colors.white),
-                  ),
-                ),
-            ],
-          ),
           const SizedBox(height: 6),
           SizedBox(
-            width: width,
+            width: width.isFinite ? width : double.infinity,
             child: Text(
               item.name,
               maxLines: 2,
@@ -174,7 +224,7 @@ class MediaPoster extends ConsumerWidget {
           ),
           if (item.seriesName != null)
             SizedBox(
-              width: width,
+              width: width.isFinite ? width : double.infinity,
               child: Text(
                 '${item.seriesName} · S${item.parentIndexNumber}E${item.indexNumber}',
                 maxLines: 1,
