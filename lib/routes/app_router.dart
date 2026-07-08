@@ -131,7 +131,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// 底部Tab外壳
+/// 底部Tab外壳（悬浮样式）
 class MainShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
   
@@ -141,28 +141,53 @@ class MainShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          border: Border(
-            top: BorderSide(
-              color: Theme.of(context).dividerTheme.color ?? Colors.transparent,
-              width: 0.5,
-            ),
+      bottomNavigationBar: SizedBox.shrink(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: _FloatingTabBar(navigationShell: navigationShell),
+    );
+  }
+}
+
+/// 悬浮Tab栏
+class _FloatingTabBar extends StatelessWidget {
+  final StatefulNavigationShell navigationShell;
+  
+  const _FloatingTabBar({required this.navigationShell});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+            spreadRadius: 2,
           ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, Icons.dns_rounded, '服务器'),
-                _buildNavItem(1, Icons.search_rounded, '聚合搜索'),
-                _buildNavItem(2, Icons.settings_rounded, '设置'),
-              ],
-            ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildNavItem(0, Icons.dns_rounded, '服务器'),
+            const SizedBox(width: 24),
+            _buildNavItem(1, Icons.search_rounded, '聚合搜索'),
+            const SizedBox(width: 24),
+            _buildNavItem(2, Icons.settings_rounded, '设置'),
+          ],
         ),
       ),
     );
@@ -174,8 +199,9 @@ class MainShell extends StatelessWidget {
     return GestureDetector(
       onTap: () => navigationShell.goBranch(index),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF5B8DEF).withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
@@ -185,16 +211,16 @@ class MainShell extends StatelessWidget {
           children: [
             Icon(
               icon,
-              size: 20,
+              size: 22,
               color: isSelected ? const Color(0xFF5B8DEF) : Colors.grey,
             ),
             if (isSelected) ...[
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
                   color: const Color(0xFF5B8DEF),
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
               ),

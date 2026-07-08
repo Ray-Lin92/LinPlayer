@@ -6,40 +6,71 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// 服务器列表页面
-class ServerListScreen extends ConsumerWidget {
+class ServerListScreen extends ConsumerStatefulWidget {
   const ServerListScreen({super.key});
   
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final servers = ref.watch(serverListProvider);
+  ConsumerState<ServerListScreen> createState() => _ServerListScreenState();
+}
+
+class _ServerListScreenState extends ConsumerState<ServerListScreen> {
+  String _searchQuery = '';
+  bool _isSearching = false;
+  
+  @override
+  Widget build(BuildContext context) {
+    final allServers = ref.watch(serverListProvider);
+    final servers = _searchQuery.isEmpty
+        ? allServers
+        : allServers.where((s) =>
+            s.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            s.remark?.toLowerCase().contains(_searchQuery.toLowerCase()) == true ||
+            s.activeLineUrl.toLowerCase().contains(_searchQuery.toLowerCase())
+          ).toList();
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('服务器'),
+        title: _isSearching
+            ? TextField(
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: '搜索服务器...',
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
+                ),
+                style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+                onChanged: (value) => setState(() => _searchQuery = value),
+              )
+            : const Text('服务器'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
+            icon: Icon(_isSearching ? Icons.close : Icons.search),
             onPressed: () {
-              // 搜索服务器
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) _searchQuery = '';
+              });
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: () {
-              context.push('/downloads');
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () {
-              context.push('/add');
-            },
-          ),
+          if (!_isSearching) ...[
+            IconButton(
+              icon: const Icon(Icons.download),
+              onPressed: () {
+                context.push('/downloads');
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: () {
+                context.push('/add');
+              },
+            ),
+          ],
         ],
       ),
       body: servers.isEmpty 
           ? _buildEmptyState(context)
-          : _buildServerList(context, ref, servers),
+          : _buildServerList(context, servers),
     );
   }
   
@@ -74,7 +105,7 @@ class ServerListScreen extends ConsumerWidget {
     );
   }
   
-  Widget _buildServerList(BuildContext context, WidgetRef ref, List<ServerConfig> servers) {
+  Widget _buildServerList(BuildContext context, List<ServerConfig> servers) {
     return ReorderableListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: servers.length,

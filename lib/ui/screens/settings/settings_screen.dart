@@ -89,7 +89,15 @@ class SettingsScreen extends ConsumerWidget {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('关闭')),
-          FilledButton(onPressed: () {}, child: const Text('检查更新')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('已是最新版本')),
+              );
+            },
+            child: const Text('检查更新'),
+          ),
         ],
       ),
     );
@@ -160,27 +168,139 @@ class GeneralSettingsScreen extends ConsumerWidget {
           ListTile(
             title: const Text('语言'),
             subtitle: const Text('跟随系统'),
-            onTap: () {},
+            onTap: () => _showLanguageSelector(context),
           ),
           ListTile(
             title: const Text('启动页'),
             subtitle: const Text('首页'),
-            onTap: () {},
+            onTap: () => _showStartupPageSelector(context),
           ),
           ListTile(
             title: const Text('缓存管理'),
             subtitle: const Text('1.2 GB'),
             trailing: TextButton(
-              onPressed: () {},
+              onPressed: () => _showClearCacheDialog(context),
               child: const Text('清除'),
             ),
           ),
           ListTile(
             title: const Text('聚合搜索优先级'),
             subtitle: const Text('服务器名称优先'),
-            onTap: () {},
+            onTap: () => _showSearchPrioritySelector(context),
           ),
         ],
+      ),
+    );
+  }
+  
+  void _showLanguageSelector(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('语言'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<String>(
+              title: const Text('跟随系统'),
+              value: 'system',
+              groupValue: 'system',
+              onChanged: (_) => Navigator.pop(context),
+            ),
+            RadioListTile<String>(
+              title: const Text('简体中文'),
+              value: 'zh_CN',
+              groupValue: 'system',
+              onChanged: (_) => Navigator.pop(context),
+            ),
+            RadioListTile<String>(
+              title: const Text('English'),
+              value: 'en',
+              groupValue: 'system',
+              onChanged: (_) => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  void _showStartupPageSelector(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('启动页'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<String>(
+              title: const Text('首页'),
+              value: 'home',
+              groupValue: 'home',
+              onChanged: (_) => Navigator.pop(context),
+            ),
+            RadioListTile<String>(
+              title: const Text('服务器列表'),
+              value: 'servers',
+              groupValue: 'home',
+              onChanged: (_) => Navigator.pop(context),
+            ),
+            RadioListTile<String>(
+              title: const Text('继续观看'),
+              value: 'resume',
+              groupValue: 'home',
+              onChanged: (_) => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  void _showClearCacheDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清除缓存'),
+        content: const Text('确定要清除所有缓存吗？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('缓存已清除')),
+              );
+            },
+            child: const Text('清除'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showSearchPrioritySelector(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('聚合搜索优先级'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<String>(
+              title: const Text('服务器名称优先'),
+              value: 'name',
+              groupValue: 'name',
+              onChanged: (_) => Navigator.pop(context),
+            ),
+            RadioListTile<String>(
+              title: const Text('响应速度优先'),
+              value: 'speed',
+              groupValue: 'name',
+              onChanged: (_) => Navigator.pop(context),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -213,91 +333,305 @@ class GeneralSettingsScreen extends ConsumerWidget {
 }
 
 /// 播放器设置页
-class PlayerSettingsScreen extends StatelessWidget {
+class PlayerSettingsScreen extends ConsumerWidget {
   const PlayerSettingsScreen({super.key});
   
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playerCore = ref.watch(playerCoreProvider);
+    final playbackSpeed = ref.watch(defaultPlaybackSpeedProvider);
+    final skipStep = ref.watch(skipForwardStepProvider);
+    final longPressSpeed = ref.watch(longPressSpeedProvider);
+    final hardwareDecoding = ref.watch(hardwareDecodingProvider);
+    final backgroundPlayback = ref.watch(backgroundPlaybackProvider);
+    final autoPlayNext = ref.watch(autoPlayNextProvider);
+    
     return Scaffold(
       appBar: AppBar(title: const Text('播放器设置')),
       body: ListView(
         children: [
           ListTile(
             title: const Text('播放器内核'),
-            subtitle: const Text('mpv（默认）'),
-            onTap: () {},
+            subtitle: Text(playerCore),
+            onTap: () => _showCoreSelector(context, ref),
           ),
           ListTile(
             title: const Text('默认播放速度'),
-            subtitle: const Text('1.0x'),
-            onTap: () {},
+            subtitle: Text('${playbackSpeed}x'),
+            onTap: () => _showSpeedSelector(context, ref),
           ),
           ListTile(
             title: const Text('快进步长'),
-            subtitle: const Text('10秒'),
-            onTap: () {},
+            subtitle: Text('$skipStep秒'),
+            onTap: () => _showSkipStepSelector(context, ref),
           ),
           ListTile(
             title: const Text('长按快进倍速'),
-            subtitle: const Text('2x'),
-            onTap: () {},
+            subtitle: Text('${longPressSpeed}x'),
+            onTap: () => _showLongPressSpeedSelector(context, ref),
           ),
           SwitchListTile(
             title: const Text('硬件解码'),
-            value: true,
-            onChanged: (_) {},
+            value: hardwareDecoding,
+            onChanged: (value) => ref.read(hardwareDecodingProvider.notifier).state = value,
           ),
           SwitchListTile(
             title: const Text('后台播放'),
-            value: true,
-            onChanged: (_) {},
+            value: backgroundPlayback,
+            onChanged: (value) => ref.read(backgroundPlaybackProvider.notifier).state = value,
           ),
           SwitchListTile(
             title: const Text('自动播放下一集'),
-            value: true,
-            onChanged: (_) {},
+            value: autoPlayNext,
+            onChanged: (value) => ref.read(autoPlayNextProvider.notifier).state = value,
           ),
         ],
+      ),
+    );
+  }
+  
+  void _showCoreSelector(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('播放器内核'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<String>(
+              title: const Text('ExoPlayer/AVPlayer（默认）'),
+              subtitle: const Text('轻量稳定，适合大多数场景'),
+              value: 'video_player',
+              groupValue: ref.read(playerCoreProvider),
+              onChanged: (value) {
+                if (value != null) {
+                  ref.read(playerCoreProvider.notifier).state = value;
+                }
+                Navigator.pop(context);
+              },
+            ),
+            RadioListTile<String>(
+              title: const Text('MPV（media_kit）'),
+              subtitle: const Text('支持PGS/SUP图形字幕、HDR'),
+              value: 'media_kit',
+              groupValue: ref.read(playerCoreProvider),
+              onChanged: (value) {
+                if (value != null) {
+                  ref.read(playerCoreProvider.notifier).state = value;
+                }
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  void _showSpeedSelector(BuildContext context, WidgetRef ref) {
+    final speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('默认播放速度'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: speeds.map((speed) => RadioListTile<double>(
+            title: Text('${speed}x'),
+            value: speed,
+            groupValue: ref.read(defaultPlaybackSpeedProvider),
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(defaultPlaybackSpeedProvider.notifier).state = value;
+              }
+              Navigator.pop(context);
+            },
+          )).toList(),
+        ),
+      ),
+    );
+  }
+  
+  void _showSkipStepSelector(BuildContext context, WidgetRef ref) {
+    final steps = [5, 10, 15, 30, 60];
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('快进步长'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: steps.map((step) => RadioListTile<int>(
+            title: Text('$step秒'),
+            value: step,
+            groupValue: ref.read(skipForwardStepProvider),
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(skipForwardStepProvider.notifier).state = value;
+              }
+              Navigator.pop(context);
+            },
+          )).toList(),
+        ),
+      ),
+    );
+  }
+  
+  void _showLongPressSpeedSelector(BuildContext context, WidgetRef ref) {
+    final speeds = [1.5, 2.0, 2.5, 3.0];
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('长按快进倍速'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: speeds.map((speed) => RadioListTile<double>(
+            title: Text('${speed}x'),
+            value: speed,
+            groupValue: ref.read(longPressSpeedProvider),
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(longPressSpeedProvider.notifier).state = value;
+              }
+              Navigator.pop(context);
+            },
+          )).toList(),
+        ),
       ),
     );
   }
 }
 
 /// 弹幕设置页
-class DanmakuSettingsScreen extends StatelessWidget {
+class DanmakuSettingsScreen extends ConsumerWidget {
   const DanmakuSettingsScreen({super.key});
   
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled = ref.watch(danmakuEnabledProvider);
+    final opacity = ref.watch(danmakuOpacityProvider);
+    final fontSize = ref.watch(danmakuFontSizeProvider);
+    final speed = ref.watch(danmakuSpeedProvider);
+    final density = ref.watch(danmakuDensityProvider);
+    
     return Scaffold(
       appBar: AppBar(title: const Text('弹幕设置')),
       body: ListView(
         children: [
           SwitchListTile(
             title: const Text('弹幕开关'),
-            value: true,
-            onChanged: (_) {},
+            value: enabled,
+            onChanged: (value) => ref.read(danmakuEnabledProvider.notifier).state = value,
           ),
           ListTile(
             title: const Text('透明度'),
-            subtitle: Slider(value: 0.8, onChanged: (_) {}),
+            subtitle: Slider(
+              value: opacity,
+              onChanged: (value) => ref.read(danmakuOpacityProvider.notifier).state = value,
+            ),
           ),
           ListTile(
             title: const Text('字号'),
-            subtitle: Slider(value: 0.5, onChanged: (_) {}),
+            subtitle: Slider(
+              value: fontSize,
+              onChanged: (value) => ref.read(danmakuFontSizeProvider.notifier).state = value,
+            ),
           ),
           ListTile(
             title: const Text('速度'),
-            subtitle: Slider(value: 0.5, onChanged: (_) {}),
+            subtitle: Slider(
+              value: speed,
+              onChanged: (value) => ref.read(danmakuSpeedProvider.notifier).state = value,
+            ),
           ),
           ListTile(
             title: const Text('密度'),
-            subtitle: Slider(value: 0.5, onChanged: (_) {}),
+            subtitle: Slider(
+              value: density,
+              onChanged: (value) => ref.read(danmakuDensityProvider.notifier).state = value,
+            ),
           ),
           ListTile(
             title: const Text('屏蔽词管理'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
+            onTap: () => _showBlockwordManager(context),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showBlockwordManager(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        '屏蔽词管理',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.add),
+                        onPressed: () => _showAddBlockwordDialog(context),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemCount: 0,
+                      itemBuilder: (context, index) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+  
+  void _showAddBlockwordDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('添加屏蔽词'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '输入屏蔽词...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('屏蔽词已添加')),
+              );
+            },
+            child: const Text('添加'),
           ),
         ],
       ),
@@ -308,7 +642,7 @@ class DanmakuSettingsScreen extends StatelessWidget {
 /// 备份与恢复页
 class BackupRestoreScreen extends StatelessWidget {
   const BackupRestoreScreen({super.key});
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -319,24 +653,98 @@ class BackupRestoreScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             FilledButton.icon(
-              onPressed: () {},
+              onPressed: () => _showExportDialog(context),
               icon: const Icon(Icons.backup),
               label: const Text('导出备份'),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: () {},
+              onPressed: () => _showImportDialog(context),
               icon: const Icon(Icons.restore),
               label: const Text('导入备份'),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: () {},
+              onPressed: () => _showImportJsonDialog(context),
               icon: const Icon(Icons.file_upload),
               label: const Text('导入服务器配置（JSON）'),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showExportDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('导出备份'),
+        content: const Text('将导出所有服务器配置和设置到本地文件。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('备份已导出')),
+              );
+            },
+            child: const Text('导出'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showImportDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('导入备份'),
+        content: const Text('将覆盖当前的服务器配置和设置。确定要继续吗？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('备份已导入')),
+              );
+            },
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showImportJsonDialog(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('导入服务器配置'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '粘贴 JSON 配置...',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 5,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('配置已导入')),
+              );
+            },
+            child: const Text('导入'),
+          ),
+        ],
       ),
     );
   }

@@ -152,3 +152,39 @@ final currentUserProvider = FutureProvider<User?>((ref) async {
 final themeModeProvider = StateProvider<ThemeModeOption>((ref) => ThemeModeOption.system);
 
 enum ThemeModeOption { light, dark, system }
+
+/// 播放器内核Provider
+final playerCoreProvider = StateProvider<String>((ref) => 'video_player');
+
+/// 默认播放速度Provider
+final defaultPlaybackSpeedProvider = StateProvider<double>((ref) => 1.0);
+
+/// 快进步长Provider（秒）
+final skipForwardStepProvider = StateProvider<int>((ref) => 10);
+
+/// 长按快进倍速Provider
+final longPressSpeedProvider = StateProvider<double>((ref) => 2.0);
+
+/// 硬件解码Provider
+final hardwareDecodingProvider = StateProvider<bool>((ref) => true);
+
+/// 后台播放Provider
+final backgroundPlaybackProvider = StateProvider<bool>((ref) => true);
+
+/// 自动播放下一集Provider
+final autoPlayNextProvider = StateProvider<bool>((ref) => true);
+
+/// 弹幕开关Provider
+final danmakuEnabledProvider = StateProvider<bool>((ref) => true);
+
+/// 弹幕透明度Provider
+final danmakuOpacityProvider = StateProvider<double>((ref) => 0.8);
+
+/// 弹幕字号Provider
+final danmakuFontSizeProvider = StateProvider<double>((ref) => 0.5);
+
+/// 弹幕速度Provider
+final danmakuSpeedProvider = StateProvider<double>((ref) => 0.5);
+
+/// 弹幕密度Provider
+final danmakuDensityProvider = StateProvider<double>((ref) => 0.5);

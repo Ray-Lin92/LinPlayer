@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../core/api/emby_api.dart';
 import '../../../core/providers/app_providers.dart';
 
@@ -212,32 +214,135 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
   }
   
   Widget _buildImportTab() {
-    return Center(
+    final importController = TextEditingController();
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(
-            Icons.upload_file,
-            size: 64,
-            color: Theme.of(context).colorScheme.outline,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '选择 JSON 配置文件',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.outline,
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '从剪贴板导入',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '支持格式：单个服务器JSON或服务器列表JSON数组',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () {
+          const SizedBox(height: 16),
+          TextField(
+            controller: importController,
+            decoration: const InputDecoration(
+              labelText: '粘贴JSON配置',
+              hintText: '[{"name": "服务器", "url": "https://..."}]',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 10,
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => _importFromJson(context, ref, importController.text),
+            icon: const Icon(Icons.paste),
+            label: const Text('解析并导入'),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () async {
+              try {
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['json', 'txt'],
+                  allowMultiple: false,
+                );
+                
+                if (result != null && result.files.isNotEmpty) {
+                  final file = result.files.first;
+                  if (file.path != null) {
+                    final content = await File(file.path!).readAsString();
+                    if (context.mounted) {
+                      _importFromJson(context, ref, content);
+                    }
+                  }
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('读取文件失败: $e')),
+                  );
+                }
+              }
             },
             icon: const Icon(Icons.folder_open),
-            label: const Text('选择文件'),
+            label: const Text('从文件选择'),
           ),
         ],
       ),
     );
+  }
+  
+  void _importFromJson(BuildContext context, WidgetRef ref, String jsonText) {
+    if (jsonText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入JSON配置')),
+      );
+      return;
+    }
+    
+    try {
+      // 简单解析：尝试提取URL和名称
+      final urlRegex = RegExp(r'["]url["]\s*:\s*["](https?://[^"]+)["]');
+      final nameRegex = RegExp(r'["]name["]\s*:\s*["]([^"]+)["]');
+      
+      final urls = urlRegex.allMatches(jsonText).map((m) => m.group(1)!).toList();
+      final names = nameRegex.allMatches(jsonText).map((m) => m.group(1)!).toList();
+      
+      if (urls.isEmpty) {
+        throw Exception('未找到有效的服务器URL');
+      }
+      
+      // 创建服务器配置
+      for (var i = 0; i < urls.length; i++) {
+        final url = urls[i];
+        final name = i < names.length ? names[i] : '导入服务器 ${i + 1}';
+        
+        final server = ServerConfig(
+          id: DateTime.now().millisecondsSinceEpoch.toString() + '_$i',
+          name: name,
+          baseUrl: url,
+          lines: [ServerLine(
+            id: 'default',
+            name: '默认线路',
+            url: url,
+          )],
+        );
+        
+        ref.read(serverListProvider.notifier).addServer(server);
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('成功导入 ${urls.length} 个服务器')),
+      );
+      
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('导入失败: ${e.toString()}')),
+      );
+    }
   }
   
   void _parseBatchText() {

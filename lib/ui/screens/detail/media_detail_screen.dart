@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../../core/services/cast_service.dart';
+import '../../screens/download/download_screen.dart';
 import '../../widgets/common/media_widgets.dart';
 
 /// 媒体详情页（剧/电影通用）
@@ -520,17 +522,27 @@ class _MoviePlayButtons extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.cast),
               title: const Text('投屏'),
-              onTap: () => Navigator.pop(context),
+              subtitle: const Text('搜索局域网设备', style: TextStyle(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _showCastDialog(context, ref);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.search),
               title: const Text('搜索其他播放源'),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/search');
+              },
             ),
             ListTile(
               leading: const Icon(Icons.download),
               title: const Text('下载'),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                _addToDownload(context, ref);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.visibility),
@@ -581,6 +593,182 @@ class _MoviePlayButtons extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _addToDownload(BuildContext context, WidgetRef ref) async {
+    final api = ref.read(apiClientProvider);
+    final videoUrl = api.playback.getVideoStreamUrl(itemId);
+    final item = await api.media.getItemDetails(itemId);
+    
+    final taskId = await ref.read(downloadServiceProvider).addDownload(
+      itemId: itemId,
+      title: item.name,
+      url: videoUrl,
+    );
+
+    if (context.mounted) {
+      if (taskId != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已添加到下载队列')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('添加下载失败')),
+        );
+      }
+    }
+  }
+
+  void _showCastDialog(BuildContext context, WidgetRef ref) {
+    final castService = CastService();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Text('投屏设备'),
+            const Spacer(),
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: _CastDeviceList(
+            castService: castService,
+            onDeviceSelected: (device) async {
+              Navigator.pop(context);
+              final api = ref.read(apiClientProvider);
+              final videoUrl = api.playback.getVideoStreamUrl(itemId);
+              
+              final connected = await castService.connect(device);
+              if (connected) {
+                final success = await castService.castVideo(videoUrl);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(success 
+                        ? '已投屏到 ${device.name}'
+                        : '投屏失败，请重试'),
+                    ),
+                  );
+                }
+              } else {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('连接设备失败')),
+                  );
+                }
+              }
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              castService.dispose();
+              Navigator.pop(context);
+            },
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+    
+    // 开始扫描
+    castService.startDiscovery();
+  }
+}
+
+/// 设备列表组件
+class _CastDeviceList extends StatefulWidget {
+  final CastService castService;
+  final Function(CastDevice) onDeviceSelected;
+  
+  const _CastDeviceList({
+    required this.castService,
+    required this.onDeviceSelected,
+  });
+  
+  @override
+  State<_CastDeviceList> createState() => _CastDeviceListState();
+}
+
+class _CastDeviceListState extends State<_CastDeviceList> {
+  @override
+  void initState() {
+    super.initState();
+    widget.castService.addListener(_onUpdate);
+  }
+  
+  @override
+  void dispose() {
+    widget.castService.removeListener(_onUpdate);
+    super.dispose();
+  }
+  
+  void _onUpdate() {
+    setState(() {});
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    final devices = widget.castService.devices;
+    
+    if (devices.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cast_connected,
+              size: 48,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '正在搜索设备...',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '请确保电视/投屏器与手机在同一WiFi下',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).textTheme.bodySmall?.color,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return ListView.builder(
+      itemCount: devices.length,
+      itemBuilder: (context, index) {
+        final device = devices[index];
+        return ListTile(
+          leading: const Icon(Icons.tv),
+          title: Text(device.name),
+          subtitle: Text('${device.host}:${device.port}'),
+          trailing: device.isConnected 
+              ? const Icon(Icons.check_circle, color: Color(0xFF5B8DEF))
+              : null,
+          onTap: () => widget.onDeviceSelected(device),
+        );
+      },
     );
   }
 }

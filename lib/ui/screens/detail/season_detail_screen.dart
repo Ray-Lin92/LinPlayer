@@ -197,15 +197,43 @@ class EpisodeDetailScreen extends ConsumerWidget {
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: streams.isEmpty
-              ? [const ListTile(title: Text('无可用轨道'))]
-              : streams.map((stream) {
-                  return ListTile(
-                    title: Text(stream.displayTitle ?? stream.language ?? '轨道 ${stream.index}'),
-                    trailing: stream.isDefault == true ? const Icon(Icons.check, color: Color(0xFF5B8DEF)) : null,
-                    onTap: () => Navigator.pop(ctx),
-                  );
-                }).toList(),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Text(
+                    type == 'Audio' ? '选择音频轨道' : '选择字幕轨道',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            if (streams.isEmpty)
+              const ListTile(title: Text('无可用轨道'))
+            else
+              ...streams.map((stream) {
+                return ListTile(
+                  title: Text(stream.displayTitle ?? stream.language ?? '轨道 ${stream.index}'),
+                  subtitle: stream.codec != null ? Text('编码: ${stream.codec}') : null,
+                  trailing: stream.isDefault == true
+                      ? const Icon(Icons.check, color: Color(0xFF5B8DEF))
+                      : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(content: Text('已选择: ${stream.displayTitle ?? stream.language ?? '轨道 ${stream.index}'}')),
+                    );
+                  },
+                );
+              }),
+          ],
         ),
       ),
     );
