@@ -73,8 +73,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          lfs: true # jniLibs/*/libmpv.so 由 Git LFS 跟踪，必须拉取真实二进制，否则打进 APK 的是 LFS 指针文件（运行时 UnsatisfiedLinkError: bad ELF magic）
 
       - name: Verify native libs are real ELF (not LFS pointers)
         run: |
@@ -230,8 +228,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          lfs: true # jniLibs/*/libmpv.so 由 Git LFS 跟踪，必须拉取真实二进制，否则打进 APK 的是 LFS 指针文件（运行时 UnsatisfiedLinkError: bad ELF magic）
 
       - name: Verify native libs are real ELF (not LFS pointers)
         run: |
