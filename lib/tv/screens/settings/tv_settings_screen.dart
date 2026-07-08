@@ -318,6 +318,14 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
             color: TvDesignTokens.brand, size: m.s(28)),
         onSelect: () => context.push('/tv/lan-control'),
       ),
+      _rowCard(
+        m,
+        title: '插件',
+        subtitle: '从插件市场一键安装、启用/卸载插件（TV 无需文件导入）',
+        trailing: Icon(Icons.extension,
+            color: TvDesignTokens.brand, size: m.s(28)),
+        onSelect: () => context.push('/tv/plugins'),
+      ),
       _fontItem(
         m,
         title: '应用字体',

@@ -1,13 +1,17 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/platform_utils.dart';
 import '../manager/plugin_manager.dart';
 import '../models/plugin_extension_point.dart';
 import '../models/plugin_info.dart';
 import '../providers/plugin_providers.dart';
 import 'plugin_permission_dialog.dart';
 import 'plugin_settings_page_host.dart';
+import 'plugin_store_screen.dart';
 
 /// 插件管理页（移动端）。负责安装、启用/禁用、查看权限、打开设置、卸载。
 class PluginManagementScreen extends ConsumerWidget {
@@ -20,10 +24,45 @@ class PluginManagementScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('插件'),
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.add),
-            tooltip: '安装 .ipk',
-            onPressed: () => _install(context, manager),
+            tooltip: '安装插件',
+            onSelected: (v) {
+              switch (v) {
+                case 'store':
+                  _openStore(context);
+                case 'url':
+                  _installFromUrl(context, manager);
+                case 'file':
+                  _install(context, manager);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'store',
+                child: ListTile(
+                  leading: Icon(Icons.storefront_outlined),
+                  title: Text('插件市场'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'url',
+                child: ListTile(
+                  leading: Icon(Icons.link),
+                  title: Text('从链接安装'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'file',
+                child: ListTile(
+                  leading: Icon(Icons.folder_open),
+                  title: Text('从文件安装 (.ipk)'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -46,15 +85,65 @@ class PluginManagementScreen extends ConsumerWidget {
     );
   }
 
+  void _openStore(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            PluginStoreScreen(target: isDesktopPlatform ? 'pc' : 'mobile'),
+      ),
+    );
+  }
+
+  Future<void> _installFromUrl(
+      BuildContext context, PluginManager manager) async {
+    final controller = TextEditingController();
+    final url = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('从链接安装'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            hintText: '粘贴 .ipk 安装包直链',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('安装'),
+          ),
+        ],
+      ),
+    );
+    if (url == null || url.isEmpty) return;
+    if (!context.mounted) return;
+    await _runInstall(context, () => manager.installFromUrl(url));
+  }
+
   Future<void> _install(BuildContext context, PluginManager manager) async {
+    // iOS 对 .ipk 这类未知扩展名无 UTType，FileType.custom 会被系统拒绝/抛错，
+    // 故 iOS 放开为 FileType.any 让用户从「文件」App 里选；其余平台保留扩展名过滤。
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['ipk', 'lpk', 'zip'],
+      type: Platform.isIOS ? FileType.any : FileType.custom,
+      allowedExtensions: Platform.isIOS ? null : const ['ipk', 'lpk', 'zip'],
     );
     final path = result?.files.single.path;
-    if (path == null) return;
+    if (path == null || !context.mounted) return;
+    await _runInstall(context, () => manager.install(path));
+  }
+
+  Future<void> _runInstall(
+      BuildContext context, Future<PluginInfo> Function() install) async {
     try {
-      final info = await manager.install(path);
+      final info = await install();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('已安装 ${info.name}，请在列表中启用')),
@@ -83,7 +172,7 @@ class _EmptyState extends StatelessWidget {
           const Text('还没有安装任何插件'),
           const SizedBox(height: 8),
           Text(
-            '点击右上角 + 安装 .ipk 插件包',
+            '点击右上角 + 从插件市场 / 链接 / 文件安装',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

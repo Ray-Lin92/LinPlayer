@@ -15,6 +15,7 @@ import '../models/plugin_permission.dart';
 import '../runtime/plugin_context_bridge.dart';
 import '../runtime/plugin_runtime.dart';
 import '../runtime/plugin_storage.dart';
+import '../store/plugin_store.dart';
 import 'plugin_extension_registry.dart';
 import 'plugin_installer.dart';
 
@@ -248,8 +249,21 @@ class PluginManager extends ChangeNotifier {
   /// 从 .ipk 文件安装（安装后默认禁用，需用户授权后启用）。兼容旧 .lpk。
   Future<PluginInfo> install(String lpkPath) async {
     final info = await _installer.installFromLpkFile(lpkPath);
-    // 覆盖安装（同 id 升级/重装）：清除旧的启用态、运行时与已同意权限，强制
-    // 重新走授权弹窗，防止新清单悄悄提权后随下次扫描自动获得新权限。
+    return _afterInstall(info);
+  }
+
+  /// 从网络安装：下载 .ipk 字节后落盘安装（插件市场 / 链接导入共用）。
+  /// 苹果移动端文件选择器无法选 .ipk，网络安装是其唯一可用的导入途径。
+  Future<PluginInfo> installFromUrl(String url) async {
+    final bytes = await PluginStore.downloadPackage(url);
+    final info = await _installer.installFromBytes(bytes);
+    return _afterInstall(info);
+  }
+
+  /// 安装落盘后的统一收尾：覆盖安装（同 id 升级/重装）时清除旧的启用态、运行时
+  /// 与已同意权限，强制重新走授权弹窗，防止新清单悄悄提权后随下次扫描自动获得
+  /// 新权限。文件 / 网络两条安装路径共用。
+  Future<PluginInfo> _afterInstall(PluginInfo info) async {
     final wasEnabled = _enabledIds.remove(info.id);
     await _deactivate(info.id);
     if (_approvedPerms.remove(info.id) != null) {
