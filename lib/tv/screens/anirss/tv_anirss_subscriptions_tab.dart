@@ -13,6 +13,7 @@ import '../../../ui/widgets/common/media_widgets.dart';
 import '../../theme/tv_design_tokens.dart';
 import '../../theme/tv_metrics.dart';
 import '../../widgets/tv_focusable.dart';
+import '../../widgets/tv_panel.dart';
 import '../../widgets/tv_toast.dart';
 
 /// Ani-rss 订阅 Tab（TV）：添加订阅 / 刷新全部 + 按订阅聚合的下载进度监控。
@@ -367,13 +368,15 @@ class _SubscriptionRowState extends ConsumerState<_SubscriptionRow> {
                   autofocus: true,
                   padding: EdgeInsets.all(m.s(4)),
                   onSelect: () => Navigator.of(ctx).pop(false),
-                  child: _dialogBtn(m, '仅移除订阅', filled: true),
+                  child: const TvDialogButton('仅移除订阅',
+                      filled: true, fullWidth: true),
                 ),
                 SizedBox(height: m.spacingSm),
                 TvFocusable(
                   padding: EdgeInsets.all(m.s(4)),
                   onSelect: () => Navigator.of(ctx).pop(true),
-                  child: _dialogBtn(m, '移除并删除已下载文件', danger: true),
+                  child: const TvDialogButton('移除并删除已下载文件',
+                      danger: true, fullWidth: true),
                 ),
               ],
             ),
@@ -393,27 +396,6 @@ class _SubscriptionRowState extends ConsumerState<_SubscriptionRow> {
     }
   }
 
-  Widget _dialogBtn(TvMetrics m, String label,
-      {bool filled = false, bool danger = false}) {
-    final Color bg = danger
-        ? TvDesignTokens.error
-        : (filled ? TvDesignTokens.brand : TvDesignTokens.surfaceElevated);
-    return Container(
-      width: double.infinity,
-      padding:
-          EdgeInsets.symmetric(horizontal: m.spacingLg, vertical: m.spacingMd),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(m.posterRadius),
-      ),
-      child: Text(label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-              fontSize: m.fontSizeMd,
-              color: Colors.white,
-              fontWeight: FontWeight.w600)),
-    );
-  }
 }
 
 class _EpisodeProgressRow extends StatelessWidget {

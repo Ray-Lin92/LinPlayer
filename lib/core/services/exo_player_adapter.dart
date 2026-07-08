@@ -769,13 +769,6 @@ class ExoPlayerAdapter implements PlayerAdapter {
     return const Center(child: CircularProgressIndicator());
   }
 
-  Widget buildVideoContent() {
-    if (_textureId == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    return Texture(textureId: _textureId!);
-  }
-
   static String _stripAssTags(String text) {
     var result = text;
     result = result.replaceAll(RegExp(r'\{\\*[^}]*\}'), '');

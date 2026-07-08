@@ -44,11 +44,3 @@ bool get isTvPlatform {
 
   return false;
 }
-
-/// 检测是否为平板（大屏幕设备）
-/// 通过屏幕尺寸和像素密度检测
-bool get isTabletPlatform {
-  // 简化检测：在运行时通过 MediaQuery 检测
-  // 实际检测需要在 Widget 构建时进行
-  return false;
-}

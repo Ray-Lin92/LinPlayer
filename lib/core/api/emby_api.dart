@@ -108,9 +108,6 @@ class EmbyApiClient implements ApiClientFactory {
   FavoriteApi get favorite => EmbyFavoriteApi(this);
 
   @override
-  SessionApi get session => EmbySessionApi(this);
-
-  @override
   ImageApi get image => EmbyImageApi(this);
 
   @override
@@ -888,20 +885,6 @@ class EmbyFavoriteApi implements FavoriteApi {
   }
 }
 
-// ==================== Session ====================
-
-class EmbySessionApi implements SessionApi {
-  final EmbyApiClient _client;
-  EmbySessionApi(this._client);
-
-  @override
-  Future<List<Session>> getSessions() async {
-    final resp = await _client.get('/Sessions');
-    final items = resp.data as List<dynamic>;
-    return items.map((e) => _parseSession(e as Map<String, dynamic>)).toList();
-  }
-}
-
 // ==================== Image ====================
 
 class EmbyImageApi implements ImageApi {
@@ -1279,26 +1262,6 @@ Person _parsePersonFromItem(Map<String, dynamic> d) {
         _extractImageTag(d, 'Primary') ?? d['PrimaryImageTag']?.toString(),
     role: d['Role']?.toString(),
     type: d['Type']?.toString(),
-  );
-}
-
-Session _parseSession(Map<String, dynamic> d) {
-  final npi = d['NowPlayingItem'] as Map<String, dynamic>?;
-  return Session(
-    id: d['Id']?.toString() ?? '',
-    userName: d['UserName']?.toString(),
-    client: d['Client']?.toString(),
-    deviceName: d['DeviceName']?.toString(),
-    isNowPlaying: d['IsNowPlaying'] as bool?,
-    nowPlayingItem: npi != null
-        ? NowPlayingItem(
-            id: npi['Id']?.toString() ?? '',
-            name: npi['Name'] ?? '',
-            seriesName: npi['SeriesName']?.toString(),
-            runTimeTicks: _parseTicks(npi['RunTimeTicks']),
-            playbackPositionTicks: _parseTicks(npi['PlaybackPositionTicks']),
-          )
-        : null,
   );
 }
 

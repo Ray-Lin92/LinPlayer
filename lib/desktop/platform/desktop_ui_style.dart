@@ -15,6 +15,4 @@ DesktopUiStyle get desktopUiStyle {
   return DesktopUiStyle.material;
 }
 
-bool get isFluentStyle => desktopUiStyle == DesktopUiStyle.fluent;
 bool get isMacosStyle => desktopUiStyle == DesktopUiStyle.macos;
-bool get isMaterialDesktopStyle => desktopUiStyle == DesktopUiStyle.material;

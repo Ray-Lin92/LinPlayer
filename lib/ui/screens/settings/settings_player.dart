@@ -468,38 +468,6 @@ class PlayerSettingsScreen extends ConsumerWidget {
     );
   }
 
-  /*
-  void _showWatchedThresholdSelector(BuildContext context, WidgetRef ref) {
-    final thresholds = [75, 80, 85, 90, 95];
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('宸茬湅鍒ゅ畾闃堝€?),
-        content: RadioGroup<int>(
-          groupValue: ref.read(watchedThresholdProvider),
-          onChanged: (value) {
-            if (value != null) {
-              ref.read(watchedThresholdProvider.notifier).state = value;
-            }
-            Navigator.pop(context);
-          },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: thresholds
-                .map((threshold) => RadioListTile<int>(
-                      title: Text('$threshold%'),
-                      subtitle:
-                          Text('鎾斁杩涘害杈惧埌 $threshold% 鍚庤涓哄凡鐪?),
-                      value: threshold,
-                    ))
-                .toList(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  */
   void _showWatchedThresholdSelector(BuildContext context, WidgetRef ref) {
     final thresholds = [75, 80, 85, 90, 95];
     showDialog(

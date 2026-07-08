@@ -189,8 +189,6 @@ class LanRemoteServer {
     return base64Url.encode(bytes).replaceAll('=', '');
   }
 
-  Future<String?> currentUrl() async => urlFor(await _lanIp());
-
   Future<String?> _lanIp() async {
     try {
       final interfaces = await NetworkInterface.list(
