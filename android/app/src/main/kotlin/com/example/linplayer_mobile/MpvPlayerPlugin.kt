@@ -379,23 +379,32 @@ class MpvPlayerPlugin(
     }
 
     private fun setMpvOptions(hardwareDecoding: Boolean, useGpuNext: Boolean = false) {
-        // Video output - use gpu-next for better HDR/DV support when using SurfaceView
+        // Video output - try gpu-next for better HDR/DV support, fallback to gpu if unavailable
+        var actuallyUsingGpuNext = false
         if (useGpuNext) {
-            MPVLib.setOptionString("vo", "gpu-next")
-            MPVLib.setOptionString("gpu-context", "android")
-            MPVLib.setOptionString("opengl-es", "yes")
-            android.util.Log.i(TAG, "Configured mpv for gpu-next rendering")
+            try {
+                MPVLib.setOptionString("vo", "gpu-next")
+                actuallyUsingGpuNext = true
+                android.util.Log.i(TAG, "Configured mpv for gpu-next rendering")
+            } catch (e: Exception) {
+                // gpu-next not available (requires Vulkan/libplacebo), fallback to gpu
+                android.util.Log.w(TAG, "gpu-next not available, falling back to gpu: ${e.message}")
+                MPVLib.setOptionString("vo", "gpu")
+                android.util.Log.i(TAG, "Configured mpv for gpu rendering (fallback)")
+            }
         } else {
             MPVLib.setOptionString("vo", "gpu")
-            MPVLib.setOptionString("gpu-context", "android")
-            MPVLib.setOptionString("opengl-es", "yes")
             android.util.Log.i(TAG, "Configured mpv for gpu rendering")
         }
+
+        // Common GPU settings
+        MPVLib.setOptionString("gpu-context", "android")
+        MPVLib.setOptionString("opengl-es", "yes")
 
         // HDR/杜比视界设置
         MPVLib.setOptionString("target-colorspace-hint", "yes")
 
-        if (useGpuNext) {
+        if (actuallyUsingGpuNext) {
             // gpu-next 模式：libplacebo 处理 DV RPU 元数据，正确映射 IPT-PQ 色空间
             MPVLib.setOptionString("dolby-vision-mode", "auto")
             MPVLib.setOptionString("tone-mapping", "spline")
@@ -420,8 +429,9 @@ class MpvPlayerPlugin(
         MPVLib.setOptionString("ao", "audiotrack,opensles")
         MPVLib.setOptionString("audio-channels", "stereo")
         MPVLib.setOptionString("ad-lavc-downmix", "yes")
-        MPVLib.setOptionString("af",
-            "lavfi=[pan=stereo|FL=FC+0.30*FL+0.30*BL|FR=FC+0.30*FR+0.30*BR]")
+        // 简化音频过滤器 - 移除可能导致问题的 pan filter
+        // 让 ad-lavc-downmix 自动处理多声道到立体声的转换
+        // MPVLib.setOptionString("af", "lavfi=[pan=stereo|c0=c2+0.30*c0+0.30*c4|c1=c2+0.30*c1+0.30*c5]")
 
         // Config
         MPVLib.setOptionString("config", "yes")
@@ -435,9 +445,7 @@ class MpvPlayerPlugin(
 
         // Subtitles
         MPVLib.setOptionString("sub-visibility", "yes")
-        // 字幕走 OSD 覆盖层渲染，不混入视频帧。blend-subtitles=video 会让
-        // PGS/SUP 位图字幕每次刷新都重绘整帧，造成视频画面闪现。
-        MPVLib.setOptionString("blend-subtitles", "no")
+        MPVLib.setOptionString("blend-subtitles", "video")
         MPVLib.setOptionString("sub-auto", "all")
         MPVLib.setOptionString("sub-ass", "yes")
         MPVLib.setOptionString("sub-codepage", "utf-8")

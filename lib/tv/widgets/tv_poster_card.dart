@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../ui/widgets/common/media_widgets.dart';
 import '../theme/tv_design_tokens.dart';
 
 /// TV 海报卡片
@@ -40,15 +39,15 @@ class TvPosterCard extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(TvDesignTokens.posterRadius),
-                child: SizedBox(
+                child: Container(
                   width: width,
                   height: height,
+                  color: TvDesignTokens.surfaceElevated,
                   child: imageUrl != null
-                      ? MediaImage(
-                          imageUrl: imageUrl,
-                          width: width,
-                          height: height,
+                      ? Image.network(
+                          imageUrl!,
                           fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
                         )
                       : _buildPlaceholder(),
                 ),
