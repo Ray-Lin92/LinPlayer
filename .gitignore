@@ -43,11 +43,14 @@ android/app/debug/
 android/app/profile/
 android/app/release/
 android/.gradle/
+android/.kotlin/
+android/gradle-user-home/
 android/captures/
 android/local.properties
 android/gradlew
 android/gradlew.bat
 android/gradle/wrapper/gradle-wrapper.jar
+android/init.gradle
 *.apk
 *.aab
 *.dex
@@ -59,11 +62,22 @@ ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
 ios/Flutter/App.framework
 ios/Flutter/Engine.framework
+ios/Flutter/ephemeral/
 
 # Windows build artifacts
 windows/flutter/generated_plugin_registrant.cc
 windows/flutter/generated_plugin_registrant.h
 windows/flutter/generated_plugins.cmake
+windows/flutter/ephemeral/
+
+# Linux/macOS Flutter artifacts
+linux/flutter/ephemeral/
+macos/Flutter/ephemeral/
+
+# Native build system caches
+**/.gradle/
+**/.kotlin/
+**/.cxx/
 
 # Generated files
 *.g.dart
