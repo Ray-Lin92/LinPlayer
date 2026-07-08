@@ -17,7 +17,8 @@ class _ServerLinesScreenState extends ConsumerState<ServerLinesScreen> {
   bool _isSyncing = false;
   
   Future<void> _syncLines() async {
-    final config = ref.read(extDomainConfigProvider);
+    final configs = ref.read(extDomainConfigProvider);
+    final config = configs[widget.serverId];
     if (config == null || config.extDomainUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请先配置线路同步地址')),
@@ -107,6 +108,107 @@ class _ServerLinesScreenState extends ConsumerState<ServerLinesScreen> {
       }
     }
   }
+
+  void _showSyncConfigDialog() {
+    final configs = ref.read(extDomainConfigProvider);
+    final config = configs[widget.serverId];
+    final controller = TextEditingController(text: config?.extDomainUrl ?? '');
+    bool isLoading = false;
+    String? testResult;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('线路同步配置'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '配置 emby_ext_domains 服务地址，用于同步该服务器的线路列表。',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText: '服务地址',
+                  hintText: 'https://ext.example.com',
+                  prefixIcon: const Icon(Icons.cloud_sync),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Padding(
+                            padding: EdgeInsets.all(12),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.check_circle_outline),
+                          onPressed: () async {
+                            final url = controller.text.trim();
+                            if (url.isEmpty) return;
+                            setDialogState(() { isLoading = true; testResult = null; });
+                            try {
+                              final service = ref.read(extDomainServiceProvider);
+                              final available = await service.checkServiceAvailable(url);
+                              setDialogState(() {
+                                testResult = available ? '连接成功' : '连接失败';
+                              });
+                            } catch (e) {
+                              setDialogState(() {
+                                testResult = '连接失败: $e';
+                              });
+                            } finally {
+                              setDialogState(() { isLoading = false; });
+                            }
+                          },
+                        ),
+                ),
+                keyboardType: TextInputType.url,
+              ),
+              if (testResult != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  testResult!,
+                  style: TextStyle(
+                    color: testResult == '连接成功'
+                        ? Colors.green
+                        : Theme.of(ctx).colorScheme.error,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final url = controller.text.trim();
+                if (url.isEmpty) {
+                  ref.read(extDomainConfigProvider.notifier).clearConfig(widget.serverId);
+                } else {
+                  ref.read(extDomainConfigProvider.notifier).setConfig(widget.serverId, url);
+                }
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('配置已保存')),
+                );
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   
   @override
   Widget build(BuildContext context) {
@@ -125,6 +227,11 @@ class _ServerLinesScreenState extends ConsumerState<ServerLinesScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _showSyncConfigDialog,
+            tooltip: '同步配置',
+          ),
           IconButton(
             icon: _isSyncing
                 ? const SizedBox(

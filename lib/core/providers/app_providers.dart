@@ -525,17 +525,17 @@ final extDomainServiceProvider = Provider<ExtDomainService>((ref) {
   return ExtDomainService();
 });
 
-/// 扩展线路同步配置Provider
-final extDomainConfigProvider = StateNotifierProvider<ExtDomainConfigNotifier, ExtDomainConfig?>((ref) {
+/// 扩展线路同步配置Provider（按服务器ID存储）
+final extDomainConfigProvider = StateNotifierProvider<ExtDomainConfigNotifier, Map<String, ExtDomainConfig>>((ref) {
   return ExtDomainConfigNotifier();
 });
 
-class ExtDomainConfigNotifier extends StateNotifier<ExtDomainConfig?> {
-  ExtDomainConfigNotifier() : super(null) {
+class ExtDomainConfigNotifier extends StateNotifier<Map<String, ExtDomainConfig>> {
+  ExtDomainConfigNotifier() : super({}) {
     _loadConfig();
   }
 
-  static const _configKey = 'linplayer_ext_domain_config';
+  static const _configKey = 'linplayer_ext_domain_configs';
 
   Future<void> _loadConfig() async {
     try {
@@ -543,10 +543,13 @@ class ExtDomainConfigNotifier extends StateNotifier<ExtDomainConfig?> {
       final jsonStr = prefs.getString(_configKey);
       if (jsonStr != null) {
         final json = jsonDecode(jsonStr) as Map<String, dynamic>;
-        state = ExtDomainConfig(
-          extDomainUrl: json['extDomainUrl'] as String,
-          autoSync: json['autoSync'] as bool? ?? false,
-        );
+        state = json.map((key, value) => MapEntry(
+          key,
+          ExtDomainConfig(
+            extDomainUrl: value['extDomainUrl'] as String,
+            autoSync: value['autoSync'] as bool? ?? false,
+          ),
+        ));
       }
     } catch (e) {
       // 加载失败
@@ -556,41 +559,49 @@ class ExtDomainConfigNotifier extends StateNotifier<ExtDomainConfig?> {
   Future<void> _saveConfig() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (state != null) {
-        await prefs.setString(_configKey, jsonEncode({
-          'extDomainUrl': state!.extDomainUrl,
-          'autoSync': state!.autoSync,
-        }));
-      } else {
-        await prefs.remove(_configKey);
-      }
+      final json = state.map((key, value) => MapEntry(key, {
+        'extDomainUrl': value.extDomainUrl,
+        'autoSync': value.autoSync,
+      }));
+      await prefs.setString(_configKey, jsonEncode(json));
     } catch (e) {
       // 保存失败
     }
   }
 
-  void setConfig(String extDomainUrl, {bool autoSync = false}) {
-    state = ExtDomainConfig(
-      extDomainUrl: extDomainUrl,
-      autoSync: autoSync,
-    );
-    _saveConfig();
-  }
-
-  void clearConfig() {
-    state = null;
-    _saveConfig();
-  }
-
-  void setAutoSync(bool autoSync) {
-    if (state != null) {
-      state = ExtDomainConfig(
-        extDomainUrl: state!.extDomainUrl,
+  void setConfig(String serverId, String extDomainUrl, {bool autoSync = false}) {
+    state = {
+      ...state,
+      serverId: ExtDomainConfig(
+        extDomainUrl: extDomainUrl,
         autoSync: autoSync,
-      );
+      ),
+    };
+    _saveConfig();
+  }
+
+  void clearConfig(String serverId) {
+    final newState = Map<String, ExtDomainConfig>.from(state);
+    newState.remove(serverId);
+    state = newState;
+    _saveConfig();
+  }
+
+  void setAutoSync(String serverId, bool autoSync) {
+    final config = state[serverId];
+    if (config != null) {
+      state = {
+        ...state,
+        serverId: ExtDomainConfig(
+          extDomainUrl: config.extDomainUrl,
+          autoSync: autoSync,
+        ),
+      };
       _saveConfig();
     }
   }
+
+  ExtDomainConfig? getConfig(String serverId) => state[serverId];
 }
 
 class ExtDomainConfig {
@@ -606,18 +617,19 @@ class ExtDomainConfig {
 /// 同步线路结果Provider
 final syncExtDomainsProvider = FutureProvider.family<List<ExtServerLine>, String>((ref, serverId) async {
   final service = ref.read(extDomainServiceProvider);
-  final config = ref.read(extDomainConfigProvider);
+  final configs = ref.read(extDomainConfigProvider);
+  final config = configs[serverId];
   final servers = ref.read(serverListProvider);
-  
+
   if (config == null || config.extDomainUrl.isEmpty) {
     return [];
   }
-  
+
   final server = servers.where((s) => s.id == serverId).firstOrNull;
   if (server == null || server.authToken == null) {
     return [];
   }
-  
+
   try {
     return await service.fetchExtDomains(
       extDomainUrl: config.extDomainUrl,

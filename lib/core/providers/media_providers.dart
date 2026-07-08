@@ -8,18 +8,21 @@ import '../providers/app_providers.dart';
 
 /// 继续观看
 final resumeItemsProvider = FutureProvider<List<MediaItem>>((ref) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.home.getResumeItems();
 });
 
 /// 下一集
 final nextUpProvider = FutureProvider<List<MediaItem>>((ref) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.home.getNextUp();
 });
 
 /// 媒体库列表（已过滤被屏蔽的）
 final librariesProvider = FutureProvider<List<Library>>((ref) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   final hiddenLibraries = ref.watch(hiddenLibrariesProvider);
   final allLibraries = await api.home.getLibraries();
@@ -28,12 +31,14 @@ final librariesProvider = FutureProvider<List<Library>>((ref) async {
 
 /// 最新添加（按媒体库）
 final latestItemsProvider = FutureProvider.family<List<MediaItem>, String>((ref, libraryId) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.home.getLatestItems(libraryId, limit: 20);
 });
 
 /// 随机推荐
 final randomRecommendationsProvider = FutureProvider<List<MediaItem>>((ref) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.home.getRandomRecommendations();
 });
@@ -44,18 +49,21 @@ final randomRecommendationsProvider = FutureProvider<List<MediaItem>>((ref) asyn
 
 /// 媒体项详情
 final mediaItemProvider = FutureProvider.family<MediaItem, String>((ref, itemId) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.media.getItemDetails(itemId);
 });
 
 /// 相似推荐
 final similarItemsProvider = FutureProvider.family<List<MediaItem>, String>((ref, itemId) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.media.getSimilarItems(itemId);
 });
 
 /// 季列表
 final seasonsProvider = FutureProvider.family<List<Season>, String>((ref, seriesId) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.media.getSeasons(seriesId);
 });
@@ -63,6 +71,7 @@ final seasonsProvider = FutureProvider.family<List<Season>, String>((ref, series
 /// 集列表
 final episodesProvider = FutureProvider.family<List<Episode>, ({String seriesId, String? seasonId})>(
   (ref, params) async {
+    ref.keepAlive();
     final api = ref.watch(apiClientProvider);
     return await api.media.getEpisodes(params.seriesId, seasonId: params.seasonId);
   },
@@ -70,6 +79,7 @@ final episodesProvider = FutureProvider.family<List<Episode>, ({String seriesId,
 
 /// 演职人员
 final personsProvider = FutureProvider.family<List<Person>, String>((ref, itemId) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.media.getPersonItems(itemId);
 });
@@ -81,6 +91,7 @@ final personsProvider = FutureProvider.family<List<Person>, String>((ref, itemId
 /// 媒体库内容
 final libraryItemsProvider = FutureProvider.family<List<MediaItem>, ({String libraryId, String? sortBy, String? sortOrder})>(
   (ref, params) async {
+    ref.keepAlive();
     final api = ref.watch(apiClientProvider);
     return await api.library.getLibraryItems(
       libraryId: params.libraryId,
@@ -92,6 +103,7 @@ final libraryItemsProvider = FutureProvider.family<List<MediaItem>, ({String lib
 
 /// 筛选条件
 final filtersProvider = FutureProvider.family<Filters, String>((ref, libraryId) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.library.getFilters(libraryId);
 });
@@ -108,6 +120,7 @@ final aggregateSearchProvider = StateProvider<bool>((ref) => false);
 
 /// 搜索结果
 final searchResultsProvider = FutureProvider<List<MediaItem>>((ref) async {
+  ref.keepAlive();
   final query = ref.watch(searchQueryProvider);
   final isAggregate = ref.watch(aggregateSearchProvider);
   final hiddenLibraries = ref.watch(hiddenLibrariesProvider);
@@ -162,6 +175,7 @@ class SearchHistoryNotifier extends StateNotifier<List<String>> {
 
 /// 播放信息
 final playbackInfoProvider = FutureProvider.family<PlaybackInfo, String>((ref, itemId) async {
+  ref.keepAlive();
   final api = ref.watch(apiClientProvider);
   return await api.playback.getPlaybackInfo(itemId);
 });

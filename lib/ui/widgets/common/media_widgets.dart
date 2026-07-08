@@ -124,14 +124,18 @@ class _FallbackNetworkImageState extends State<_FallbackNetworkImage> {
   @override
   Widget build(BuildContext context) {
     final dpr = MediaQuery.of(context).devicePixelRatio;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // 修复：当width/height为无限时，使用屏幕尺寸作为缓存尺寸上限
     final cw = widget.cacheWidth ??
-        (widget.width != null && widget.width!.isFinite
+        (widget.width != null && widget.width!.isFinite && widget.width! > 0
             ? (widget.width! * dpr).ceil()
-            : null);
+            : (screenWidth * dpr).ceil());
     final ch = widget.cacheHeight ??
-        (widget.height != null && widget.height!.isFinite
+        (widget.height != null && widget.height!.isFinite && widget.height! > 0
             ? (widget.height! * dpr).ceil()
-            : null);
+            : (screenHeight * dpr).ceil());
 
     return ExtendedImage.network(
       widget.imageUrls[_currentIndex],

@@ -4,13 +4,13 @@ import 'package:palette_generator/palette_generator.dart';
 /// 颜色提取工具类
 class ColorExtractor {
   /// 从图片URL提取主色调和暗色背景
-  /// 使用更高分辨率采样以获得更准确的颜色
+  /// 降低采样分辨率以减少主线程阻塞
   static Future<ExtractedColors> extractFromUrl(String imageUrl) async {
     try {
       final palette = await PaletteGenerator.fromImageProvider(
         NetworkImage(imageUrl),
-        size: const Size(300, 300),
-        maximumColorCount: 32,
+        size: const Size(100, 100),
+        maximumColorCount: 16,
         filters: [],
       );
 
