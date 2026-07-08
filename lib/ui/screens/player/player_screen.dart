@@ -320,7 +320,18 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
           return 'ass';
       }
     } else {
-      return 'srt';
+      switch (codec) {
+        case 'srt' || 'subrip':
+          return 'srt';
+        case 'vtt' || 'webvtt':
+          return 'vtt';
+        case 'ass' || 'ssa':
+          return 'ass';
+        case 'pgssub' || 'pgs' || 'sup':
+          return 'pgs';
+        default:
+          return 'srt';
+      }
     }
   }
 
@@ -329,7 +340,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     final subtitleTracks = tracks.where((t) => t['type'] == 'text').toList();
     logger.i('Player', 'MPV 可用字幕轨道: ${subtitleTracks.length} 个');
     for (final track in subtitleTracks) {
-      logger.d('Player', '  轨道: id=${track['id']}, title=${track['title']}, language=${track['language']}');
+      logger.d('Player', '  轨道: id=${track['id']}, title=${track['title']}, language=${track['language']}, codec=${track['codec']}');
     }
 
     if (subtitleTracks.isEmpty) {
