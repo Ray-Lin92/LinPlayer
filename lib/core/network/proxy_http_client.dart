@@ -83,7 +83,13 @@ void _applyProxy(
 
   if (config.type.isHttp) {
     final hostPort = '${config.host.trim()}:${config.port}';
-    client.findProxy = (uri) => 'PROXY $hostPort';
+    // 本机环回（CF 优选反代监听在 127.0.0.1）必须直连，绝不绕经用户代理，
+    // 否则会把「localhost→反代」也丢进代理隧道，导致优选反代不可用。
+    client.findProxy = (uri) {
+      final h = uri.host;
+      if (h == '127.0.0.1' || h == 'localhost' || h == '::1') return 'DIRECT';
+      return 'PROXY $hostPort';
+    };
     if (config.hasCredentials) {
       client.addProxyCredentials(
         config.host.trim(),

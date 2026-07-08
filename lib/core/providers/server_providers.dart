@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_interfaces.dart';
 import '../api/emby_api.dart';
+import '../network/cf_proxy/cf_proxy_runtime.dart';
 import '../network/proxy_http_client.dart';
 import '../services/secure_credential_store.dart';
 import '../sources/source_credentials.dart';
@@ -83,7 +84,17 @@ class ServerConfig {
   /// 是否文件浏览型源（非 Emby）。
   bool get isFileBrowse => isFileBrowseSource(sourceKind);
 
+  /// 当前生效的线路地址。**会被 CF 优选反代改写**：若本服务器已开启优选反代，
+  /// 返回本地反代基址（http://127.0.0.1:port/...），让 Dio 与 mpv 都改走优选 CF IP。
+  /// 需要原始上游地址（如反代自身上游、编辑线路）时用 [directLineUrl]。
   String get activeLineUrl {
+    final override = CfProxyRuntime.instance.localUrlFor(id);
+    if (override != null) return override;
+    return directLineUrl;
+  }
+
+  /// 原始上游线路地址，**不经** CF 优选反代改写。
+  String get directLineUrl {
     if (lines.isEmpty) return baseUrl;
     final safeIndex = activeLineIndex.clamp(0, lines.length - 1);
     return lines[safeIndex].url;

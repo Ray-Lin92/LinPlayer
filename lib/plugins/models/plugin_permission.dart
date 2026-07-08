@@ -89,6 +89,14 @@ class PluginPermissions {
     description: '向应用注册侧边栏入口、操作按钮、设置页等扩展点。',
   );
 
+  static const cfproxy = PluginPermission(
+    id: 'cfproxy',
+    title: 'CF 优选反代',
+    description: '对你添加的服务器做 Cloudflare 优选 IP 测速，并启用本地反代改写其网络'
+        '线路（仅指向 127.0.0.1 本地反代，不外发凭据）。',
+    dangerous: true,
+  );
+
   /// `log` 权限默认始终授予，无需声明，这里仅用于展示。
   static const log = PluginPermission(
     id: 'log',
@@ -106,6 +114,7 @@ class PluginPermissions {
     embyApi,
     embyCredentials,
     extensions,
+    cfproxy,
     log,
   ];
 
