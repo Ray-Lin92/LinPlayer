@@ -60,7 +60,7 @@ jobs:
         if: steps.cache-aar.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip git cmake ninja-build
+          sudo apt-get install -y wget unzip git cmake ninja-build yasm
       
       - name: Download Android NDK
         if: steps.cache-aar.outputs.cache-hit != 'true'
@@ -68,6 +68,23 @@ jobs:
           wget -q https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip -O /tmp/ndk.zip
           unzip -q /tmp/ndk.zip -d /opt
           echo "NDK_PATH=/opt/android-ndk-${NDK_VERSION}" >> $GITHUB_ENV
+      
+      - name: Setup NDK toolchain symlinks
+        if: steps.cache-aar.outputs.cache-hit != 'true'
+        run: |
+          # NDK r25c 使用 llvm-xxx 工具，但 FFmpeg configure 脚本期望旧命名
+          # 为所有架构创建符号链接
+          TOOLCHAIN=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin
+          
+          for PREFIX in aarch64-linux-android21 arm-linux-androideabi21 x86_64-linux-android21 i686-linux-android21; do
+            ln -sf $TOOLCHAIN/llvm-ar $TOOLCHAIN/${PREFIX}-ar 2>/dev/null || true
+            ln -sf $TOOLCHAIN/llvm-nm $TOOLCHAIN/${PREFIX}-nm 2>/dev/null || true
+            ln -sf $TOOLCHAIN/llvm-ranlib $TOOLCHAIN/${PREFIX}-ranlib 2>/dev/null || true
+            ln -sf $TOOLCHAIN/llvm-strip $TOOLCHAIN/${PREFIX}-strip 2>/dev/null || true
+          done
+          
+          echo "Toolchain symlinks created"
+          ls -la $TOOLCHAIN/*-nm | head -5
       
       - name: Setup Java
         if: steps.cache-aar.outputs.cache-hit != 'true'
@@ -92,7 +109,8 @@ jobs:
         run: |
           cd /tmp/media3/libraries/decoder_ffmpeg/src/main/jni
           
-          for ARCH in arm64-v8a armeabi-v7a x86_64; do
+          # 只编译主流真机架构（跳过 x86_64，避免 nasm/yasm 依赖问题）
+          for ARCH in arm64-v8a armeabi-v7a; do
             echo "Building for $ARCH..."
             
             case $ARCH in
@@ -103,10 +121,6 @@ jobs:
               armeabi-v7a)
                 CPU=armv7-a
                 CROSS_PREFIX=arm-linux-androideabi21-
-                ;;
-              x86_64)
-                CPU=x86-64
-                CROSS_PREFIX=x86_64-linux-android21-
                 ;;
             esac
             
@@ -136,6 +150,7 @@ jobs:
               --disable-postproc \
               --disable-avfilter \
               --disable-symver \
+              --disable-asm \
               --extra-cflags="-O3 -fPIC" \
               --extra-ldflags="-Wl,--no-undefined -Wl,-z,noexecstack"
             
@@ -248,30 +263,4 @@ jobs:
           path: build/
           retention-days: 3
 
-  build-ios:
-    name: Build iOS (No Sign)
-    runs-on: macos-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.2'
-          channel: 'stable'
-          cache: true
-      
-      - name: Get dependencies
-        run: flutter pub get
-      
-      - name: Build iOS (no codesign)
-        run: flutter build ios --no-codesign
-      
-      - name: Upload iOS build
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build
-          path: build/ios/iphoneos/*.app
-          retention-days: 7
+  # 注意：iOS 版本将使用原生 Swift 开发，不包含在此 Flutter 构建中
