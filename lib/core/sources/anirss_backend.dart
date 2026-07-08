@@ -105,9 +105,10 @@ class AniRssBackend implements MediaSourceBackend {
     final token = await _auth.ensureToken(server);
     final base = normalizeBaseUrl(server.activeLineUrl);
     // filename 已是 base64，仅做查询参数转义，不可二次 base64。
+    // URL 无法带请求头 → 用 `s=<token>` 查询参数走服务端 Form 鉴权（非 api-key）。
     final url = '$base/api/file'
         '?filename=${Uri.encodeQueryComponent(b64Filename)}'
-        '&${AniRssAuth.header}=${Uri.encodeQueryComponent(token)}';
+        '&${AniRssAuth.queryAuthKey}=${Uri.encodeQueryComponent(token)}';
     final headers = {AniRssAuth.header: token};
     return ResolvedPlay(
       url: url,
@@ -136,7 +137,7 @@ class AniRssBackend implements MediaSourceBackend {
           : '$base${u.startsWith('/') ? '' : '/'}$u';
       final sep = full.contains('?') ? '&' : '?';
       subs.add(SourceSubtitle(
-        url: '$full$sep${AniRssAuth.header}=${Uri.encodeQueryComponent(token)}',
+        url: '$full$sep${AniRssAuth.queryAuthKey}=${Uri.encodeQueryComponent(token)}',
         title: s['name']?.toString(),
         httpHeaders: headers,
       ));

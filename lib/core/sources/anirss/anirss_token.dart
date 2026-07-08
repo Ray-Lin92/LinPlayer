@@ -9,10 +9,15 @@ import '../source_http.dart';
 
 /// Ani-rss 鉴权 + 请求生命周期（三端、播放后端与类型化 API 共享一份 token 缓存）。
 ///
-/// 端点/字段以仓库根 `api-docs.json`（OpenAPI v3）为准：
-/// - 登录 `POST /api/login`，body `{username, password(MD5摘要)}` → `ResultString`（data=token）。
-/// - 鉴权 securityScheme 为 apiKey，**请求头 `api-key: <token>`**（非 Authorization）。
-/// - 失效（401/403）→ 清缓存、用账密重登一次。
+/// 端点/字段以仓库根 `api-docs.json`（OpenAPI v3）为准，但**鉴权以服务端源码为准**
+/// （ani-rss `AuthUtil`/`Header`/`Form`/`ApiKey`）：
+/// - 登录 `POST /api/login`，body `{username, password(MD5摘要)}` → `ResultString`
+///   （data=`sha256(json(login))` 登录令牌）。
+/// - 校验该登录令牌的方式有二：① 请求头 **`Authorization: <token>`**（`Header` 鉴权）；
+///   ② 查询参数 **`s=<token>`**（`Form` 鉴权，用于无法设请求头的流/图片 URL）。
+///   swagger 里的 `api-key` 头是**另一套**「静态 Config.apiKey」鉴权，与登录令牌无关，
+///   我们没有那个静态 key，故**绝不能**把登录令牌塞进 `api-key` 头（否则恒判失败→「登录已失效」）。
+/// - 失效（服务端返回 `{code:403, message:'登录已失效'}`）→ 清缓存、用账密重登一次。
 ///
 /// 单例：[AniRssAuth.instance]。`AniRssBackend`（播放路径）与 `AniRssApi`（浏览/订阅/
 /// 设置）都依赖它，故任一路径触发的重登都会刷新另一路径使用的 token。
@@ -20,8 +25,11 @@ class AniRssAuth {
   AniRssAuth._();
   static final AniRssAuth instance = AniRssAuth._();
 
-  /// 鉴权请求头名（OpenAPI: name=api-key, in=header）。
-  static const String header = 'api-key';
+  /// 登录令牌的鉴权请求头名（服务端 `Header` 鉴权读 `Authorization`）。
+  static const String header = 'Authorization';
+
+  /// 登录令牌的查询参数名（服务端 `Form` 鉴权读 `s`；用于流/图片 URL）。
+  static const String queryAuthKey = 's';
 
   final Map<String, String> _tokenCache = {};
 
@@ -82,7 +90,7 @@ class AniRssAuth {
   Dio _dio(ServerConfig server) =>
       buildSourceDio(baseUrl: normalizeBaseUrl(server.activeLineUrl));
 
-  /// 发起一个带 api-key 头的鉴权请求；失效自动重登一次。
+  /// 发起一个带 `Authorization` 登录令牌头的鉴权请求；失效自动重登一次。
   /// [method] 默认 POST（ani-rss 绝大多数接口都是 POST）。
   Future<Response> authed(
     ServerConfig server,
