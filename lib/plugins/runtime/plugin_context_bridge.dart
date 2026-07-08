@@ -10,6 +10,7 @@ import '../../core/network/cf_proxy/cf_proxy_panel_page.dart';
 import '../../core/providers/media_providers.dart';
 import '../../core/providers/server_providers.dart';
 import '../../core/services/app_logger.dart';
+import '../../core/services/cache_service.dart';
 import '../manager/plugin_extension_registry.dart';
 import '../models/plugin_extension_point.dart';
 import '../models/plugin_manifest.dart';
@@ -240,6 +241,10 @@ class PluginContextBridge {
       case 'getCurrentMedia':
         _require(PluginPermissions.playerRead.id);
         return _currentMediaFromProviders() ?? bridge.currentMedia;
+      case 'getCacheLimitBytes':
+        // 用户在设置里配置的视频缓存上限（字节），供预热类插件据此封顶。
+        _require(PluginPermissions.playerRead.id);
+        return (await CacheService.getVideoCacheMaxSizeMB()) * 1024 * 1024;
       case 'play':
         _require(PluginPermissions.playerControl.id);
         await bridge.hooks?.play?.call();
@@ -362,6 +367,12 @@ class PluginContextBridge {
     final query = (opts['query'] is Map)
         ? (opts['query'] as Map).map((k, v) => MapEntry('$k', v))
         : null;
+    // 插件自定义请求头（如 Range，用于分段预热当前流）；同一服务器下随 X-Emby-Token 一起发出。
+    final extraHeaders = (opts['headers'] is Map)
+        ? (opts['headers'] as Map).map((k, v) => MapEntry('$k', '$v'))
+        : null;
+    // discardBody：只为预热服务端/CDN 缓存，按流丢弃不解码，避免把大段二进制读进 isolate（64MB 上限）。
+    final discardBody = opts['discardBody'] == true;
     final baseUri = Uri.parse(base);
     final resolved = baseUri.resolve(path);
     // 防 SSRF：path 形如 `//evil.com/x` 或绝对 URL 会改写主机，但仍会带上
@@ -376,8 +387,20 @@ class PluginContextBridge {
         queryParameters: query?.map((k, v) => MapEntry(k, '$v')),
       ),
       data: opts['body'],
-      options: Options(method: httpMethod),
+      options: Options(
+        method: httpMethod,
+        headers: extraHeaders,
+        responseType: discardBody ? ResponseType.stream : ResponseType.json,
+      ),
     );
+    if (discardBody) {
+      // 流式丢弃，仅统计字节数，内存恒定。
+      var bytes = 0;
+      await for (final chunk in (response.data as ResponseBody).stream) {
+        bytes += chunk.length;
+      }
+      return {'status': response.statusCode, 'bytes': bytes};
+    }
     return {
       'status': response.statusCode,
       'body': _decodeResponse(response.data),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -132,6 +133,7 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
     final autoNext = ref.watch(autoPlayNextProvider);
     final autoSkipSegments = ref.watch(autoSkipSegmentsProvider);
     final preloadEnabled = ref.watch(preloadEnabledProvider);
+    final multiThreadLoading = ref.watch(multiThreadLoadingProvider);
     final strmDirectPlay = ref.watch(strmDirectPlayProvider);
     final exoLibass = ref.watch(exoLibassProvider);
     final gpuNext = ref.watch(gpuNextEnabledProvider);
@@ -224,6 +226,13 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
       ),
       _toggleItem(
         m,
+        title: '多线程加载',
+        subtitle: '播放时用 2~4 个并发连接预取当前流喂给播放器，弱网更少卡顿。⚠️ 需先获得服主允许',
+        value: multiThreadLoading,
+        onToggle: () => unawaited(_toggleMtLoading()),
+      ),
+      _toggleItem(
+        m,
         title: 'STRM 直链播放',
         subtitle: 'STRM 可获取直链时直接直链播放；部分服务器不兼容可能导致无法播放，仅在明确需要时开启',
         value: strmDirectPlay,
@@ -273,6 +282,25 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
         onSubmit: (v) => _saveRegexPref(preferredAudioRegexProvider, v),
       ),
     ]);
+  }
+
+  /// 开关「多线程加载」。开启前强制确认须获服主允许，确认后才记录同意并启用。
+  Future<void> _toggleMtLoading() async {
+    if (ref.read(multiThreadLoadingProvider)) {
+      ref.read(multiThreadLoadingProvider.notifier).state = false;
+      return;
+    }
+    final ok = await showTvConfirm(
+      context,
+      title: '请先获得服主允许',
+      message: '多线程加载会用 2~4 个并发连接预取当前播放流，给服务器带来额外并发压力。'
+          '不少服主明确禁止多线程 / 预拉取，滥用可能导致封号。请确认你已获服主允许后再开启。',
+      confirmLabel: '我已获服主允许',
+      cancelLabel: '暂不开启',
+    );
+    if (!mounted || !ok) return;
+    ref.read(multiThreadLoadingConsentProvider.notifier).state = true;
+    ref.read(multiThreadLoadingProvider.notifier).state = true;
   }
 
   /// 保存正则筛选偏好：校验合法性，非法则提示且不保存。
