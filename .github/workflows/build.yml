@@ -135,7 +135,7 @@ jobs:
               --cross-prefix=$TOOLCHAIN/bin/$CROSS_PREFIX \
               --cc=$TOOLCHAIN/bin/${CROSS_PREFIX}clang \
               --cxx=$TOOLCHAIN/bin/${CROSS_PREFIX}clang++ \
-              --prefix=/tmp/media3/libraries/decoder_ffmpeg/src/main/jni/ffmpeg/build/$ARCH \
+              --prefix=/tmp/media3/libraries/decoder_ffmpeg/src/main/jni/ffmpeg/android-libs/$ARCH \
               --enable-static \
               --disable-shared \
               --disable-doc \
