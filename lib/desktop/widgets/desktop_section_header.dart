@@ -13,14 +13,14 @@ class DesktopSectionHeader extends StatelessWidget {
   
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 18, 24, 10),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
       child: Row(
         children: [
           Text(
             title,
-            style: theme.textTheme.headlineSmall?.copyWith(
+            style: const TextStyle(
+              fontSize: 20,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.3,
             ),
@@ -42,7 +42,8 @@ class DesktopSectionHeader extends StatelessWidget {
                     children: [
                       Text(
                         '查看全部',
-                        style: theme.textTheme.labelMedium?.copyWith(
+                        style: TextStyle(
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: Theme.of(context).colorScheme.primary,
                         ),
