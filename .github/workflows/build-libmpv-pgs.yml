@@ -9,11 +9,16 @@ env:
   BUILD_REPO: media-kit/libmpv-android-video-build
 
 jobs:
-  build-libmpv:
-    name: Build libmpv with PGS
+  build-and-commit:
+    name: Build and commit libmpv
     runs-on: ubuntu-latest
     
     steps:
+      - name: Checkout LinPlayer
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Checkout libmpv-android-video-build
         uses: actions/checkout@v4
         with:
@@ -24,15 +29,10 @@ jobs:
         run: |
           echo "=== Build configuration files ==="
           find libmpv-build -name "*.sh" -o -name "build.gradle" -o -name "CMakeLists.txt" | head -20
-          
-          echo "=== Looking for decoder configuration ==="
-          grep -r "pgssub\|subtitle\|decoder" libmpv-build --include="*.sh" --include="*.gradle" --include="*.txt" 2>/dev/null | head -20 || true
       
       - name: Enable PGS decoder in build
         run: |
-          # Find and modify build scripts to enable pgssub
           cd libmpv-build
-          
           # Look for ffmpeg configuration
           FFMPEG_CONFIG=$(find . -name "*.sh" -exec grep -l "disable-everything\|enable-decoder" {} \; | head -1)
           if [ -n "$FFMPEG_CONFIG" ]; then
@@ -54,7 +54,7 @@ jobs:
           ndk-version: r25c
           link-to-sdk: true
       
-      - name: Build libmpv (all architectures)
+      - name: Build libmpv
         run: |
           cd libmpv-build
           # Check available build scripts
@@ -72,7 +72,7 @@ jobs:
           fi
         continue-on-error: true
       
-      - name: Extract JARs
+      - name: Extract libmpv.so from JARs
         run: |
           echo "=== Looking for built JARs ==="
           find libmpv-build -name "*.jar" -type f 2>/dev/null | while read jar; do
@@ -93,68 +93,51 @@ jobs:
           done
           
           echo "=== Extracted libraries ==="
-          find built-libraries -name "libmpv.so" -exec ls -lh {} \;
+          find built-libraries -name "libmpv.so" -exec ls -lh {} \; 2>/dev/null || echo "No libmpv.so found"
       
-      - name: Verify PGS support
-        run: |
-          find built-libraries -name "libmpv.so" | while read lib; do
-            echo "Checking $(basename $(dirname $lib))..."
-            if strings "$lib" | grep -q "pgssub"; then
-              echo "✅ PGS decoder found"
-            else
-              echo "⚠️ PGS decoder not found"
-            fi
-          done
-        continue-on-error: true
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: libmpv-pgs-build
-          path: built-libraries/**/libmpv.so
-          if-no-files-found: ignore
-          retention-days: 90
-
-  commit-libraries:
-    name: Commit to LinPlayer
-    needs: build-libmpv
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout LinPlayer
-        uses: actions/checkout@v4
-      
-      - name: Download built libraries
-        uses: actions/download-artifact@v4
-        with:
-          name: libmpv-pgs-build
-          path: downloaded
-      
-      - name: Copy to jniLibs
+      - name: Verify and copy to jniLibs
         run: |
           mkdir -p android/app/src/main/jniLibs
           
-          find downloaded -name "libmpv.so" | while read lib; do
-            # Extract ABI from path
+          find built-libraries -name "libmpv.so" | while read lib; do
             abi=$(basename $(dirname "$lib"))
             mkdir -p "android/app/src/main/jniLibs/$abi"
             cp "$lib" "android/app/src/main/jniLibs/$abi/"
-            echo "✅ Copied libmpv.so for $abi"
+            
+            # Verify PGS
+            if strings "$lib" | grep -q "pgssub"; then
+              echo "✅ $abi: PGS decoder found"
+            else
+              echo "⚠️ $abi: PGS decoder not found"
+            fi
           done
-      
-      - name: Commit and push
-        run: |
-          echo "=== Final jniLibs ==="
-          find android/app/src/main/jniLibs -name "*.so" -exec ls -lh {} \;
           
+          echo "=== jniLibs contents ==="
+          find android/app/src/main/jniLibs -name "*.so" -exec ls -lh {} \; 2>/dev/null || echo "No libraries copied"
+      
+      - name: Commit if libraries found
+        run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add android/app/src/main/jniLibs/
           
           if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: update libmpv with PGS support (built from ${{ env.BUILD_REPO }})"
-            git push
-            echo "✅ Libraries committed"
+            echo "No libraries to commit (build may have failed or no JARs found)"
+            exit 0
           fi
+          
+          git commit -m "chore: update libmpv with PGS support (built from ${{ env.BUILD_REPO }})"
+          git push
+          echo "✅ Libraries committed"
         continue-on-error: true
+      
+      - name: Upload artifacts (backup)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: libmpv-build-output
+          path: |
+            built-libraries/**/libmpv.so
+            libmpv-build/**/*.jar
+          if-no-files-found: warn
+          retention-days: 7
