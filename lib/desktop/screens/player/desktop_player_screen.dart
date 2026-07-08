@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../../core/services/subtitle_track_matcher.dart';
 import '../../../core/services/video_player_service.dart';
 import '../../../core/utils/playback_url_resolver.dart';
 import '../../utils/desktop_smooth_scroll.dart';
@@ -385,6 +386,7 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
       return;
     }
     if (next == null) {
+      _playerService.setSubtitleSelectionHint();
       await _playerService.deselectSubtitleTrack();
       return;
     }
@@ -396,22 +398,27 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
     }
 
     final codec = (target.codec ?? '').toLowerCase();
+    final targetTitle = target.displayTitle ?? target.title;
     final isExternal = target.isExternal == true;
 
     if (!isExternal) {
+      _playerService.setSubtitleSelectionHint(codec: codec, title: targetTitle);
       final trackId = _matchSubtitleTrackId(
         subtitleStreams,
         target.language,
-        target.displayTitle ?? target.title,
+        targetTitle,
         target.codec,
         target.index,
       );
       if (trackId != null && trackId.isNotEmpty) {
         await _playerService.selectSubtitleTrack(trackId);
+      } else if (_playerService.coreType == PlayerCoreType.mpv) {
+        await _playerService.selectSubtitleTrack('auto');
       }
       return;
     }
 
+    _playerService.setSubtitleSelectionHint();
     await _playerService.deselectSubtitleTrack();
     final subtitleFile = await _prepareExternalSubtitleFile(target, codec);
     await _playerService.loadLibassSubtitle(subtitleFile.path);
@@ -473,96 +480,43 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
       return null;
     }
 
-    final codec = (targetCodec ?? '').toLowerCase();
-    final isGraphical = _isGraphicalSubtitleCodec(codec);
-    final isAss = _isAssSubtitleCodec(codec);
+    final kind = SubtitleTrackMatcher.classifyKind(
+      codec: targetCodec,
+      title: targetTitle,
+    );
+    final typedStreamPosition = _typedSubtitleStreamPosition(
+      subtitleStreams,
+      targetStreamIndex,
+      kind,
+    );
 
-    final candidates = isGraphical
-        ? subtitleTracks.where((track) => track['type'] == 'bitmap' || track['isBitmap'] == true).toList()
-        : isAss
-            ? subtitleTracks.where((track) => track['isAss'] == true || track['type'] == 'text').toList()
-            : subtitleTracks;
-
-    if (candidates.isEmpty) {
-      return subtitleTracks.first['id']?.toString();
-    }
-
-    if (targetTitle != null && targetTitle.isNotEmpty) {
-      for (final track in candidates) {
-        final title = (track['title'] ?? '').toString();
-        if (title.isNotEmpty && _titlesMatch(targetTitle, title)) {
-          return track['id']?.toString();
-        }
-      }
-    }
-
-    if (targetLang != null && targetLang.isNotEmpty) {
-      final langMatches = candidates.where((track) {
-        final language = (track['language'] ?? '').toString().toLowerCase();
-        return language == targetLang.toLowerCase() ||
-            language == 'chi' ||
-            language == 'zh';
-      }).toList();
-      if (langMatches.length == 1) {
-        return langMatches.first['id']?.toString();
-      }
-      if (langMatches.length > 1 && targetTitle != null && targetTitle.isNotEmpty) {
-        for (final track in langMatches) {
-          final title = (track['title'] ?? '').toString();
-          if (title.isNotEmpty && _titlesMatch(targetTitle, title)) {
-            return track['id']?.toString();
-          }
-        }
-      }
-    }
-
-    final embyIndex = _computeEmbySubtitleIndex(targetStreamIndex, subtitleTracks);
-    if (embyIndex >= 0 && embyIndex < candidates.length) {
-      return candidates[embyIndex]['id']?.toString();
-    }
-
-    final position = subtitleStreams.indexWhere((stream) => stream.index == targetStreamIndex);
-    if (position >= 0 && position < candidates.length) {
-      return candidates[position]['id']?.toString();
-    }
-
-    return candidates.first['id']?.toString();
+    return SubtitleTrackMatcher.matchTrackId(
+      subtitleTracks: subtitleTracks,
+      targetKind: kind,
+      targetStreamIndex: targetStreamIndex,
+      typedStreamPosition: typedStreamPosition,
+      targetLang: targetLang,
+      targetTitle: targetTitle,
+      titlesMatch: _titlesMatch,
+    );
   }
 
-  int _computeEmbySubtitleIndex(
-    int embyStreamIndex,
-    List<Map<String, dynamic>> subtitleTracks,
+  int _typedSubtitleStreamPosition(
+    List<MediaStream> subtitleStreams,
+    int targetStreamIndex,
+    SubtitleKind targetKind,
   ) {
-    if (subtitleTracks.isEmpty) {
-      return -1;
-    }
-    final ids = subtitleTracks.map((track) => track['id']?.toString() ?? '').toList();
-    for (int i = 0; i < ids.length; i++) {
-      final parts = ids[i].split('_');
-      if (parts.length == 2 && int.tryParse(parts[0]) == embyStreamIndex) {
-        return i;
+    final typedStreams = subtitleStreams.where((stream) {
+      final streamKind = SubtitleTrackMatcher.classifyKind(
+        codec: stream.codec,
+        title: stream.displayTitle ?? stream.title,
+      );
+      if (targetKind == SubtitleKind.bitmap) {
+        return streamKind == SubtitleKind.bitmap;
       }
-    }
-    final sorted = List<Map<String, dynamic>>.from(subtitleTracks);
-    sorted.sort((a, b) {
-      final aId = (a['id'] ?? '0').toString();
-      final bId = (b['id'] ?? '0').toString();
-      final aGroup = int.tryParse(aId.split('_').first) ?? 0;
-      final bGroup = int.tryParse(bId.split('_').first) ?? 0;
-      if (aGroup != bGroup) {
-        return aGroup.compareTo(bGroup);
-      }
-      final aTrack = int.tryParse(aId.split('_').last) ?? 0;
-      final bTrack = int.tryParse(bId.split('_').last) ?? 0;
-      return aTrack.compareTo(bTrack);
-    });
-    for (int i = 0; i < sorted.length; i++) {
-      final group = int.tryParse(sorted[i]['id'].toString().split('_').first) ?? -1;
-      if (group == embyStreamIndex) {
-        return i;
-      }
-    }
-    return -1;
+      return streamKind != SubtitleKind.bitmap;
+    }).toList();
+    return typedStreams.indexWhere((stream) => stream.index == targetStreamIndex);
   }
 
   bool _titlesMatch(String expected, String actual) {
@@ -590,19 +544,11 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen> {
   }
 
   bool _isAssSubtitleCodec(String codec) {
-    final lower = codec.toLowerCase();
-    return lower == 'ass' || lower == 'ssa';
+    return SubtitleTrackMatcher.isAssSubtitleCodec(codec);
   }
 
   bool _isGraphicalSubtitleCodec(String codec) {
-    final lower = codec.toLowerCase();
-    return lower == 'pgssub' ||
-        lower == 'sup' ||
-        lower == 'pgs' ||
-        lower == 'dvdsub' ||
-        lower == 'vobsub' ||
-        lower.contains('hdmv') ||
-        lower.contains('pgs');
+    return SubtitleTrackMatcher.isGraphicalSubtitleCodec(codec);
   }
 
   String _embySubtitleCodec(String codec) {
