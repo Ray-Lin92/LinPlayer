@@ -19,6 +19,7 @@ dependencies:
   
   # 网络
   dio: ^5.4.0
+  crypto: ^3.0.3
   
   # 图片加载
   extended_image: ^8.2.0

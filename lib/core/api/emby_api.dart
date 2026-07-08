@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'api_interfaces.dart';
-import '../utils/danmaku_filter.dart';
 
 class EmbyApiClient implements ApiClientFactory {
   late Dio _dio;
@@ -77,9 +76,6 @@ class EmbyApiClient implements ApiClientFactory {
 
   @override
   ImageApi get image => EmbyImageApi(this);
-
-  @override
-  DanmakuApi get danmaku => EmbyDanmakuApi();
 
   @override
   void switchLine(String lineUrl) {
@@ -650,98 +646,8 @@ class EmbyImageApi implements ImageApi {
   }
 }
 
-// ==================== Danmaku ====================
+// ==================== Danmaku (deprecated - see danmaku/ module) ====================
 
-class EmbyDanmakuApi implements DanmakuApi {
-  DanmakuFilter? _filter;
-
-  /// 设置弹幕过滤器
-  void setFilter(DanmakuFilter filter) {
-    _filter = filter;
-  }
-
-  @override
-  Future<List<DanmakuItem>> searchDanmaku({
-    required String title,
-    int? episode,
-    String? source,
-  }) async {
-    final src = source ?? 'dandanplay';
-    switch (src) {
-      case 'dandanplay':
-        return _searchDandanplay(title, episode);
-      case 'danmu_api':
-        return _searchDanmuApi(title, episode);
-      case 'misaka':
-        return _searchMisaka(title, episode);
-      default:
-        return [];
-    }
-  }
-
-  @override
-  Future<List<DanmakuItem>> getDanmakuComments(String episodeId) async {
-    try {
-      final dio = Dio();
-      final resp = await dio.get('https://api.dandanplay.com/api/v2/comment/$episodeId');
-      final comments = (resp.data as Map<String, dynamic>)['comments'] as List<dynamic>;
-      final items = comments.map((e) {
-        final d = e as Map<String, dynamic>;
-        final p = (d['p'] as String?)?.split(',') ?? [];
-        return DanmakuItem(
-          time: double.tryParse(p.isNotEmpty ? p[0] : '0') ?? 0.0,
-          text: d['m'] as String? ?? '',
-          type: int.tryParse(p.length > 1 ? p[1] : '0') ?? 0,
-          color: int.tryParse(p.length > 2 ? p[2] : '0xFFFFFFFF') ?? 0xFFFFFFFF,
-          size: double.tryParse(p.length > 3 ? p[3] : '25') ?? 25,
-        );
-      }).toList();
-
-      // 应用屏蔽词过滤
-      if (_filter != null) {
-        return items.where((item) {
-          return !_filter!.shouldFilter(item.text);
-        }).toList();
-      }
-
-      return items;
-    } catch (_) {
-      return [];
-    }
-  }
-
-  Future<List<DanmakuItem>> _searchDandanplay(String title, int? episode) async {
-    try {
-      final dio = Dio();
-      final resp = await dio.get('https://api.dandanplay.com/api/v2/search/episodes', queryParameters: {
-        'anime': title,
-      });
-      final animes = (resp.data as Map<String, dynamic>)['animes'] as List<dynamic>;
-      if (animes.isEmpty) return [];
-      final first = animes.first as Map<String, dynamic>;
-      final eps = first['episodes'] as List<dynamic>;
-      if (eps.isEmpty) return [];
-      final targetEp = episode != null
-          ? eps.cast<Map<String, dynamic>>().firstWhere(
-              (e) => e['episodeTitle']?.toString().contains(episode.toString()) ?? false,
-              orElse: () => eps.first as Map<String, dynamic>,
-            )
-          : eps.first as Map<String, dynamic>;
-      final epId = targetEp['episodeId'].toString();
-      return await getDanmakuComments(epId);
-    } catch (_) {
-      return [];
-    }
-  }
-
-  Future<List<DanmakuItem>> _searchDanmuApi(String title, int? episode) async {
-    return [];
-  }
-
-  Future<List<DanmakuItem>> _searchMisaka(String title, int? episode) async {
-    return [];
-  }
-}
 
 // ==================== Parse Helpers ====================
 

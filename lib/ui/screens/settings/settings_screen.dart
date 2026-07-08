@@ -3,10 +3,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/services/webdav_service.dart';
 import '../../../core/services/app_logger.dart';
 import '../../../core/utils/danmaku_filter.dart';
+import '../../../core/api/danmaku/danmaku_source.dart';
+import '../../../core/api/danmaku/danmaku_service.dart';
 
 /// 设置主页
 class SettingsScreen extends ConsumerWidget {
@@ -833,10 +836,50 @@ class DanmakuSettingsScreen extends ConsumerWidget {
             ),
           ),
           ListTile(
+            title: const Text('弹幕延迟'),
+            subtitle: Builder(builder: (context) {
+              final delay = ref.watch(danmakuDelayProvider);
+              return Slider(
+                value: delay,
+                min: -5.0,
+                max: 5.0,
+                label: '${delay.toStringAsFixed(1)}s',
+                onChanged: (value) => ref.read(danmakuDelayProvider.notifier).state = value,
+              );
+            }),
+          ),
+          ListTile(
             title: const Text('屏蔽词管理'),
             subtitle: Text('共 ${blockwords.length} 个屏蔽词'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showBlockwordManager(context, ref),
+          ),
+          SwitchListTile(
+            title: const Text('弹幕去重'),
+            subtitle: const Text('合并相同文本弹幕，显示重复次数'),
+            value: ref.watch(danmakuDedupProvider),
+            onChanged: (v) => ref.read(danmakuDedupProvider.notifier).state = v,
+          ),
+          if (ref.watch(danmakuDedupProvider))
+            ListTile(
+              title: const Text('去重时间窗口'),
+              subtitle: Builder(builder: (context) {
+                final window = ref.watch(danmakuDedupWindowProvider);
+                return Slider(
+                  value: window,
+                  min: 1.0,
+                  max: 30.0,
+                  label: '${window.toStringAsFixed(0)}秒',
+                  onChanged: (v) => ref.read(danmakuDedupWindowProvider.notifier).state = v,
+                );
+              }),
+            ),
+          const Divider(),
+          ListTile(
+            title: const Text('自定义弹幕源'),
+            subtitle: const Text('添加 danmu_api / 御坂弹幕 等自定义源'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showCustomSourceManager(context, ref),
           ),
         ],
       ),
@@ -1066,6 +1109,186 @@ class DanmakuSettingsScreen extends ConsumerWidget {
         );
       }
     }
+  }
+
+  void _showCustomSourceManager(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _CustomSourceManagerSheet(),
+    );
+  }
+}
+
+class _CustomSourceManagerSheet extends ConsumerStatefulWidget {
+  @override
+  ConsumerState<_CustomSourceManagerSheet> createState() => _CustomSourceManagerSheetState();
+}
+
+class _CustomSourceManagerSheetState extends ConsumerState<_CustomSourceManagerSheet> {
+  final _nameController = TextEditingController();
+  final _urlController = TextEditingController();
+  bool _isAdding = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final service = ref.watch(danmakuServiceProvider);
+    final customSources = service.sources;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('自定义弹幕源', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (service.dandanplay != null)
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.cloud, color: Colors.blue),
+                      title: const Text('弹弹Play'),
+                      subtitle: const Text('默认源，无需配置'),
+                      trailing: const Icon(Icons.check_circle, color: Colors.green),
+                    ),
+                  ),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    itemCount: customSources.length,
+                    itemBuilder: (context, index) {
+                      final source = customSources[index];
+                      return Card(
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.dns,
+                            color: source.config.enabled ? Colors.green : Colors.grey,
+                          ),
+                          title: Text(source.config.name),
+                          subtitle: Text(source.config.apiUrl, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Switch(
+                                value: source.config.enabled,
+                                onChanged: (val) {
+                                  final newCfg = DanmakuSourceConfig(
+                                    id: source.config.id,
+                                    type: source.config.type,
+                                    name: source.config.name,
+                                    apiUrl: source.config.apiUrl,
+                                    priority: source.config.priority,
+                                    enabled: val,
+                                  );
+                                  ref.read(danmakuServiceProvider.notifier).addCustomSource(newCfg);
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () {
+                                  ref.read(danmakuServiceProvider.notifier).removeCustomSource(source.config.id);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const Divider(),
+                if (_isAdding) ...[
+                  TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: '源名称',
+                      hintText: '如：我的弹幕API',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _urlController,
+                    decoration: const InputDecoration(
+                      labelText: 'API地址',
+                      hintText: '如: http://192.168.1.7:9321/87654321',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.url,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => setState(() => _isAdding = false),
+                        child: const Text('取消'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _addSource,
+                        child: const Text('添加'),
+                      ),
+                    ],
+                  ),
+                ] else
+                  FilledButton.icon(
+                    onPressed: () => setState(() => _isAdding = true),
+                    icon: const Icon(Icons.add),
+                    label: const Text('添加自定义源'),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _addSource() {
+    final name = _nameController.text.trim();
+    final url = _urlController.text.trim();
+    if (name.isEmpty || url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请填写名称和API地址')),
+      );
+      return;
+    }
+    final cfg = DanmakuSourceConfig(
+      id: const Uuid().v4(),
+      type: DanmakuSourceType.custom,
+      name: name,
+      apiUrl: url,
+      priority: ref.read(danmakuServiceProvider).sources.length,
+    );
+    ref.read(danmakuServiceProvider.notifier).addCustomSource(cfg);
+    _nameController.clear();
+    _urlController.clear();
+    setState(() => _isAdding = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已添加 $name')),
+    );
   }
 }
 

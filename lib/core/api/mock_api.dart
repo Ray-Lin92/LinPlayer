@@ -38,10 +38,7 @@ class MockApiClient implements ApiClientFactory {
   
   @override
   ImageApi get image => MockImageApi();
-  
-  @override
-  DanmakuApi get danmaku => MockDanmakuApi();
-  
+
   @override
   void switchLine(String lineUrl) {
     _currentLine = lineUrl;
@@ -351,27 +348,6 @@ class MockImageApi implements ImageApi {
       maxWidth: maxWidth ?? 800,
       maxHeight: 450,
     );
-  }
-}
-
-class MockDanmakuApi implements DanmakuApi {
-  @override
-  Future<List<DanmakuItem>> searchDanmaku({
-    required String title,
-    int? episode,
-    String? source,
-  }) async {
-    return [];
-  }
-  
-  @override
-  Future<List<DanmakuItem>> getDanmakuComments(String episodeId) async {
-    return List.generate(50, (index) => DanmakuItem(
-      time: index * 5.0,
-      text: '弹幕${index + 1}',
-      type: index % 3,
-      color: 0xFFFFFFFF,
-    ));
   }
 }
 

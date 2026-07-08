@@ -11,6 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/media_providers.dart';
+import '../../widgets/common/danmaku_search_widget.dart';
+import '../../widgets/common/danmaku_overlay.dart';
 import '../../../core/services/video_player_service.dart';
 import '../../../core/services/libass_bridge.dart';
 import '../../../core/services/app_logger.dart';
@@ -70,6 +72,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       });
       ref.listenManual(secondarySubtitleTrackProvider, (prev, next) {
         _onSecondarySubtitleTrackChanged(next);
+      });
+      ref.listenManual(currentPlayingItemProvider, (prev, next) {
+        if (prev?.id != next?.id) {
+          ref.read(loadedDanmakuProvider.notifier).state = [];
+        }
       });
     });
   }
@@ -741,22 +748,35 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
 
   Widget _buildVideoArea() {
     final videoWidget = _playerService.buildVideo();
+    final danmakuItems = ref.watch(loadedDanmakuProvider);
+    final danmakuEnabled = ref.watch(danmakuEnabledProvider);
+    final danmakuOpacity = ref.watch(danmakuOpacityProvider);
+    final danmakuFontSize = ref.watch(danmakuFontSizeProvider);
+    final danmakuSpeed = ref.watch(danmakuSpeedProvider);
+    final danmakuDensity = ref.watch(danmakuDensityProvider);
+    final danmakuDelay = ref.watch(danmakuDelayProvider);
 
-    // ExoPlayer 内核且启用了 libass：叠加 libass 位图字幕
-    // MPV 内核：libmpv 自行渲染字幕，无需 Dart 层叠加
+    final overlays = <Widget>[];
     if (_playerService.coreType == PlayerCoreType.exoPlayer && _playerService.libassReady) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          videoWidget,
-          Positioned.fill(
-            child: _LibassOverlay(playerService: _playerService),
-          ),
-        ],
-      );
+      overlays.add(Positioned.fill(child: _LibassOverlay(playerService: _playerService)));
+    }
+    if (danmakuEnabled && danmakuItems.isNotEmpty) {
+      final delayedPosition = _playerService.position - Duration(milliseconds: (danmakuDelay * 1000).round());
+      overlays.add(Positioned.fill(
+        child: DanmakuOverlay(
+          items: danmakuItems,
+          position: delayedPosition,
+          isPlaying: _playerService.isPlaying,
+          opacity: danmakuOpacity,
+          fontSizeFactor: danmakuFontSize,
+          speedFactor: danmakuSpeed,
+          densityFactor: danmakuDensity,
+        ),
+      ));
     }
 
-    return videoWidget;
+    if (overlays.isEmpty) return videoWidget;
+    return Stack(fit: StackFit.expand, children: [videoWidget, ...overlays]);
   }
 
   void _onDoubleTapDown(TapDownDetails details) {
@@ -1125,6 +1145,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
             icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
             tooltip: '弹幕设置',
             onPressed: _showDanmakuSettings,
+          ),
+          IconButton(
+            icon: const Icon(Icons.search, color: Colors.white),
+            tooltip: '搜索弹幕',
+            onPressed: _showDanmakuSearch,
           ),
           IconButton(
             icon: const Icon(Icons.subtitles, color: Colors.white),
@@ -1525,6 +1550,16 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     );
   }
 
+  void _showDanmakuSearch() {
+    final item = ref.read(currentPlayingItemProvider);
+    _showRightPanel(
+      title: '搜索弹幕',
+      children: [
+        DanmakuSearchContent(item: item),
+      ],
+    );
+  }
+
   void _showSubtitleSettings() {
     _showRightPanel(
       title: '字幕设置',
@@ -1902,27 +1937,6 @@ class _DanmakuSettingsContent extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.orange.withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '弹幕功能当前版本暂不支持显示，设置仅作预留',
-                  style: TextStyle(fontSize: 12, color: Colors.orange.shade700),
-                ),
-              ),
-            ],
-          ),
-        ),
         SwitchListTile(
           title: const Text('显示弹幕', style: TextStyle(color: Colors.white)),
           value: danmakuEnabled,
@@ -1959,6 +1973,27 @@ class _DanmakuSettingsContent extends ConsumerWidget {
             ref.read(danmakuDensityProvider.notifier).state = value;
           },
         ),
+        const Text('延迟', style: TextStyle(color: Colors.white70)),
+        Consumer(builder: (context, ref, _) {
+          final delay = ref.watch(danmakuDelayProvider);
+          return Slider(
+            value: delay,
+            min: -5.0,
+            max: 5.0,
+            label: '${delay.toStringAsFixed(1)}s',
+            onChanged: (value) {
+              ref.read(danmakuDelayProvider.notifier).state = value;
+            },
+          );
+        }),
+        const Text('去重', style: TextStyle(color: Colors.white70)),
+        Consumer(builder: (context, ref, _) {
+          final dedup = ref.watch(danmakuDedupProvider);
+          return Switch(
+            value: dedup,
+            onChanged: (v) => ref.read(danmakuDedupProvider.notifier).state = v,
+          );
+        }),
       ],
     );
   }

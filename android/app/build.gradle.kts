@@ -33,7 +33,7 @@ android {
             }
         }
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
     }
 
@@ -47,6 +47,15 @@ android {
     sourceSets {
         getByName("main") {
             jniLibs.srcDirs("src/main/jniLibs")
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a")
+            isUniversalApk = false
         }
     }
 

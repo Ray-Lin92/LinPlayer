@@ -310,6 +310,18 @@ final danmakuSpeedProvider = StateProvider<double>((ref) => 0.5);
 /// 弹幕密度Provider
 final danmakuDensityProvider = StateProvider<double>((ref) => 0.5);
 
+/// 弹幕延迟Provider (秒)
+final danmakuDelayProvider = StateProvider<double>((ref) => 0.0);
+
+/// 弹幕去重开关Provider
+final danmakuDedupProvider = StateProvider<bool>((ref) => false);
+
+/// 弹幕去重时间窗口Provider (秒)
+final danmakuDedupWindowProvider = StateProvider<double>((ref) => 10.0);
+
+/// 已加载的弹幕列表Provider
+final loadedDanmakuProvider = StateProvider<List<DanmakuItem>>((ref) => []);
+
 /// 弹幕屏蔽词列表Provider
 final danmakuBlockwordsProvider = StateNotifierProvider<DanmakuBlockwordsNotifier, List<String>>((ref) {
   return DanmakuBlockwordsNotifier();

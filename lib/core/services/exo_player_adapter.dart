@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' show max, min;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,6 +37,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
   Timer? _positionTimer;
 
   final ValueNotifier<String> subtitleNotifier = ValueNotifier('');
+  final ValueNotifier<String?> bitmapNotifier = ValueNotifier(null);
   final ValueNotifier<int> _subtitleSettingsVersion = ValueNotifier(0);
 
   @override
@@ -296,11 +298,13 @@ class ExoPlayerAdapter implements PlayerAdapter {
           final images = data['images'] as List?;
           if (images != null && images.isNotEmpty) {
             _subtitleBitmapBase64 = images.first as String;
+            bitmapNotifier.value = _subtitleBitmapBase64;
+          } else {
+            _subtitleBitmapBase64 = '';
+            bitmapNotifier.value = null;
           }
           _subtitleText = data['text'] as String? ?? '';
-          subtitleNotifier.value = _subtitleBitmapBase64.isNotEmpty
-              ? 'BITMAP:${_subtitleBitmapBase64.substring(0, 20)}...'
-              : _subtitleText;
+          subtitleNotifier.value = _subtitleText;
         }
         break;
       case 'subtitleType':
@@ -475,41 +479,66 @@ class ExoPlayerAdapter implements PlayerAdapter {
             child: ValueListenableBuilder<int>(
               valueListenable: _subtitleSettingsVersion,
               builder: (context, _, __) {
-                return ValueListenableBuilder<String>(
-                  valueListenable: subtitleNotifier,
-                  builder: (context, text, _) {
-                    if (text.isEmpty) return const SizedBox.shrink();
-                    if (text.startsWith('BITMAP:')) return const SizedBox.shrink();
-                    final fontSize = 14.0 + (_subtitleSize * 18.0);
-                    return Container(
-                      key: ValueKey('sub_$_subtitleSettingsVersion.value'),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: _subtitleBackground
-                          ? BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(4),
-                            )
-                          : const BoxDecoration(),
-                      child: Text(
-                        text,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: fontSize,
-                          fontFamily: (_subtitleFont.isNotEmpty && _subtitleFont != '默认') ? _subtitleFont : null,
-                          height: 1.4,
-                          decoration: TextDecoration.none,
-                          shadows: _subtitleBackground
-                              ? []
-                              : [
-                                  Shadow(
-                                    offset: const Offset(1, 1),
-                                    blurRadius: 2,
-                                    color: Colors.black.withOpacity(0.8),
-                                  ),
-                                ],
-                        ),
-                      ),
+                return ValueListenableBuilder<String?>(
+                  valueListenable: bitmapNotifier,
+                  builder: (context, bitmapB64, _) {
+                    if (bitmapB64 != null && bitmapB64.isNotEmpty) {
+                      try {
+                        final bytes = base64Decode(bitmapB64);
+                        return Center(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: 800,
+                              maxHeight: 300 * (0.5 + _subtitleSize),
+                            ),
+                            child: Image.memory(
+                              bytes,
+                              fit: BoxFit.contain,
+                              gaplessPlayback: true,
+                              filterQuality: FilterQuality.high,
+                            ),
+                          ),
+                        );
+                      } catch (_) {
+                        return const SizedBox.shrink();
+                      }
+                    }
+                    return ValueListenableBuilder<String>(
+                      valueListenable: subtitleNotifier,
+                      builder: (context, text, _) {
+                        if (text.isEmpty) return const SizedBox.shrink();
+                        final fontSize = 14.0 + (_subtitleSize * 18.0);
+                        return Container(
+                          key: ValueKey('sub_$_subtitleSettingsVersion.value'),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: _subtitleBackground
+                              ? BoxDecoration(
+                                  color: Colors.black.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(4),
+                                )
+                              : const BoxDecoration(),
+                          child: Text(
+                            text,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: fontSize,
+                              fontFamily: (_subtitleFont.isNotEmpty && _subtitleFont != '默认') ? _subtitleFont : null,
+                              height: 1.4,
+                              decoration: TextDecoration.none,
+                              shadows: _subtitleBackground
+                                  ? []
+                                  : [
+                                      Shadow(
+                                        offset: const Offset(1, 1),
+                                        blurRadius: 2,
+                                        color: Colors.black.withOpacity(0.8),
+                                      ),
+                                    ],
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );
@@ -548,6 +577,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
     _subtitleText = '';
     _subtitleBitmapBase64 = '';
     subtitleNotifier.value = '';
+    bitmapNotifier.value = null;
     _subtitleSettingsVersion.value = 0;
   }
 }

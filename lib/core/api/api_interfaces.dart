@@ -581,31 +581,103 @@ abstract class ImageApi {
 
 // ==================== 弹幕相关 ====================
 
-abstract class DanmakuApi {
-  /// 搜索弹幕
-  Future<List<DanmakuItem>> searchDanmaku({
-    required String title,
-    int? episode,
-    String? source, // 'dandanplay', 'danmu_api', 'misaka'
-  });
-  
-  /// 获取弹幕列表
-  Future<List<DanmakuItem>> getDanmakuComments(String episodeId);
-}
-
 class DanmakuItem {
-  final double time; // 出现时间(秒)
+  final double time;
   final String text;
-  final int type; // 0=滚动, 1=顶部, 2=底部
-  final int color;
+  final int type; // 1=滚动, 4=底部, 5=顶部 (弹弹Play标准)
+  final int color; // 十进制RGB (16777215=白色)
   final double size;
-  
+  final String? source; // 弹幕来源标识
+  final String? cid; // 弹幕唯一ID
+  final String? userId; // 用户ID/Hash
+  final int count; // 合并计数（去重后同一弹幕出现的次数）
+
   DanmakuItem({
     required this.time,
     required this.text,
-    this.type = 0,
-    this.color = 0xFFFFFFFF,
+    this.type = 1,
+    this.color = 16777215,
     this.size = 25,
+    this.source,
+    this.cid,
+    this.userId,
+    this.count = 1,
+  });
+}
+
+class DanmakuAnime {
+  final String animeId;
+  final String animeTitle;
+  final String? bangumiId;
+  final String? type;
+  final String? typeDescription;
+  final String? imageUrl;
+  final int? year;
+  final int? episodeCount;
+  final List<DanmakuEpisode>? episodes;
+
+  DanmakuAnime({
+    required this.animeId,
+    required this.animeTitle,
+    this.bangumiId,
+    this.type,
+    this.typeDescription,
+    this.imageUrl,
+    this.year,
+    this.episodeCount,
+    this.episodes,
+  });
+}
+
+class DanmakuEpisode {
+  final String episodeId;
+  final String episodeTitle;
+  final String? episodeNumber;
+
+  DanmakuEpisode({
+    required this.episodeId,
+    required this.episodeTitle,
+    this.episodeNumber,
+  });
+}
+
+class DanmakuMatchResult {
+  final bool isMatched;
+  final List<DanmakuMatchItem> matches;
+
+  DanmakuMatchResult({
+    required this.isMatched,
+    required this.matches,
+  });
+}
+
+class DanmakuMatchItem {
+  final String episodeId;
+  final String animeId;
+  final String animeTitle;
+  final String episodeTitle;
+  final String? type;
+  final String? typeDescription;
+  final int? shift;
+
+  DanmakuMatchItem({
+    required this.episodeId,
+    required this.animeId,
+    required this.animeTitle,
+    required this.episodeTitle,
+    this.type,
+    this.typeDescription,
+    this.shift,
+  });
+}
+
+class DanmakuSearchResult {
+  final List<DanmakuAnime> animes;
+  final bool hasMore;
+
+  DanmakuSearchResult({
+    required this.animes,
+    this.hasMore = false,
   });
 }
 
@@ -624,8 +696,7 @@ abstract class ApiClientFactory {
   FavoriteApi get favorite;
   SessionApi get session;
   ImageApi get image;
-  DanmakuApi get danmaku;
-  
+
   /// 切换活跃线路
   void switchLine(String lineUrl);
   
