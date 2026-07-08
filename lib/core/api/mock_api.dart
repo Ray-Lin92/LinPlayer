@@ -291,6 +291,11 @@ class MockPlaybackApi implements PlaybackApi {
   String getVideoStreamUrl(String itemId) {
     return 'https://mock.example.com/Videos/$itemId/stream';
   }
+
+  @override
+  String getSubtitleStreamUrl(String itemId, String mediaSourceId, int index, String codec) {
+    return 'https://mock.example.com/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$codec';
+  }
   
   @override
   Future<void> reportPlaybackStart(PlaybackStartInfo info) async {}

@@ -100,6 +100,35 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+    
+    // libass 字幕加载
+    if (useLibass && _playerService.libassReady && mediaSource != null) {
+      await _loadLibassSubtitles(item, mediaSource);
+    }
+  }
+  
+  Future<void> _loadLibassSubtitles(MediaItem item, MediaSource mediaSource) async {
+    final api = ref.read(apiClientProvider);
+    final subtitleStreams = mediaSource.mediaStreams
+        .where((s) => s.isSubtitle)
+        .toList();
+    if (subtitleStreams.isEmpty) return;
+    
+    final preferredLang = ref.read(preferredSubtitleLanguageProvider);
+    final target = subtitleStreams.firstWhere(
+      (s) => s.language == preferredLang,
+      orElse: () => subtitleStreams.first,
+    );
+    
+    final codec = target.codec?.toLowerCase() ?? 'ass';
+    final subUrl = api.playback.getSubtitleStreamUrl(
+      widget.itemId,
+      mediaSource.id,
+      target.index,
+      codec == 'ass' || codec == 'ssa' ? codec : 'ass',
+    );
+    
+    await _playerService.loadLibassSubtitle(subUrl);
   }
   
   void _onPlayerUpdate() {

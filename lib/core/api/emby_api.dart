@@ -515,6 +515,13 @@ class EmbyPlaybackApi implements PlaybackApi {
   }
 
   @override
+  String getSubtitleStreamUrl(String itemId, String mediaSourceId, int index, String codec) {
+    final base = _client._currentLine;
+    final token = _client._authToken;
+    return '$base/Videos/$itemId/$mediaSourceId/Subtitles/$index/Stream.$codec${token != null ? '?api_key=$token' : ''}';
+  }
+
+  @override
   Future<void> reportPlaybackStart(PlaybackStartInfo info) async {
     await _client.post('/Sessions/Playing', data: {
       'ItemId': info.itemId,

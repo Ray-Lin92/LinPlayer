@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' show max, min;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -65,6 +66,15 @@ class MediaKitAdapter implements PlayerAdapter {
   
   @override
   String? get errorMessage => _errorMessage;
+  
+  @override
+  bool get libassReady => false;
+  
+  @override
+  Future<void> loadLibassSubtitle(String path) async {}
+  
+  @override
+  Future<void> loadLibassSubtitleMemory(Uint8List data, {String codec = 'ass'}) async {}
   
   @override
   void setCallbacks(PlayerStateCallbacks callbacks) {
@@ -137,6 +147,9 @@ class MediaKitAdapter implements PlayerAdapter {
       if (startPosition != null && startPosition > Duration.zero) {
         await _player!.seek(startPosition);
       }
+      
+      // MPV 原生支持 ASS 字幕渲染，useLibass 无需额外处理
+      // MPV 内置 libass，ASS/SSA 特效字幕开箱即用
       
       _isInitialized = true;
       _callbacks?.onDurationChanged?.call();

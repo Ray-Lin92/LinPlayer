@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' show max, min;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_interfaces.dart';
@@ -150,6 +151,19 @@ class VideoPlayerService extends ChangeNotifier {
     
     notifyListeners();
   }
+  
+  /// 加载外部字幕文件（通过 libass）
+  Future<void> loadLibassSubtitle(String path) async {
+    await _adapter?.loadLibassSubtitle(path);
+  }
+  
+  /// 加载字幕数据到内存（通过 libass）
+  Future<void> loadLibassSubtitleMemory(Uint8List data, {String codec = 'ass'}) async {
+    await _adapter?.loadLibassSubtitleMemory(data, codec: codec);
+  }
+  
+  /// libass 是否已就绪
+  bool get libassReady => _adapter?.libassReady ?? false;
   
   /// 视频渲染Widget
   Widget buildVideoWidget() {

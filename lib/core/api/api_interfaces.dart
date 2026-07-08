@@ -354,6 +354,10 @@ abstract class PlaybackApi {
   /// GET /Videos/{Id}/stream
   String getVideoStreamUrl(String itemId);
   
+  /// 获取字幕流URL
+  /// GET /Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/Stream.{codec}
+  String getSubtitleStreamUrl(String itemId, String mediaSourceId, int index, String codec);
+  
   /// 播放开始上报
   /// POST /Sessions/Playing
   Future<void> reportPlaybackStart(PlaybackStartInfo info);

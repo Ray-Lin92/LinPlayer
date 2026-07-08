@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 /// 播放器适配器接口
@@ -37,6 +38,9 @@ abstract class PlayerAdapter {
   /// 错误信息
   String? get errorMessage;
   
+  /// libass 是否已就绪
+  bool get libassReady => false;
+  
   /// 视频渲染Widget
   Widget buildVideoWidget();
   
@@ -47,6 +51,12 @@ abstract class PlayerAdapter {
     bool dolbyVisionFix = false,
     bool useLibass = false,
   });
+  
+  /// 加载外部字幕文件（通过 libass）
+  Future<void> loadLibassSubtitle(String path) async {}
+  
+  /// 加载字幕数据到内存（通过 libass）
+  Future<void> loadLibassSubtitleMemory(Uint8List data, {String codec = 'ass'}) async {}
   
   /// 播放
   Future<void> play();
