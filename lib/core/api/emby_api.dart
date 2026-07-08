@@ -357,6 +357,20 @@ class EmbyHomeApi implements HomeApi {
   }
 
   @override
+  Future<MediaCounts> getMediaCounts() async {
+    final uid = _requireUserId(_client);
+    final resp = await _client.get('/Items/Counts', queryParameters: {
+      'UserId': uid,
+    });
+    final data = resp.data as Map<String, dynamic>;
+    return MediaCounts(
+      movieCount: (data['MovieCount'] as num?)?.toInt() ?? 0,
+      episodeCount: (data['EpisodeCount'] as num?)?.toInt() ?? 0,
+      itemCount: (data['ItemCount'] as num?)?.toInt(),
+    );
+  }
+
+  @override
   Future<List<MediaItem>> getLatestItems(String libraryId, {int limit = 20}) async {
     final uid = _requireUserId(_client);
     final resp = await _client.get('/Users/$uid/Items/Latest', queryParameters: {
