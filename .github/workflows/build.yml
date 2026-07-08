@@ -107,59 +107,71 @@ jobs:
       - name: Build FFmpeg for all architectures
         if: steps.cache-aar.outputs.cache-hit != 'true'
         run: |
-          cd /tmp/media3/libraries/decoder_ffmpeg/src/main/jni
+          FFMPEG_MODULE_PATH="/tmp/media3/libraries/decoder_ffmpeg/src/main"
+          NDK_PATH="/opt/android-ndk-${NDK_VERSION}"
+          HOST_PLATFORM="linux-x86_64"
+          ANDROID_ABI="21"
+          ENABLED_DECODERS=(pgssub dvbsub dvdsub ass ssa srt webvtt)
+          JOBS=$(nproc)
           
-          # 只编译主流真机架构（跳过 x86_64，避免 nasm/yasm 依赖问题）
-          for ARCH in arm64-v8a armeabi-v7a; do
-            echo "Building for $ARCH..."
-            
-            case $ARCH in
-              arm64-v8a)
-                CPU=armv8-a
-                CROSS_PREFIX=aarch64-linux-android21-
-                ;;
-              armeabi-v7a)
-                CPU=armv7-a
-                # NDK r25c 中 armv7a 的工具链前缀是 armv7a-linux-androideabi21-
-                CROSS_PREFIX=armv7a-linux-androideabi21-
-                ;;
-            esac
-            
-            TOOLCHAIN=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64
-            
-            cd ffmpeg
-            ./configure \
-              --target-os=android \
-              --arch=$ARCH \
-              --cpu=$CPU \
-              --cross-prefix=$TOOLCHAIN/bin/$CROSS_PREFIX \
-              --cc=$TOOLCHAIN/bin/${CROSS_PREFIX}clang \
-              --cxx=$TOOLCHAIN/bin/${CROSS_PREFIX}clang++ \
-              --prefix=/tmp/media3/libraries/decoder_ffmpeg/src/main/jni/ffmpeg/android-libs/$ARCH \
-              --enable-static \
-              --disable-shared \
-              --disable-doc \
-              --disable-ffmpeg \
-              --disable-ffplay \
-              --disable-ffprobe \
-              --disable-network \
-              --enable-decoder=pgssub,dvbsub,dvdsub,ass,ssa,srt,webvtt \
-              --disable-everything \
-              --disable-avdevice \
-              --disable-avformat \
-              --disable-swresample \
-              --disable-postproc \
-              --disable-avfilter \
-              --disable-symver \
-              --disable-asm \
-              --extra-cflags="-O3 -fPIC" \
-              --extra-ldflags="-Wl,--no-undefined -Wl,-z,noexecstack"
-            
-            make -j$(nproc)
-            make install
-            make clean
-            cd ..
+          COMMON_OPTIONS="
+              --target-os=android
+              --enable-static
+              --disable-shared
+              --disable-doc
+              --disable-programs
+              --disable-everything
+              --disable-avdevice
+              --disable-avformat
+              --disable-swscale
+              --disable-postproc
+              --disable-avfilter
+              --disable-symver
+              --enable-swresample
+              --extra-ldexeflags=-pie
+              --disable-v4l2-m2m
+              --disable-vulkan
+              --disable-asm
+              "
+          
+          for decoder in "${ENABLED_DECODERS[@]}"; do
+              COMMON_OPTIONS="${COMMON_OPTIONS} --enable-decoder=${decoder}"
           done
+          
+          TOOLCHAIN_PREFIX="${NDK_PATH}/toolchains/llvm/prebuilt/${HOST_PLATFORM}/bin"
+          
+          # 编译 arm64-v8a
+          cd "${FFMPEG_MODULE_PATH}/jni/ffmpeg"
+          ./configure \
+              --libdir=android-libs/arm64-v8a \
+              --arch=aarch64 \
+              --cpu=armv8-a \
+              --cross-prefix="${TOOLCHAIN_PREFIX}/aarch64-linux-android${ANDROID_ABI}-" \
+              --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
+              --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
+              --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
+              --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
+              ${COMMON_OPTIONS}
+          make -j${JOBS}
+          make install-libs
+          make clean
+          
+          # 编译 armeabi-v7a
+          ./configure \
+              --libdir=android-libs/armeabi-v7a \
+              --arch=arm \
+              --cpu=armv7-a \
+              --cross-prefix="${TOOLCHAIN_PREFIX}/armv7a-linux-androideabi${ANDROID_ABI}-" \
+              --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
+              --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
+              --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
+              --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
+              --extra-cflags="-march=armv7-a -mfloat-abi=softfp" \
+              --extra-ldflags="-Wl,--fix-cortex-a8" \
+              ${COMMON_OPTIONS}
+          make -j${JOBS}
+          make install-libs
+          make clean
       
       - name: Build AAR
         if: steps.cache-aar.outputs.cache-hit != 'true'
