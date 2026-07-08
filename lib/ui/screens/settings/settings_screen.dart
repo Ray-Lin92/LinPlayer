@@ -47,7 +47,6 @@ Map<String, dynamic> _buildBackupPayload(WidgetRef ref) {
       'rememberBrightness': ref.read(rememberBrightnessProvider),
       'subtitleFont': ref.read(subtitleFontProvider),
       'mpvDolbyVisionFix': ref.read(mpvDolbyVisionFixProvider),
-      'externalMpvPath': ref.read(externalMpvPathProvider),
       'impellerEnabled': ref.read(impellerEnabledProvider),
       'exoLibass': ref.read(exoLibassProvider),
       'subtitleBackground': ref.read(subtitleBackgroundProvider),
@@ -160,10 +159,6 @@ Future<void> _restoreBackupPayload(
   if (settings['mpvDolbyVisionFix'] is bool) {
     ref.read(mpvDolbyVisionFixProvider.notifier).state =
         settings['mpvDolbyVisionFix'] as bool;
-  }
-  if (settings['externalMpvPath'] is String) {
-    ref.read(externalMpvPathProvider.notifier).state =
-        settings['externalMpvPath'] as String;
   }
   if (settings['impellerEnabled'] is bool) {
     ref.read(impellerEnabledProvider.notifier).state =
