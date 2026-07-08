@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/ranking_providers.dart';
 import '../platform/desktop_ui_style.dart';
 import 'desktop_content_gate.dart';
 import 'desktop_nav_model.dart';
@@ -61,6 +62,7 @@ class MaterialDesktopShell extends ConsumerWidget {
     final collapsed = ref.watch(sidebarCollapsedProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final selectedIndex = navigationShell.currentIndex;
+    final visibleNav = desktopVisibleNav(ref.watch(rankingEnabledProvider));
     final sidebarWidth = collapsed ? _kSidebarCollapsedWidth : _kSidebarWidth;
 
     return Scaffold(
@@ -87,15 +89,16 @@ class MaterialDesktopShell extends ConsumerWidget {
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: desktopNavItems.length,
+                    itemCount: visibleNav.length,
                     itemBuilder: (context, index) {
+                      final e = visibleNav[index];
                       return _buildNavItem(
                         context,
-                        desktopNavItems[index],
-                        index == selectedIndex,
+                        e.item,
+                        e.branchIndex == selectedIndex,
                         isDark,
                         collapsed,
-                        () => navigationShell.goBranch(index),
+                        () => navigationShell.goBranch(e.branchIndex),
                       );
                     },
                   ),

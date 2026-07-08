@@ -30,6 +30,7 @@ class _TvShellState extends State<TvShell> {
     '/tv/server',
     '/tv/scan',
     '/tv/settings',
+    '/tv/rankings',
   ];
 
   @override

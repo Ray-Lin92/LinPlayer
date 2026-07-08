@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers/app_providers.dart';
+import '../../core/providers/ranking_providers.dart';
 import 'desktop_content_gate.dart';
 import 'desktop_nav_model.dart';
 
@@ -23,14 +24,20 @@ class FluentDesktopShell extends ConsumerWidget {
     final collapsed = ref.watch(sidebarCollapsedProvider);
     final selectedIndex = navigationShell.currentIndex;
     final accent = FluentTheme.of(context).accentColor;
+    final visibleNav = desktopVisibleNav(ref.watch(rankingEnabledProvider));
+    // NavigationPane.selected 是「可见项列表」中的位置，需由真实分支索引反查。
+    final selectedPos = () {
+      final i = visibleNav.indexWhere((e) => e.branchIndex == selectedIndex);
+      return i < 0 ? 0 : i;
+    }();
 
     return NavigationView(
       // 关键：禁用 NavigationView 自身的内容切换动画，交由 go_router 统一过渡，
       // 否则两层动画叠加会出现闪烁/不跟手。
       transitionBuilder: (child, animation) => child,
       pane: NavigationPane(
-        selected: selectedIndex,
-        onChanged: navigationShell.goBranch,
+        selected: selectedPos,
+        onChanged: (pos) => navigationShell.goBranch(visibleNav[pos].branchIndex),
         // fluent_ui 默认 openWidth=320，对仅图标+短标签的导航来说右侧留白过多。
         // 收窄到 220（与 Material/macOS 外壳一致），更紧凑也更协调。
         size: const NavigationPaneSize(openWidth: 220),
@@ -39,13 +46,13 @@ class FluentDesktopShell extends ConsumerWidget {
         // 收起由标题栏汉堡按钮统一控制，隐藏 pane 内置的切换按钮避免重复。
         toggleButton: const m.SizedBox.shrink(),
         items: [
-          for (final item in desktopNavItems)
+          for (final e in visibleNav)
             PaneItem(
-              icon: m.Icon(item.icon, size: 18),
+              icon: m.Icon(e.item.icon, size: 18),
               selectedTileColor: WidgetStateProperty.all(
                 accent.withValues(alpha: 0.14),
               ),
-              title: m.Text(item.label),
+              title: m.Text(e.item.label),
               body: const m.SizedBox.shrink(),
             ),
         ],
