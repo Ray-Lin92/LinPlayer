@@ -375,6 +375,12 @@ class ExoPlayerPlugin(
                         val mime = group.getTrackFormat(trackIndex).sampleMimeType ?: ""
                         val subType = if (mime.contains("pgs", ignoreCase = true) || mime.contains("hdmv", ignoreCase = true) || mime.contains("vobsub", ignoreCase = true) || mime.contains("dvb", ignoreCase = true)) "bitmap" else if (mime.contains("ssa", ignoreCase = true) || mime.contains("ass", ignoreCase = true)) "ass" else "text"
                         emitEvent("subtitleType", subType)
+                        
+                        // PGS/SUP 图形字幕需要额外确保 bitmap 字幕渲染开启
+                        if (subType == "bitmap") {
+                            isBitmapSubtitle = true
+                            emitEvent("subtitle", "")
+                        }
                     }
                     trackSelector.parameters = paramsBuilder.build()
                 }
@@ -558,15 +564,17 @@ class ExoPlayerPlugin(
             val textParts = mutableListOf<String>()
             val bitmapParts = mutableListOf<Map<String, Any>>()
             var hasBitmap = false
+            var hasAnyCue = false
 
             for (cue in cues) {
+                hasAnyCue = true
                 val bmp = cue.bitmap
                 if (bmp != null) {
                     hasBitmap = true
                     try {
                         var src = bmp
 
-                        val maxDim = 1280
+                        val maxDim = 1920
                         if (src.width > maxDim || src.height > maxDim) {
                             val scale = minOf(maxDim.toFloat() / src.width, maxDim.toFloat() / src.height)
                             val newW = (src.width * scale).toInt()
@@ -631,6 +639,14 @@ class ExoPlayerPlugin(
             } else if (textParts.isNotEmpty()) {
                 isBitmapSubtitle = false
                 emitEvent("subtitle", textParts.joinToString("\n"))
+            } else if (hasAnyCue && isBitmapSubtitle) {
+                // Bitmap subtitle track active but no bitmap at this moment (e.g. between subtitles)
+                // Keep bitmap mode but clear display
+                emitEvent("subtitleBitmap", mapOf(
+                    "images" to emptyList<String>(),
+                    "text" to "",
+                    "positions" to emptyList<Map<String, Float>>()
+                ))
             } else {
                 isBitmapSubtitle = false
                 emitEvent("subtitle", "")

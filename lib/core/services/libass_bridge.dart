@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
+import 'app_logger.dart';
 
 class LibassBridge {
   static const _channel = MethodChannel('com.linplayer/libass');
+  static final _logger = AppLogger();
   static bool _available = false;
   static bool _checked = false;
 
@@ -12,9 +14,15 @@ class LibassBridge {
     if (_checked) return _available;
     try {
       _available = await _channel.invokeMethod<bool>('isLibassAvailable') ?? false;
-    } on PlatformException catch (_) {
+      _logger.i('LibassBridge', 'libass 可用性检查结果: $_available');
+    } on PlatformException catch (e) {
+      _logger.e('LibassBridge', 'libass 可用性检查失败: ${e.message}');
       _available = false;
-    } on MissingPluginException catch (_) {
+    } on MissingPluginException catch (e) {
+      _logger.e('LibassBridge', 'libass MethodChannel 未注册: ${e.message}');
+      _available = false;
+    } catch (e) {
+      _logger.e('LibassBridge', 'libass 可用性检查异常: $e');
       _available = false;
     }
     _checked = true;
@@ -23,32 +31,53 @@ class LibassBridge {
 
   static Future<bool> init({required int width, required int height}) async {
     try {
-      return await _channel.invokeMethod<bool>('initLibass', {
+      _logger.i('LibassBridge', '初始化 libass: ${width}x$height');
+      final result = await _channel.invokeMethod<bool>('initLibass', {
         'width': width,
         'height': height,
       }) ?? false;
-    } on PlatformException catch (_) {
+      _logger.i('LibassBridge', 'libass 初始化结果: $result');
+      return result;
+    } on PlatformException catch (e) {
+      _logger.e('LibassBridge', 'libass 初始化失败: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e('LibassBridge', 'libass 初始化异常: $e');
       return false;
     }
   }
 
   static Future<bool> loadSubFile(String path) async {
     try {
-      return await _channel.invokeMethod<bool>('loadSubFile', {
+      _logger.i('LibassBridge', '加载字幕文件: $path');
+      final result = await _channel.invokeMethod<bool>('loadSubFile', {
         'path': path,
       }) ?? false;
-    } on PlatformException catch (_) {
+      _logger.i('LibassBridge', '字幕文件加载结果: $result');
+      return result;
+    } on PlatformException catch (e) {
+      _logger.e('LibassBridge', '加载字幕文件失败: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e('LibassBridge', '加载字幕文件异常: $e');
       return false;
     }
   }
 
   static Future<bool> loadSubMemory(Uint8List data, {String codec = 'ass'}) async {
     try {
-      return await _channel.invokeMethod<bool>('loadSubMemory', {
+      _logger.i('LibassBridge', '加载内存字幕: ${data.length} bytes, codec=$codec');
+      final result = await _channel.invokeMethod<bool>('loadSubMemory', {
         'data': data,
         'codec': codec,
       }) ?? false;
-    } on PlatformException catch (_) {
+      _logger.i('LibassBridge', '内存字幕加载结果: $result');
+      return result;
+    } on PlatformException catch (e) {
+      _logger.e('LibassBridge', '加载内存字幕失败: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e('LibassBridge', '加载内存字幕异常: $e');
       return false;
     }
   }
@@ -58,7 +87,11 @@ class LibassBridge {
       return await _channel.invokeMethod<bool>('setFontSize', {
         'size': size,
       }) ?? false;
-    } on PlatformException catch (_) {
+    } on PlatformException catch (e) {
+      _logger.e('LibassBridge', '设置字体大小失败: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e('LibassBridge', '设置字体大小异常: $e');
       return false;
     }
   }
@@ -68,7 +101,11 @@ class LibassBridge {
       return await _channel.invokeMethod<bool>('setFontName', {
         'name': name,
       }) ?? false;
-    } on PlatformException catch (_) {
+    } on PlatformException catch (e) {
+      _logger.e('LibassBridge', '设置字体名称失败: ${e.message}');
+      return false;
+    } catch (e) {
+      _logger.e('LibassBridge', '设置字体名称异常: $e');
       return false;
     }
   }
@@ -80,15 +117,24 @@ class LibassBridge {
       });
       if (raw == null) return null;
       return _parseRenderResult(raw);
-    } on PlatformException catch (_) {
+    } on PlatformException catch (e) {
+      _logger.e('LibassBridge', '渲染帧失败: ${e.message}');
+      return null;
+    } catch (e) {
+      _logger.e('LibassBridge', '渲染帧异常: $e');
       return null;
     }
   }
 
   static Future<void> dispose() async {
     try {
+      _logger.i('LibassBridge', '释放 libass');
       await _channel.invokeMethod<bool>('dispose');
-    } on PlatformException catch (_) {}
+    } on PlatformException catch (e) {
+      _logger.e('LibassBridge', '释放 libass 失败: ${e.message}');
+    } catch (e) {
+      _logger.e('LibassBridge', '释放 libass 异常: $e');
+    }
     _available = false;
     _checked = false;
   }

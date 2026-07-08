@@ -262,7 +262,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
     final ext = _extractExtension(path);
     final isAss = ext == 'ass' || ext == 'ssa';
     final isPgs = ext == 'pgs' || ext == 'sup';
-    _logger.i('ExoPlayer', '加载外挂字幕: $path (mime=$mimeType, isAss=$isAss, isPgs=$isPgs)');
+    _logger.i('ExoPlayer', '加载字幕: $path (mime=$mimeType, isAss=$isAss, isPgs=$isPgs)');
 
     _isBitmapSubtitle = isPgs;
 
@@ -271,6 +271,13 @@ class ExoPlayerAdapter implements PlayerAdapter {
         await _initLibass();
       }
       if (_libassInited) {
+        // 关闭 ExoPlayer 原生字幕轨道，避免与 libass 叠加层冲突
+        try {
+          await _channel.invokeMethod('deselectSubtitleTrack', {
+            'playerId': _playerId,
+          });
+        } catch (_) {}
+        
         final loaded = await LibassBridge.loadSubFile(path);
         if (loaded) {
           _useLibassForCurrentSub = true;

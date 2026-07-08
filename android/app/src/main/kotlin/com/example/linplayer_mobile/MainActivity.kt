@@ -4,9 +4,11 @@ import android.content.Context
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.MethodCall
 
 class MainActivity : FlutterActivity() {
     private var exoPlayerPlugin: ExoPlayerPlugin? = null
+    private var libassChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -20,15 +22,70 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.linplayer/exoplayer")
             .setMethodCallHandler(exoPlayerPlugin)
 
-        // 注意：MPV 内核已迁移到 media_kit（Dart 封装库），
-        // 不再使用 FFI 直调 libmpv.so，因此不再注册 MpvTexturePlugin。
-        // libass 也已通过 ExoPlayer 原生字幕管线和 media_kit 内置支持，
-        // 不再使用自定义 libass JNI。
+        // 注册 libass JNI 桥接 MethodChannel
+        // 用于 ExoPlayer 内核的内封/外挂 ASS 字幕特效渲染
+        libassChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.linplayer/libass"
+        )
+        libassChannel!!.setMethodCallHandler { call, result ->
+            handleLibassCall(this, call, result)
+        }
     }
 
     override fun onDestroy() {
         exoPlayerPlugin?.disposeAll()
         super.onDestroy()
+    }
+}
+
+/**
+ * libass JNI 桥接的 MethodChannel 处理
+ * 对应 Dart 层 LibassBridge 的调用
+ */
+private fun handleLibassCall(context: Context, call: MethodCall, result: MethodChannel.Result) {
+    when (call.method) {
+        "isLibassAvailable" -> {
+            result.success(LibassBridge.isAvailable(context))
+        }
+        "initLibass" -> {
+            val width = call.argument<Int>("width") ?: 1920
+            val height = call.argument<Int>("height") ?: 1080
+            LibassBridge.init(context, width, height)
+            result.success(true)
+        }
+        "loadSubFile" -> {
+            val path = call.argument<String>("path") ?: ""
+            LibassBridge.loadSubFile(path)
+            result.success(true)
+        }
+        "loadSubMemory" -> {
+            val data = call.argument<ByteArray>("data") ?: byteArrayOf()
+            val codec = call.argument<String>("codec") ?: "ass"
+            LibassBridge.loadSubMemory(data, codec)
+            result.success(true)
+        }
+        "setFontSize" -> {
+            val size = call.argument<Int>("size") ?: 48
+            LibassBridge.setFontSize(size)
+            result.success(true)
+        }
+        "setFontName" -> {
+            val name = call.argument<String>("name") ?: ""
+            LibassBridge.setFontName(name)
+            result.success(true)
+        }
+        "renderFrame" -> {
+            val ptsMs = call.argument<Int>("ptsMs") ?: 0
+            val changed = IntArray(1)
+            val frameData = LibassBridge.renderFrame(ptsMs.toLong(), changed)
+            result.success(frameData)
+        }
+        "dispose" -> {
+            LibassBridge.dispose()
+            result.success(true)
+        }
+        else -> result.notImplemented()
     }
 }
 
@@ -39,8 +96,16 @@ object LibassBridge {
     private var initialized = false
 
     init {
-        System.loadLibrary("ass")
-        System.loadLibrary("linass_jni")
+        try {
+            System.loadLibrary("ass")
+        } catch (e: UnsatisfiedLinkError) {
+            android.util.Log.w("LibassBridge", "libass.so not found, will try libmpv.so fallback")
+        }
+        try {
+            System.loadLibrary("linass_jni")
+        } catch (e: UnsatisfiedLinkError) {
+            android.util.Log.e("LibassBridge", "Failed to load linass_jni: ${e.message}")
+        }
     }
 
     external fun nativeIsAvailable(): Boolean
@@ -56,48 +121,92 @@ object LibassBridge {
         return try {
             nativeIsAvailable()
         } catch (e: UnsatisfiedLinkError) {
+            android.util.Log.e("LibassBridge", "nativeIsAvailable failed: ${e.message}")
+            false
+        } catch (e: Exception) {
+            android.util.Log.e("LibassBridge", "nativeIsAvailable exception: ${e.message}")
             false
         }
     }
 
     fun init(context: Context, width: Int, height: Int) {
         if (initialized) dispose()
-        assLibrary = nativeInit(width, height)
-        assRenderer = assLibrary
-        initialized = true
+        try {
+            assLibrary = nativeInit(width, height)
+            assRenderer = assLibrary
+            initialized = true
+            android.util.Log.i("LibassBridge", "Initialized: ${width}x${height}, library=$assLibrary")
+        } catch (e: Exception) {
+            android.util.Log.e("LibassBridge", "Init failed: ${e.message}")
+            initialized = false
+        }
     }
 
     fun loadSubFile(path: String) {
-        if (assLibrary == 0L) return
-        assTrack = nativeLoadFile(assLibrary, path)
+        if (assLibrary == 0L) {
+            android.util.Log.w("LibassBridge", "Cannot load sub file: library not initialized")
+            return
+        }
+        try {
+            assTrack = nativeLoadFile(assLibrary, path)
+            android.util.Log.i("LibassBridge", "Loaded sub file: $path, track=$assTrack")
+        } catch (e: Exception) {
+            android.util.Log.e("LibassBridge", "Load sub file failed: ${e.message}")
+        }
     }
 
     fun loadSubMemory(data: ByteArray, codec: String) {
-        if (assLibrary == 0L) return
-        assTrack = nativeLoadMemory(assLibrary, data, codec)
+        if (assLibrary == 0L) {
+            android.util.Log.w("LibassBridge", "Cannot load sub memory: library not initialized")
+            return
+        }
+        try {
+            assTrack = nativeLoadMemory(assLibrary, data, codec)
+            android.util.Log.i("LibassBridge", "Loaded sub memory: ${data.size} bytes, codec=$codec, track=$assTrack")
+        } catch (e: Exception) {
+            android.util.Log.e("LibassBridge", "Load sub memory failed: ${e.message}")
+        }
     }
 
     fun setFontSize(size: Int) {
         if (assRenderer == 0L) return
-        nativeSetFontSize(assRenderer, size)
+        try {
+            nativeSetFontSize(assRenderer, size)
+        } catch (e: Exception) {
+            android.util.Log.e("LibassBridge", "Set font size failed: ${e.message}")
+        }
     }
 
     fun setFontName(name: String) {
         if (assRenderer == 0L) return
-        nativeSetFontName(assRenderer, name)
+        try {
+            nativeSetFontName(assRenderer, name)
+        } catch (e: Exception) {
+            android.util.Log.e("LibassBridge", "Set font name failed: ${e.message}")
+        }
     }
 
     fun renderFrame(ptsMs: Long, changed: IntArray): ByteArray? {
         if (assRenderer == 0L || assTrack == 0L) return null
-        return nativeRenderFrame(assRenderer, assTrack, ptsMs)
+        return try {
+            nativeRenderFrame(assRenderer, assTrack, ptsMs)
+        } catch (e: Exception) {
+            android.util.Log.e("LibassBridge", "Render frame failed: ${e.message}")
+            null
+        }
     }
 
     fun dispose() {
         if (!initialized) return
-        nativeDispose(assLibrary, assRenderer, assTrack)
+        try {
+            nativeDispose(assLibrary, assRenderer, assTrack)
+        } catch (e: Exception) {
+            android.util.Log.e("LibassBridge", "Dispose failed: ${e.message}")
+        }
         assLibrary = 0
         assRenderer = 0
         assTrack = 0
         initialized = false
+        android.util.Log.i("LibassBridge", "Disposed")
     }
 }
