@@ -11,6 +11,7 @@ import 'core/services/app_logger.dart';
 import 'core/services/cache_service.dart';
 import 'core/services/crash_diagnostics.dart';
 import 'core/services/secure_credential_store.dart';
+import 'core/network/cf_proxy/cf_proxy_controller.dart';
 import 'core/services/deep_link_service.dart';
 import 'core/services/font_service.dart';
 import 'core/services/portable_paths.dart';
@@ -89,6 +90,14 @@ Future<void> main() async {
       child: appWidget,
     ),
   );
+
+  // TV 端没有插件管理界面去触发插件 onEnable→restore，故启动时按持久化状态自动
+  // 恢复已启用的 CF 优选反代（沿用上次优选 IP，不重新测速）。放后台不阻塞首帧。
+  // 其它端的恢复由 cf-proxy 插件的启用流程负责。
+  if (isTvPlatform) {
+    CfProxyController.instance.ensureInit(container);
+    unawaited(CfProxyController.instance.restoreAll());
+  }
 
   // 自定义协议深链(linplayer://add-server …)：唤起即自动登录并添加服务器。
   // 共用同一 container，跨三端生效；放 runApp 之后，确保插件通道已就绪。
