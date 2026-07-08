@@ -243,6 +243,14 @@ class _DesktopAddServerScreenState extends ConsumerState<DesktopAddServerScreen>
       if (username.isNotEmpty) {
         final authResult = await client.auth.login(username: username, password: password);
         
+        // 验证认证结果
+        if (authResult.userId.isEmpty) {
+          throw Exception('认证失败：服务器返回的用户ID为空');
+        }
+        if (authResult.accessToken.isEmpty) {
+          throw Exception('认证失败：服务器返回的访问令牌为空');
+        }
+        
         final name = _nameController.text.trim().isNotEmpty
             ? _nameController.text.trim()
             : serverInfo.serverName;
