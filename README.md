@@ -67,7 +67,36 @@ flutter build apk --release
 
 ExoPlayer 默认不支持 PGS/SUP 图形字幕。播放含此类字幕的视频时：
 - 自动检测到 PGS/SUP 字幕
-- 提示切换到 **MPV 内核** 即可获得完整支持
+- **PC 端默认使用 MPV 内核**，完整支持 HDR/Anime4K/高级字幕控制
+- 移动端可切换到 **MPV 内核** 获得完整支持
+
+### Windows 端 MPV PGS/SUP 说明
+
+media-kit 的 Windows 预编译 libmpv 为了减小体积禁用了 `hdmv_pgs_subtitle` 解码器，
+导致 PC 版 MPV 默认无法渲染 PGS/SUP。构建时会**自动**用完整版 `libmpv-2.dll` 替换：
+
+```powershell
+flutter build windows
+```
+
+CMake 默认会在构建完成后调用 `windows/scripts/upgrade_libmpv_for_pgs.ps1`，
+从 shinchiro 发布页下载完整版 `mpv-dev` 包并提取 `libmpv-2.dll`。
+如果已经升级过，脚本会自动跳过，不会重复下载。
+
+如需关闭自动升级：
+
+```powershell
+$env:LINPLAYER_SKIP_LIBMPV_UPGRADE = "1"
+flutter build windows
+```
+
+或手动运行：
+
+```powershell
+.\windows\scripts\upgrade_libmpv_for_pgs.ps1
+```
+
+替换后，MPV 内核即可正常解码并渲染 PGS/SUP 图形字幕。
 
 ## 项目结构
 

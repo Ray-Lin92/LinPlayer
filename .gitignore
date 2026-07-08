@@ -27,6 +27,10 @@ migrate_working_dir/
 # CodeGraph (AI coding assistant)
 .codegraph/
 
+# Agent / Skill runtime files
+.agents/
+skills-lock.json
+
 # Zed Editor
 .zed/
 
@@ -42,11 +46,20 @@ migrate_working_dir/
 *.env.*.local
 .envrc
 
-# Android Signing
+# Android / iOS Signing & certificates
 *.keystore
 *.jks
+*.p12
+*.key
+*.pem
+*.mobileprovision
 key.properties
 android/key.properties
+ios/Runner/ExportOptions.plist
+
+# Backup / merge artifacts
+*.orig
+*.rej
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -56,8 +69,12 @@ android/key.properties
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
+.packages
 build/
 coverage/
+
+# Flutter version management
+.fvm/
 
 # Symbolication related
 app.*.symbols

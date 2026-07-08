@@ -44,6 +44,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
   bool _hasBitmapSubtitle = false;
   bool _currentSubIsAss = false;
   bool _usingExternalSubtitle = false;
+  bool _pgsDecoderAvailable = true;
   bool _isSeekBuffering = false;
   Timer? _seekBufferingFallbackTimer;
   Timer? _seekBufferingPollTimer;
@@ -122,11 +123,42 @@ class MpvPlayerAdapter implements PlayerAdapter {
     return slashIndex >= 0 ? normalized.substring(slashIndex + 1) : normalized;
   }
 
-  String _normalizeMpvPath(String path) {
-    if (Platform.isWindows) {
-      return path.replaceAll('\\', '/');
+  /// 把本地字幕路径转成 mpv `sub-add` 能稳定识别的 URI。
+  ///
+  /// Windows 下直接把 `C:\\foo\\bar.sup` 传给 mpv 可能被当成相对路径，
+  /// 用 `file:///C:/foo/bar.sup` 可以消除歧义；HTTP(S) 字幕保持原样。
+  String _toMpvSubtitleUri(String path) {
+    if (_isHttpUrl(path)) {
+      return path;
     }
-    return path;
+    return Uri.file(path).toString();
+  }
+
+  /// 探测当前 libmpv 是否包含 PGS/SUP 解码器。
+  ///
+  /// media-kit 的 Windows 预编译包为了体积会 `--disable-decoders` 并漏掉
+  /// `hdmv_pgs_subtitle`，这是 PC 端不显示 PGS/SUP 的根因。
+  /// 探测结果只用于日志/诊断，真正的修复需要替换为完整版 libmpv-2.dll。
+  Future<void> _probePgsDecoderAvailability() async {
+    final np = _nativePlayer;
+    if (np == null || !Platform.isWindows) {
+      return;
+    }
+    try {
+      final decoderList = await np.getProperty('decoder-list');
+      _pgsDecoderAvailable = decoderList.contains('hdmv_pgs_subtitle');
+      if (!_pgsDecoderAvailable) {
+        _logger.w(
+          'MpvAdapter',
+          '当前 libmpv 未包含 hdmv_pgs_subtitle 解码器，PC 端 PGS/SUP 图形字幕将无法渲染。'
+          '请运行 windows/scripts/upgrade_libmpv_for_pgs.ps1 替换完整版 libmpv-2.dll。',
+        );
+      } else {
+        _logger.i('MpvAdapter', '当前 libmpv 已包含 hdmv_pgs_subtitle 解码器');
+      }
+    } catch (e) {
+      _logger.w('MpvAdapter', '探测 PGS 解码器失败: $e');
+    }
   }
 
   Future<String> _ensureShaderAssetFile(String shaderRef) async {
@@ -269,16 +301,32 @@ class MpvPlayerAdapter implements PlayerAdapter {
         }
       }
 
-      final media = Media(videoUrl);
-      await _player!.open(media, play: false);
-
-      if (startPosition != null && startPosition > Duration.zero) {
-        await _player!.seek(startPosition);
+      // 使用 mpv_command 数组形式调用 loadfile，避免 URL 中的特殊字符被错误解析。
+      // media_kit 的 Player.open 内部会把 URL 拼成字符串，极端场景下引号/空格容易出错。
+      final np = _nativePlayer;
+      if (np != null) {
+        final options = <String>[];
+        if (startPosition != null && startPosition > Duration.zero) {
+          options.add(
+            'start=${(startPosition.inMilliseconds / 1000.0).toStringAsFixed(3)}',
+          );
+        }
+        options.add('pause');
+        await np.command(['loadfile', videoUrl, 'replace', options.join(',')]);
+      } else {
+        final media = Media(videoUrl);
+        await _player!.open(media, play: false);
+        if (startPosition != null && startPosition > Duration.zero) {
+          await _player!.seek(startPosition);
+        }
       }
 
       _isInitialized = true;
       _callbacks?.onDurationChanged?.call();
       _logger.i('MpvAdapter', 'media_kit 初始化完成');
+
+      // 异步探测 PGS 解码器，不阻塞初始化。
+      unawaited(_probePgsDecoderAvailability());
     } catch (e, stackTrace) {
       _errorMessage = e.toString();
       _isInitialized = false;
@@ -1073,7 +1121,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
         final np = _nativePlayer;
         if (_hasBitmapSubtitle && np != null) {
           await _removeExternalSubtitleTracks();
-          final subtitlePath = _normalizeMpvPath(path);
+          final subtitlePath = _toMpvSubtitleUri(path);
           await np.command(['sub-add', subtitlePath, 'select', 'External Subtitle', 'und']);
           await _ensureBitmapExternalSubtitleSelection();
         } else {
@@ -1100,7 +1148,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
           await _removeExternalSubtitleTracks();
           await np.setProperty('sub-ass', 'no');
           await np.setProperty('sub-ass-override', 'no');
-          final subtitlePath = _normalizeMpvPath(path);
+          final subtitlePath = _toMpvSubtitleUri(path);
           await np.command(['sub-add', subtitlePath, 'select', 'External Subtitle', 'und']);
         } else {
           await _player!.setSubtitleTrack(SubtitleTrack.uri(path));
@@ -1245,7 +1293,7 @@ class MpvPlayerAdapter implements PlayerAdapter {
 
         final subtitleTracks = _player!.state.tracks.subtitle;
         final beforeCount = subtitleTracks.length;
-        await np.command(['sub-add', path, 'auto', 'secondary', 'und']);
+        await np.command(['sub-add', _toMpvSubtitleUri(path), 'auto', 'secondary', 'und']);
 
         SubtitleTrack? newTrack;
         for (int i = 0; i < 20; i++) {
