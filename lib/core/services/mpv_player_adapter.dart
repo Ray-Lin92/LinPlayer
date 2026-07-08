@@ -65,6 +65,11 @@ class MpvPlayerAdapter implements PlayerAdapter {
   bool _currentSubIsAss = false;
   bool _usingExternalSubtitle = false;
   bool _pgsDecoderAvailable = true;
+  // Windows dxva2-egl 渲染兜底：某些 GPU/驱动下 media_kit 硬件渲染(ANGLE)建 EGL
+  // surface 失败 → 视频/字幕/OSD 全渲染不出。检测到即持久化,后续走软件渲染。
+  bool _useSoftwareRendering = false;
+  bool _eglSurfaceFailed = false;
+  bool _swRenderRetried = false;
   String _lastSubtitleCueText = '';
   bool _isSeekBuffering = false;
   Timer? _seekBufferingFallbackTimer;
@@ -278,8 +283,13 @@ class MpvPlayerAdapter implements PlayerAdapter {
         return;
       }
 
+      // 播放器可能在等待/重开途中被 dispose（如 EGL 兜底重开），_player 置空后
+      // 继续 seek 会空指针崩溃并刷屏。捕获此刻的实例,为空即安静收工。
+      final player = _player;
+      if (player == null) return;
+
       try {
-        await _player!.seek(startPosition);
+        await player.seek(startPosition);
       } catch (error, stackTrace) {
         // seek 失败不抛出中断播放：start 选项多半已定位，最坏从头播也好过整页报错。
         _logger.w(
@@ -560,6 +570,12 @@ class MpvPlayerAdapter implements PlayerAdapter {
           ? Map<String, String>.from(httpHeaders)
           : null;
       _userAgentOverride = userAgentOverride;
+      // 每次 open 重新探测 EGL 失败；软件渲染决定持久化,启动即读。
+      _eglSurfaceFailed = false;
+      if (Platform.isWindows) {
+        _useSoftwareRendering =
+            await CacheService.getWindowsSoftwareRendering();
+      }
 
       await _configManager.initialize();
       await _configManager.writeConfig(
@@ -589,9 +605,13 @@ class MpvPlayerAdapter implements PlayerAdapter {
       // 黑屏(音频不受影响)，老 macOS(12.x/Intel)尤甚。改用软件纹理 TextureSW
       // (CVPixelBuffer 拷贝，不用 GL 上下文)彻底免疫该泄漏；解码仍是硬解
       // (videotoolbox-copy)，只是最终一帧上传走 CPU，代价可接受。其余平台不变。
+      // macOS 恒走软件纹理（GL 上下文泄漏黑屏兜底）；Windows 仅在检测到
+      // dxva2-egl EGL surface 失败后走软件渲染（见下方自动重开逻辑）。
+      final softwareRendering =
+          Platform.isMacOS || (Platform.isWindows && _useSoftwareRendering);
       _videoController = VideoController(
         _player!,
-        configuration: Platform.isMacOS
+        configuration: softwareRendering
             ? const VideoControllerConfiguration(
                 enableHardwareAcceleration: false)
             : const VideoControllerConfiguration(),
@@ -703,6 +723,33 @@ class MpvPlayerAdapter implements PlayerAdapter {
 
       await _openVideoSource(videoUrl, startPosition: startPosition);
 
+      // Windows dxva2-egl 兜底：硬件渲染建 EGL surface 失败 → 画面/字幕全黑。
+      // 检测到即持久化并用软件渲染重开一次（一台机器只需触发一次,之后启动直读）。
+      if (Platform.isWindows && !_useSoftwareRendering && !_swRenderRetried) {
+        // 渲染上下文暴露 EGL 失败约在建控制器后 ~200ms,给点时间再判定。
+        if (!_eglSurfaceFailed) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+        if (_eglSurfaceFailed) {
+          _swRenderRetried = true;
+          await CacheService.setWindowsSoftwareRendering(true);
+          _logger.w('MpvAdapter',
+              'dxva2-egl EGL surface 创建失败,自动切换软件渲染并重开视频');
+          return initialize(
+            videoUrl: videoUrl,
+            startPosition: startPosition,
+            dolbyVisionFix: dolbyVisionFix,
+            useLibass: useLibass,
+            hardwareDecoding: hardwareDecoding,
+            preferredSubtitleLanguage: preferredSubtitleLanguage,
+            surfaceViewId: surfaceViewId,
+            useGpuNext: useGpuNext,
+            httpHeaders: httpHeaders,
+            userAgentOverride: userAgentOverride,
+          );
+        }
+      }
+
       _isInitialized = true;
       _callbacks?.onDurationChanged?.call();
       _logger.i('MpvAdapter', 'media_kit 初始化完成');
@@ -788,6 +835,13 @@ class MpvPlayerAdapter implements PlayerAdapter {
     _subscriptions.add(_player!.stream.log.listen((log) {
       final level = log.level.toLowerCase();
       final msg = 'mpv[${log.prefix}] ${log.text}'.trimRight();
+      // Windows 硬件渲染建 EGL surface 失败 → 视频/字幕全渲染不出。捕获信号,
+      // initialize 收尾时据此自动切软件渲染重开一次。
+      if (Platform.isWindows &&
+          (log.text.contains('Failed to create EGL surface') ||
+              log.prefix.contains('dxva2-egl'))) {
+        _eglSurfaceFailed = true;
+      }
       if (level == 'error' || level == 'fatal') {
         _logger.e('MpvNative', msg);
       } else {
