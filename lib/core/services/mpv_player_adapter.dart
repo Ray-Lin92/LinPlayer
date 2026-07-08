@@ -134,11 +134,14 @@ class MpvPlayerAdapter implements PlayerAdapter {
         subtitleBackground: _subtitleBackground,
       );
 
-      // libass 默认启用以获得最佳 ASS 字幕渲染效果
-      // PGS/SUP 位图字幕通过 sub-ass=no 配置避免 libass 干扰
+      // 禁用 media_kit 内置的 libass，使用 MPV 原生字幕渲染管线
+      // 原因：
+      // 1. media_kit 的 libass 仅支持 ASS/SSA，不支持 PGS/SUP 位图字幕
+      // 2. MPV 原生渲染支持所有字幕格式，且能通过 blend-subtitles=video 混合到帧中
+      // 3. 用户通过 UI 调节字幕大小/位置时，MPV 原生配置更灵活
       _player = Player(
         configuration: const PlayerConfiguration(
-          libass: true,
+          libass: false,
           logLevel: MPVLogLevel.warn,
         ),
       );
@@ -156,6 +159,9 @@ class MpvPlayerAdapter implements PlayerAdapter {
           await np.setProperty('sub-fonts-dir', systemFontsDir);
         }
         await np.setProperty('secondary-sub-visibility', 'yes');
+        // 确保PGS/SUP位图字幕被正确渲染到视频帧中
+        await np.setProperty('blend-subtitles', 'video');
+        await np.setProperty('sub-visibility', 'yes');
       }
 
       final media = Media(videoUrl);
@@ -509,13 +515,16 @@ class MpvPlayerAdapter implements PlayerAdapter {
         await np.setProperty('sub-ass', 'no');
         await np.setProperty('sub-ass-override', 'no');
         await np.setProperty('sub-back-color', '#00000000');
+        await np.setProperty('sub-visibility', 'yes');
         // 位图字幕应用用户设置的缩放，但位置固定为底部
         await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
         await np.setProperty('sub-pos', '100');
         _logger.i('MpvAdapter', '已应用图形字幕(PGS/SUP)配置: scale=$_subtitleScale, pos=100, ass=no');
       } else if (_currentSubIsAss) {
         await np.setProperty('sub-ass', 'yes');
-        await np.setProperty('sub-ass-override', 'no');
+        // 使用 'scale' 模式：允许 sub-scale/sub-pos 覆盖ASS内联样式中的位置和大小
+        // 但保留颜色、字体等原始样式，确保特效不完全丢失
+        await np.setProperty('sub-ass-override', 'scale');
         await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
         await np.setProperty('sub-pos', _subtitlePosition.toStringAsFixed(1));
         if (_subtitleFont != null && _subtitleFont!.isNotEmpty && _subtitleFont != '默认') {
@@ -685,23 +694,17 @@ class MpvPlayerAdapter implements PlayerAdapter {
       await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
     }
     await _configManager.updateConfigValue('sub-scale', _subtitleScale.toStringAsFixed(2));
-    if (!_currentSubIsAss || _hasBitmapSubtitle) {
-      final np = _nativePlayer;
-      if (np != null) {
-        await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
-      }
-    }
   }
 
   @override
   Future<void> setSubtitlePosition(double position) async {
     _subtitlePosition = 100 - position * 100;
     _logger.i('MpvAdapter', '设置字幕位置: pos=$_subtitlePosition');
-    if (!_currentSubIsAss || _hasBitmapSubtitle) {
-      final np = _nativePlayer;
-      if (np != null) {
-        await np.setProperty('sub-pos', _hasBitmapSubtitle ? '100' : _subtitlePosition.toStringAsFixed(1));
-      }
+    final np = _nativePlayer;
+    if (np != null) {
+      // PGS位图字幕位置由流本身定义，不覆盖；其他类型允许调节
+      final posValue = _hasBitmapSubtitle ? '100' : _subtitlePosition.toStringAsFixed(1);
+      await np.setProperty('sub-pos', posValue);
     }
     await _configManager.updateConfigValue('sub-pos', _subtitlePosition.toStringAsFixed(1));
   }

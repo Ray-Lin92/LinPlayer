@@ -94,6 +94,7 @@ object LibassBridge {
     private var assRenderer: Long = 0
     private var assTrack: Long = 0
     private var initialized = false
+    private var pathsSet = false
 
     init {
         try {
@@ -108,6 +109,7 @@ object LibassBridge {
         }
     }
 
+    external fun nativeSetLibraryPaths(libassPath: String, libmpvPath: String)
     external fun nativeIsAvailable(): Boolean
     external fun nativeInit(width: Int, height: Int): Long
     external fun nativeLoadFile(assLibrary: Long, path: String): Long
@@ -118,6 +120,18 @@ object LibassBridge {
     external fun nativeDispose(assLibrary: Long, renderer: Long, track: Long)
 
     fun isAvailable(context: Context): Boolean {
+        if (!pathsSet) {
+            try {
+                val nativeDir = context.applicationInfo.nativeLibraryDir
+                val libassPath = "$nativeDir/libass.so"
+                val libmpvPath = "$nativeDir/libmpv.so"
+                nativeSetLibraryPaths(libassPath, libmpvPath)
+                pathsSet = true
+                android.util.Log.i("LibassBridge", "Set library paths: ass=$libassPath, mpv=$libmpvPath")
+            } catch (e: Exception) {
+                android.util.Log.e("LibassBridge", "Failed to set library paths: ${e.message}")
+            }
+        }
         return try {
             nativeIsAvailable()
         } catch (e: UnsatisfiedLinkError) {
