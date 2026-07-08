@@ -242,7 +242,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
         : buildOfflinePlaybackSelection(itemId: widget.itemId);
     final mediaSource = selection.mediaSource;
     _sanitizeSelectionState(mediaSource);
-    final videoStream = mediaSource?.primaryVideoStream;
+    final videoStream =
+        mediaSource?.mediaStreams.where((stream) => stream.isVideo).firstOrNull;
     _initialVideoAspectRatio = (videoStream?.width != null &&
             videoStream?.height != null &&
             videoStream!.width! > 0 &&

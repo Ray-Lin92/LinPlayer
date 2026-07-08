@@ -272,9 +272,10 @@ class _PlaybackOptionsState extends ConsumerState<PlaybackOptions> {
     }).toList();
   }
 
-  /// 媒体源的画质档位标签（取最高分辨率视频流，如 "1080p"/"4K"）。
+  /// 媒体源的画质档位标签（取视频流分辨率，如 "1080p"/"4K"）。
   static String _sourceQualityLabel(MediaSource source) {
-    return source.qualityLabel;
+    final v = source.mediaStreams.where((s) => s.isVideo).firstOrNull;
+    return v?.resolution ?? '';
   }
 
   List<Widget> _buildAudioOptions(List<MediaStream> streams) {
@@ -475,21 +476,12 @@ class _PlaybackOptionsState extends ConsumerState<PlaybackOptions> {
     return '默认版本';
   }
 
-  /// 版本副标题：分辨率 / 编码格式(含 Dolby Vision·HDR) / 大小 / 码率。
+  /// 版本副标题：清晰度 / 码率 / 大小 / 容器格式。
   static String _sourceSummary(MediaSource source) {
-    // 取最高分辨率视频流，避免被排在前面的低清流误导（4K 显示成 1080p）。
-    final video = source.primaryVideoStream;
+    final video = source.mediaStreams.where((s) => s.isVideo).firstOrNull;
     final parts = <String>[];
-
     final res = video?.resolution ?? '';
     if (res.isNotEmpty) parts.add(res);
-
-    // 编码格式：如 "Dolby Vision HEVC" / "HDR10 HEVC" / "H.264"。
-    final format = video?.videoFormatLabel ?? '';
-    if (format.isNotEmpty) parts.add(format);
-
-    final size = _formatSize(source.size);
-    if (size.isNotEmpty) parts.add(size);
 
     int? bitrate = video?.bitRate;
     if ((bitrate == null || bitrate <= 0) &&
@@ -505,6 +497,13 @@ class _PlaybackOptionsState extends ConsumerState<PlaybackOptions> {
     final br = _formatBitrate(bitrate);
     if (br.isNotEmpty) parts.add(br);
 
+    final size = _formatSize(source.size);
+    if (size.isNotEmpty) parts.add(size);
+
+    final container = source.container?.trim();
+    if (container != null && container.isNotEmpty) {
+      parts.add(container.toUpperCase());
+    }
     return parts.join(' / ');
   }
 

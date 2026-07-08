@@ -583,9 +583,10 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
           );
 
       if (!mounted) return;
-      // 取最高分辨率视频流，避免 4K 资源被排在前面的低清流误判成 1080p。
-      final videoStream = mediaSource.primaryVideoStream ??
-          MediaStream(index: 0, type: 'Video');
+      final videoStream = mediaSource.mediaStreams.firstWhere(
+        (stream) => stream.isVideo,
+        orElse: () => MediaStream(index: 0, type: 'Video'),
+      );
       final sourceLabel = _buildSourceDisplayName(mediaSource, videoStream);
       showDesktopMessage(context, '已调用外部播放器播放：$sourceLabel');
     } on ProcessException catch (error) {
@@ -919,8 +920,10 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
                     : secondaryCandidates
                         .where((s) => s.index == selectedSecondarySubtitleIndex)
                         .firstOrNull;
-            final videoStream =
-                source.primaryVideoStream ?? MediaStream(index: 0, type: 'Video');
+            final videoStream = source.mediaStreams.firstWhere(
+              (s) => s.isVideo,
+              orElse: () => MediaStream(index: 0, type: 'Video'),
+            );
             final sourceLabel = _buildSourceName(source, videoStream);
             final versionLabel = _buildVideoVersionLabel(source, videoStream);
             final fileSummary = <String>[
@@ -1152,8 +1155,10 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
   List<String> _videoVersionParts(MediaSource source, MediaStream videoStream) {
     return <String>[
       if (videoStream.resolution.isNotEmpty) videoStream.resolution,
-      // 编码格式含动态范围，如 "Dolby Vision HEVC" / "HDR10 HEVC" / "H.264"。
-      if (videoStream.videoFormatLabel.isNotEmpty) videoStream.videoFormatLabel,
+      if ((videoStream.videoCodec ?? '').trim().isNotEmpty)
+        (videoStream.videoCodec ?? '').trim().toUpperCase(),
+      if ((source.container ?? '').trim().isNotEmpty)
+        source.container!.trim().toUpperCase(),
     ];
   }
 
@@ -1241,8 +1246,10 @@ class _InfoSectionState extends ConsumerState<_InfoSection> {
       link: _sourceLink,
       menuWidth: 420,
       items: info.mediaSources.map((source) {
-        final videoStream =
-            source.primaryVideoStream ?? MediaStream(index: 0, type: 'Video');
+        final videoStream = source.mediaStreams.firstWhere(
+          (stream) => stream.isVideo,
+          orElse: () => MediaStream(index: 0, type: 'Video'),
+        );
         final isCurrent = source.id == selectedSourceId;
         return _MenuItem(
           icon: isCurrent ? Icons.check_circle : Icons.layers_outlined,
@@ -1972,8 +1979,10 @@ class _MediaInfoPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scale = scaleFactor;
-    final videoStream =
-        source.primaryVideoStream ?? MediaStream(index: 0, type: 'Video');
+    final videoStream = source.mediaStreams.firstWhere(
+      (s) => s.type == 'Video',
+      orElse: () => MediaStream(index: 0, type: 'Video'),
+    );
     final audioStreams =
         source.mediaStreams.where((s) => s.type == 'Audio').toList();
     final subtitleStreams =
