@@ -573,6 +573,8 @@ class EmbyLibraryApi implements LibraryApi {
       _client.get('/Items/Filters', queryParameters: {
         'UserId': uid,
         'ParentId': libraryId,
+        // 必须按条目类型限定，否则部分服务器对 /Items/Filters 返回空分面。
+        'IncludeItemTypes': 'Movie,Series',
       }),
       _fetchStudios(libraryId, uid),
     ]);
