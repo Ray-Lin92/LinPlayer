@@ -134,8 +134,8 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
     );
   }
 
-  /// 类型/标签/工作室/时间 各一行：默认「全部」，选中后回显；点该行弹窗（拼音排序）
-  /// 选一个值，下方网格服务端实时过滤。
+  /// 类型/标签/时间：项不多，一行行铺开可点选胶囊（单选，再选取消）。工作室取值可能
+  /// 很多，单独成一行回显当前值，点开焦点弹窗（拼音排序）选。下方网格服务端实时过滤。
   Widget _buildFilterRows(TvMetrics m, String libraryId) {
     final facetsAsync = ref.watch(filtersProvider(libraryId));
     return facetsAsync.maybeWhen(
@@ -143,23 +143,18 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
         final years = buildYearChips(f.years, currentYear: DateTime.now().year);
         final rows = <Widget>[];
         if (f.genres.isNotEmpty) {
-          rows.add(_facetRow(m, '类型', _filter.genre, () async {
-            final p = await _showFacetPicker(
-                m, '类型', sortByPinyin(f.genres), _filter.genre);
-            if (p != null) {
-              setState(() =>
-                  _filter = _filter.withGenre(p.isEmpty ? null : p));
-            }
-          }));
+          rows.add(_facetChipRow(m, '类型', [
+            for (final g in f.genres)
+              _facetChip(m, g, _filter.genre == g,
+                  () => _filter = _filter.withGenre(_filter.genre == g ? null : g)),
+          ]));
         }
         if (f.tags.isNotEmpty) {
-          rows.add(_facetRow(m, '标签', _filter.tag, () async {
-            final p = await _showFacetPicker(
-                m, '标签', sortByPinyin(f.tags), _filter.tag);
-            if (p != null) {
-              setState(() => _filter = _filter.withTag(p.isEmpty ? null : p));
-            }
-          }));
+          rows.add(_facetChipRow(m, '标签', [
+            for (final t in f.tags)
+              _facetChip(m, t, _filter.tag == t,
+                  () => _filter = _filter.withTag(_filter.tag == t ? null : t)),
+          ]));
         }
         if (f.studios.isNotEmpty) {
           rows.add(_facetRow(m, '工作室', _filter.studio, () async {
@@ -172,17 +167,14 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
           }));
         }
         if (years.isNotEmpty) {
-          rows.add(_facetRow(m, '时间', _filter.yearLabel, () async {
-            final p = await _showFacetPicker(
-                m, '时间', years.map((e) => e.label).toList(), _filter.yearLabel);
-            if (p == null) return;
-            if (p.isEmpty) {
-              setState(() => _filter = _filter.withYear(null, null));
-            } else {
-              final csv = years.firstWhere((e) => e.label == p).yearsCsv;
-              setState(() => _filter = _filter.withYear(p, csv));
-            }
-          }));
+          rows.add(_facetChipRow(m, '时间', [
+            for (final yc in years)
+              _facetChip(m, yc.label, _filter.yearLabel == yc.label, () {
+                final on = _filter.yearLabel == yc.label;
+                _filter = _filter.withYear(
+                    on ? null : yc.label, on ? null : yc.yearsCsv);
+              }),
+          ]));
         }
         if (rows.isEmpty) return const SizedBox.shrink();
         return Padding(
@@ -194,6 +186,45 @@ class _TvLibraryScreenState extends ConsumerState<TvLibraryScreen> {
     );
   }
 
+  /// 一行可点选胶囊（类型/标签/时间）。
+  Widget _facetChipRow(TvMetrics m, String label, List<Widget> chips) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: m.spacingSm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: m.spacingXs, right: m.spacingMd),
+            child: SizedBox(
+              width: m.s(64),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: m.fontSizeSm,
+                  color: TvDesignTokens.textSecondary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Wrap(
+                spacing: m.spacingSm, runSpacing: m.spacingSm, children: chips),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _facetChip(
+      TvMetrics m, String label, bool selected, VoidCallback apply) {
+    return TvFocusable(
+      onSelect: () => setState(apply),
+      child: _chip(m, label: label, selected: selected),
+    );
+  }
+
+  /// 工作室一行：回显当前选中值（未选「全部」），点开焦点弹窗。
   Widget _facetRow(
       TvMetrics m, String label, String? selected, VoidCallback onTap) {
     return Padding(

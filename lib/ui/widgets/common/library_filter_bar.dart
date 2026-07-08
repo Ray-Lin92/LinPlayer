@@ -28,38 +28,40 @@ class LibraryFilterBar extends StatelessWidget {
     final v = value;
     final yearChips = buildYearChips(f.years, currentYear: currentYear);
 
+    final theme = Theme.of(context);
     final rows = <Widget>[];
+    // 类型/标签/时间项不多，直接一行行铺开成可点选胶囊（单选，再点取消）。
     if (f.genres.isNotEmpty) {
-      rows.add(_row(context, '类型', v.genre, () async {
-        final picked = await _pick(context, '类型', sortByPinyin(f.genres), v.genre);
-        if (picked != null) onChanged(v.withGenre(picked.isEmpty ? null : picked));
-      }));
+      rows.add(_chipRow(theme, '类型', [
+        for (final g in f.genres)
+          _chip(theme, g, v.genre == g,
+              () => onChanged(v.withGenre(v.genre == g ? null : g))),
+      ]));
     }
     if (f.tags.isNotEmpty) {
-      rows.add(_row(context, '标签', v.tag, () async {
-        final picked = await _pick(context, '标签', sortByPinyin(f.tags), v.tag);
-        if (picked != null) onChanged(v.withTag(picked.isEmpty ? null : picked));
-      }));
+      rows.add(_chipRow(theme, '标签', [
+        for (final t in f.tags)
+          _chip(theme, t, v.tag == t,
+              () => onChanged(v.withTag(v.tag == t ? null : t))),
+      ]));
     }
+    // 工作室取值可能很多，单独成一行回显当前值，点开居中可搜索弹窗选。
     if (f.studios.isNotEmpty) {
-      rows.add(_row(context, '工作室', v.studio, () async {
+      rows.add(_pickerRow(theme, '工作室', v.studio, () async {
         final picked =
             await _pick(context, '工作室', sortByPinyin(f.studios), v.studio);
         if (picked != null) onChanged(v.withStudio(picked.isEmpty ? null : picked));
       }));
     }
     if (yearChips.isNotEmpty) {
-      rows.add(_row(context, '时间', v.yearLabel, () async {
-        final picked = await _pick(
-            context, '时间', yearChips.map((e) => e.label).toList(), v.yearLabel);
-        if (picked == null) return;
-        if (picked.isEmpty) {
-          onChanged(v.withYear(null, null));
-        } else {
-          final csv = yearChips.firstWhere((e) => e.label == picked).yearsCsv;
-          onChanged(v.withYear(picked, csv));
-        }
-      }));
+      rows.add(_chipRow(theme, '时间', [
+        for (final yc in yearChips)
+          _chip(theme, yc.label, v.yearLabel == yc.label, () {
+            final on = v.yearLabel == yc.label;
+            onChanged(
+                v.withYear(on ? null : yc.label, on ? null : yc.yearsCsv));
+          }),
+      ]));
     }
 
     // 服务器对该库没有返回任何分面时，给个明确提示而非空白（避免误以为"功能没做"）。
@@ -95,41 +97,81 @@ class LibraryFilterBar extends StatelessWidget {
     );
   }
 
-  /// 一行筛选维度：左侧标签，右侧当前选中值（未选显示「全部」），整行可点开选择器。
-  Widget _row(BuildContext context, String label, String? selected,
-      VoidCallback onTap) {
-    final theme = Theme.of(context);
+  /// 左侧维度标签胶囊。
+  Widget _label(ThemeData theme, String label) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4, right: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  /// 一行可点选胶囊（类型/标签/时间）。
+  Widget _chipRow(ThemeData theme, String label, List<Widget> chips) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _label(theme, label),
+          Expanded(child: Wrap(spacing: 6, runSpacing: 4, children: chips)),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(ThemeData theme, String label, bool selected, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: selected
+                ? theme.colorScheme.primary
+                : theme.textTheme.bodyMedium?.color,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 一行回显当前选中值（未选显示「全部」），整行可点开居中弹窗（工作室专用）。
+  Widget _pickerRow(
+      ThemeData theme, String label, String? selected, VoidCallback onTap) {
     final active = selected != null;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           children: [
-            SizedBox(
-              width: 48,
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
+            _label(theme, label),
             Expanded(
               child: Text(
                 selected ?? '全部',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 14,
-                  color: active
-                      ? theme.textTheme.bodyLarge?.color
-                      : theme.hintColor,
-                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                  fontSize: 13,
+                  color: active ? theme.colorScheme.primary : theme.hintColor,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w400,
                 ),
               ),
             ),
