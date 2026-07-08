@@ -38,6 +38,21 @@ class AniModel {
   String? get releaseDate => _nonEmpty(raw['releaseDate']);
   String? get downloadPath => _nonEmpty(raw['downloadPath']);
 
+  /// 番剧更新星期（1=周一 … 7=周日）；0/null = 未排期，对齐 ani-rss `weekList` 分组。
+  int? get week {
+    final w = (raw['week'] as num?)?.toInt();
+    return (w != null && w >= 1 && w <= 7) ? w : null;
+  }
+
+  /// 上次下载时间（epoch 毫秒；0 表示从未下载）。
+  int get lastDownloadTime => (raw['lastDownloadTime'] as num?)?.toInt() ?? 0;
+
+  /// 是否配置了备用 RSS（对齐 AniCard.vue 的「备用RSS」标签）。
+  bool get hasStandbyRss {
+    final v = raw['standbyRssList'];
+    return v is List && v.isNotEmpty;
+  }
+
   bool get ova => raw['ova'] == true;
   bool get enable => raw['enable'] != false; // 缺省视为启用
 

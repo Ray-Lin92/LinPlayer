@@ -50,7 +50,8 @@ class _DetailContent extends StatefulWidget {
 }
 
 class _DetailContentState extends State<_DetailContent> {
-  Color _backgroundColor = const Color(0xFF121212);
+  // null = 还未取色：跟随当前主题背景（浅色模式不再黑底）。
+  Color? _backgroundColor;
 
   void _onColorChanged(Color color) {
     if (_backgroundColor != color) {
@@ -62,11 +63,13 @@ class _DetailContentState extends State<_DetailContent> {
 
   @override
   Widget build(BuildContext context) {
-    final foregroundColor = readableTextColorForBackground(_backgroundColor);
+    final backgroundColor =
+        _backgroundColor ?? Theme.of(context).scaffoldBackgroundColor;
+    final foregroundColor = readableTextColorForBackground(backgroundColor);
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      backgroundColor: backgroundColor,
       body: DynamicBackground(
-        backgroundColor: _backgroundColor,
+        backgroundColor: backgroundColor,
         child: CustomScrollView(
         slivers: [
           // 封面区域
@@ -82,7 +85,7 @@ class _DetailContentState extends State<_DetailContent> {
           if (widget.item.type == 'Series') ...[
             _SeasonsSliver(
               itemId: widget.itemId,
-              onSeasonTap: (season) => context.push('/season/${season.id}', extra: _backgroundColor),
+              onSeasonTap: (season) => context.push('/season/${season.id}', extra: backgroundColor),
             ),
             _EpisodesSliver(
               itemId: widget.itemId,
@@ -199,8 +202,9 @@ class _DetailHeader extends ConsumerStatefulWidget {
 }
 
 class _DetailHeaderState extends ConsumerState<_DetailHeader> {
-  Color _dominantColor = Colors.black;
-  Color _backgroundColor = const Color(0xFF121212);
+  // null = 还未取色：build 时退回当前主题背景。
+  Color? _dominantColor;
+  Color? _backgroundColor;
   bool _isDownloadingSeries = false;
   bool _isFavorite = false;
   bool _favoriteBusy = false;
@@ -259,10 +263,22 @@ class _DetailHeaderState extends ConsumerState<_DetailHeader> {
     );
     final imageUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
 
-    if (imageUrl == null) return;
-
     // 跟随用户主题明暗取色：浅色模式取浅色系背景，深色模式取深色系。
     final brightness = Theme.of(context).brightness;
+
+    if (imageUrl == null) {
+      // 无横图也要给主题对应的兜底色，否则浅色模式停在深色默认值。
+      final fb = ExtractedColors.fallback(brightness);
+      if (mounted) {
+        setState(() {
+          _dominantColor = fb.gradientStart;
+          _backgroundColor = fb.background;
+        });
+        widget.onColorChanged?.call(fb.background);
+      }
+      return;
+    }
+
     final colors =
         await ColorExtractor.extractFromUrl(imageUrl, brightness: brightness);
     if (mounted) {
@@ -337,7 +353,10 @@ class _DetailHeaderState extends ConsumerState<_DetailHeader> {
 
     // 标题/元信息坐落在「渐变→海报主色」的底部，前景色按主色亮度自适配：
     // 深底用浅字、浅底用深字；阴影取反色保证两种模式下都清晰。
-    final fg = readableTextColorForBackground(_backgroundColor);
+    final themeBg = Theme.of(context).scaffoldBackgroundColor;
+    final dominantColor = _dominantColor ?? themeBg;
+    final backgroundColor = _backgroundColor ?? themeBg;
+    final fg = readableTextColorForBackground(backgroundColor);
     final shadowColor = fg.computeLuminance() > 0.5
         ? Colors.black.withValues(alpha: 0.5)
         : Colors.white.withValues(alpha: 0.5);
@@ -347,7 +366,7 @@ class _DetailHeaderState extends ConsumerState<_DetailHeader> {
         Container(
           height: headerHeight,
           width: double.infinity,
-          color: _dominantColor,
+          color: dominantColor,
           child: videoUrl != null
               ? VideoBackground(
                   videoUrl: videoUrl,
@@ -386,8 +405,8 @@ class _DetailHeaderState extends ConsumerState<_DetailHeader> {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  _backgroundColor.withValues(alpha: 0.9),
-                  _backgroundColor,
+                  backgroundColor.withValues(alpha: 0.9),
+                  backgroundColor,
                 ],
               ),
             ),
