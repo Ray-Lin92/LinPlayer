@@ -4,7 +4,11 @@ import '../api/api_interfaces.dart';
 import '../utils/platform_utils.dart';
 import 'app_preferences.dart';
 
-String get defaultPlayerCoreKey => isDesktopPlatform ? 'mpv' : 'exoPlayer';
+String get defaultPlayerCoreKey {
+  if (isDesktopPlatform) return 'mpv';
+  // Android 默认使用原生 MPV（通过 libplayer.so + 平台通道）
+  return 'nativeMpv';
+}
 
 String normalizePlayerCore(String? value) {
   switch (value) {
@@ -14,17 +18,22 @@ String normalizePlayerCore(String? value) {
     case 'exoPlayer':
     case 'video_player':
       return 'exoPlayer';
+    case 'nativeMpv':
+      return 'nativeMpv';
     default:
       return defaultPlayerCoreKey;
   }
 }
 
-final playerCoreProvider = StateNotifierProvider<PreferenceNotifier<String>, String>((ref) {
+final playerCoreProvider =
+    StateNotifierProvider<PreferenceNotifier<String>, String>((ref) {
   return PreferenceNotifier<String>(
     defaultValue: defaultPlayerCoreKey,
-    readValue: (prefs) => normalizePlayerCore(prefs.getString('linplayer_player_core')),
+    readValue: (prefs) =>
+        normalizePlayerCore(prefs.getString('linplayer_player_core')),
     writeValue: (prefs, value) async {
-      await prefs.setString('linplayer_player_core', normalizePlayerCore(value));
+      await prefs.setString(
+          'linplayer_player_core', normalizePlayerCore(value));
     },
   );
 });
@@ -40,7 +49,8 @@ final defaultPlaybackSpeedProvider =
   );
 });
 
-final skipForwardStepProvider = StateNotifierProvider<PreferenceNotifier<int>, int>((ref) {
+final skipForwardStepProvider =
+    StateNotifierProvider<PreferenceNotifier<int>, int>((ref) {
   return PreferenceNotifier<int>(
     defaultValue: 10,
     readValue: (prefs) => prefs.getInt('linplayer_skip_forward_step'),
@@ -83,7 +93,8 @@ final backgroundPlaybackProvider =
   );
 });
 
-final autoPlayNextProvider = StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
+final autoPlayNextProvider =
+    StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
   return PreferenceNotifier<bool>(
     defaultValue: true,
     readValue: (prefs) => prefs.getBool('linplayer_auto_play_next'),
@@ -172,7 +183,9 @@ class DanmakuBlockwordsNotifier extends StateNotifier<List<String>> {
   }
 
   void importWords(List<String> words) {
-    final newWords = words.where((word) => word.isNotEmpty && !state.contains(word)).toList();
+    final newWords = words
+        .where((word) => word.isNotEmpty && !state.contains(word))
+        .toList();
     if (newWords.isNotEmpty) {
       state = [...state, ...newWords];
     }
@@ -192,7 +205,8 @@ final preferredSubtitleLanguageProvider =
     StateNotifierProvider<PreferenceNotifier<String>, String>((ref) {
   return PreferenceNotifier<String>(
     defaultValue: 'chi',
-    readValue: (prefs) => prefs.getString('linplayer_preferred_subtitle_language'),
+    readValue: (prefs) =>
+        prefs.getString('linplayer_preferred_subtitle_language'),
     writeValue: (prefs, value) async {
       await prefs.setString('linplayer_preferred_subtitle_language', value);
     },
@@ -234,7 +248,8 @@ final rememberBrightnessProvider =
 
 final playerBrightnessProvider = StateProvider<double>((ref) => 1.0);
 
-final subtitleFontProvider = StateNotifierProvider<PreferenceNotifier<String>, String>((ref) {
+final subtitleFontProvider =
+    StateNotifierProvider<PreferenceNotifier<String>, String>((ref) {
   return PreferenceNotifier<String>(
     defaultValue: '默认',
     readValue: (prefs) => prefs.getString('linplayer_subtitle_font'),
@@ -255,6 +270,17 @@ final mpvDolbyVisionFixProvider =
   );
 });
 
+final externalMpvPathProvider =
+    StateNotifierProvider<PreferenceNotifier<String>, String>((ref) {
+  return PreferenceNotifier<String>(
+    defaultValue: '',
+    readValue: (prefs) => prefs.getString('linplayer_external_mpv_path'),
+    writeValue: (prefs, value) async {
+      await prefs.setString('linplayer_external_mpv_path', value);
+    },
+  );
+});
+
 final impellerEnabledProvider =
     StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
   return PreferenceNotifier<bool>(
@@ -266,7 +292,8 @@ final impellerEnabledProvider =
   );
 });
 
-final exoLibassProvider = StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
+final exoLibassProvider =
+    StateNotifierProvider<PreferenceNotifier<bool>, bool>((ref) {
   return PreferenceNotifier<bool>(
     defaultValue: false,
     readValue: (prefs) => prefs.getBool('linplayer_exo_libass'),
