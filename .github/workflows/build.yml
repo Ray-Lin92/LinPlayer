@@ -3,8 +3,22 @@ name: Build Flutter
 on:
   push:
     branches: [ main, master, develop ]
+    # 纯文档/代理站等不影响 App 产物的改动不触发构建，省免费构建时长。
+    # 仅当推送里全部文件都命中下列路径时才跳过；掺杂任一程序文件仍会构建。
+    paths-ignore:
+      - '**.md'
+      - 'oauth-proxy/**'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
   pull_request:
     branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - 'oauth-proxy/**'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
   workflow_dispatch:
     inputs:
       version:
