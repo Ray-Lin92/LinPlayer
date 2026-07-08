@@ -246,9 +246,9 @@ class ExoPlayerPlugin(
                     .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
                     .setEnableDecoderFallback(true)
 
-                android.util.Log.i("ExoPlayerPlugin", "Creating ExoPlayer with FFmpeg extension support");
+                android.util.Log.i("ExoPlayerPlugin", "Creating ExoPlayer with Media3 extension renderers");
                 
-                // 检查 FFmpeg 扩展是否可用
+                // 检查 FFmpeg 扩展是否可用（仅记录，不作为字幕能力判断依据）
                 try {
                     val ffmpegClass = Class.forName("androidx.media3.decoder.ffmpeg.FfmpegLibrary")
                     val isAvailable = ffmpegClass.getMethod("isAvailable").invoke(null) as Boolean

@@ -292,7 +292,7 @@ class ExoPlayerAdapter implements PlayerAdapter {
     if (isPgs) {
       _useLibassForCurrentSub = false;
       libassOverlayNotifier.value = false;
-      _logger.w('ExoPlayer', 'PGS/SUP图形字幕需要FFmpeg扩展支持，如无法显示请切换MPV内核');
+      _logger.w('ExoPlayer', 'PGS/SUP图形字幕仍依赖设备侧 Media3 解析，如无法显示请切换MPV内核');
     } else if (isAss) {
       _useLibassForCurrentSub = false;
       libassOverlayNotifier.value = false;

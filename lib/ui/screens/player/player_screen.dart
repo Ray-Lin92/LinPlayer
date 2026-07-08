@@ -396,11 +396,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
     }
 
     if (_isAssSubtitleCodec(codec)) {
+      final preferLibass = ref.read(exoLibassProvider);
+      final adapter = _playerService.adapter;
+      final canUseExperimentalLibass =
+          preferLibass && adapter is ExoPlayerAdapter && adapter.libassReady;
+      if (canUseExperimentalLibass) {
+        logger.i('Player', 'EXO内核: ASS/SSA 保留原文件，优先尝试实验性 libass 渲染');
+        return sourceFile;
+      }
+
       final convertedPath = await SubtitleProcessor.convertAssToSrt(
         sourceFile.path,
         outputPath: sourceFile.path.replaceFirst(RegExp(r'\.[^.]+$'), '.srt'),
       );
-      logger.i('Player', 'EXO内核: ASS/SSA 已转换为 SRT: $convertedPath');
+      logger.i('Player', 'EXO内核: ASS/SSA 已转换为 SRT 兼容播放: $convertedPath');
       return File(convertedPath);
     }
 
@@ -556,11 +565,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> with WidgetsBinding
       await _playerService.selectSubtitleTrack(trackId);
       logger.i('Player', 'EXO 已选择内封字幕轨道: id=$trackId');
       
-      // PGS 字幕提示：如果 FFmpeg 扩展未正确加载，PGS 可能无法显示
+      // PGS 字幕提示：显示能力依赖设备侧 Media3 解码输出，异常时建议切换 MPV
       if (isGraphical && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('PGS字幕加载中，如无法显示请检查FFmpeg扩展或切换MPV内核'),
+            content: Text('PGS字幕加载中，如无法显示请切换MPV内核'),
             duration: Duration(seconds: 3),
           ),
         );

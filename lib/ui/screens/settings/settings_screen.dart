@@ -743,8 +743,8 @@ class PlayerSettingsScreen extends ConsumerWidget {
             onChanged: (value) => ref.read(impellerEnabledProvider.notifier).state = value,
           ),
           SwitchListTile(
-            title: const Text('EXO 播放器使用 libass 渲染 ASS 字幕'),
-            subtitle: const Text('优化 ASS 特效字幕在 EXO 内核上的播放效果'),
+            title: const Text('EXO 尝试实验性 libass 渲染 ASS'),
+            subtitle: const Text('关闭时默认将 ASS 转为 SRT 以保证兼容；开启后优先尝试特效渲染'),
             value: exoLibass,
             onChanged: (value) => ref.read(exoLibassProvider.notifier).state = value,
           ),
