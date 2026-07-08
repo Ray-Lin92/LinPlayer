@@ -1,4 +1,6 @@
 # Miscellaneous
+ScreenShot_*.png
+/tool/dandan_send_test.dart
 .tmp/
 *.class
 *.log
