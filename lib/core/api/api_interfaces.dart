@@ -798,9 +798,6 @@ class DanmakuAnime {
   final int? year;
   final int? episodeCount;
   final List<DanmakuEpisode>? episodes;
-  /// 弹弹play 作品详情里的「Bangumi.tv 页面地址」，形如 https://bgm.tv/subject/123。
-  /// 用于反查 bgm.tv subject id（作品详情接口才会返回）。
-  final String? bangumiUrl;
 
   DanmakuAnime({
     required this.animeId,
@@ -812,7 +809,6 @@ class DanmakuAnime {
     this.year,
     this.episodeCount,
     this.episodes,
-    this.bangumiUrl,
   });
 }
 

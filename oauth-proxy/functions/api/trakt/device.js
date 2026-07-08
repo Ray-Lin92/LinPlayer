@@ -3,12 +3,7 @@
 export async function onRequestPost({ env }) {
   const upstream = await fetch('https://api.trakt.tv/oauth/device/code', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Linplayer/1.0.0',
-      'trakt-api-version': '2',
-      'trakt-api-key': env.TRAKT_CLIENT_ID,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ client_id: env.TRAKT_CLIENT_ID }),
   });
   const body = await upstream.text();
