@@ -109,6 +109,8 @@ jobs:
           
           cd "${FFMPEG_MODULE_PATH}/jni/ffmpeg"
           
+          cd "${FFMPEG_MODULE_PATH}/jni/ffmpeg"
+          
           case ${{ matrix.arch }} in
             arm64-v8a)
               ./configure \
@@ -121,8 +123,6 @@ jobs:
                   --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
                   --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
                   ${COMMON_OPTIONS}
-              make -j${JOBS}
-              make install-libs
               ;;
             armeabi-v7a)
               ./configure \
@@ -137,10 +137,20 @@ jobs:
                   --extra-cflags="-march=armv7-a -mfloat-abi=softfp" \
                   --extra-ldflags="-Wl,--fix-cortex-a8" \
                   ${COMMON_OPTIONS}
-              make -j${JOBS}
-              make install-libs
               ;;
           esac
+          
+          make -j${JOBS}
+          
+          # 手动复制静态库到 CMake 期望的路径
+          # 因为 make install-libs 可能不可靠
+          mkdir -p "android-libs/${{ matrix.arch }}"
+          cp libavutil/libavutil.a "android-libs/${{ matrix.arch }}/"
+          cp libswresample/libswresample.a "android-libs/${{ matrix.arch }}/"
+          cp libavcodec/libavcodec.a "android-libs/${{ matrix.arch }}/"
+          
+          echo "FFmpeg libraries for ${{ matrix.arch }}:"
+          ls -la "android-libs/${{ matrix.arch }}/"
       
       # 编译 AAR
       - name: Build AAR

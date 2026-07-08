@@ -152,26 +152,38 @@ jobs:
               --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
               --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
               ${COMMON_OPTIONS}
-          make -j${JOBS}
-          make install-libs
-          make clean
-          
-          # 编译 armeabi-v7a
-          ./configure \
-              --libdir=android-libs/armeabi-v7a \
-              --arch=arm \
-              --cpu=armv7-a \
-              --cross-prefix="${TOOLCHAIN_PREFIX}/armv7a-linux-androideabi${ANDROID_ABI}-" \
-              --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
-              --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
-              --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
-              --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
-              --extra-cflags="-march=armv7-a -mfloat-abi=softfp" \
-              --extra-ldflags="-Wl,--fix-cortex-a8" \
-              ${COMMON_OPTIONS}
-          make -j${JOBS}
-          make install-libs
-          make clean
+           make -j${JOBS}
+           
+           # 手动复制静态库到 CMake 期望的路径
+           mkdir -p android-libs/arm64-v8a
+           cp libavutil/libavutil.a android-libs/arm64-v8a/
+           cp libswresample/libswresample.a android-libs/arm64-v8a/
+           cp libavcodec/libavcodec.a android-libs/arm64-v8a/
+           
+           make clean
+           
+           # 编译 armeabi-v7a
+           ./configure \
+               --libdir=android-libs/armeabi-v7a \
+               --arch=arm \
+               --cpu=armv7-a \
+               --cross-prefix="${TOOLCHAIN_PREFIX}/armv7a-linux-androideabi${ANDROID_ABI}-" \
+               --nm="${TOOLCHAIN_PREFIX}/llvm-nm" \
+               --ar="${TOOLCHAIN_PREFIX}/llvm-ar" \
+               --ranlib="${TOOLCHAIN_PREFIX}/llvm-ranlib" \
+               --strip="${TOOLCHAIN_PREFIX}/llvm-strip" \
+               --extra-cflags="-march=armv7-a -mfloat-abi=softfp" \
+               --extra-ldflags="-Wl,--fix-cortex-a8" \
+               ${COMMON_OPTIONS}
+           make -j${JOBS}
+           
+           # 手动复制静态库到 CMake 期望的路径
+           mkdir -p android-libs/armeabi-v7a
+           cp libavutil/libavutil.a android-libs/armeabi-v7a/
+           cp libswresample/libswresample.a android-libs/armeabi-v7a/
+           cp libavcodec/libavcodec.a android-libs/armeabi-v7a/
+           
+           make clean
       
       - name: Build AAR
         if: steps.cache-aar.outputs.cache-hit != 'true'
