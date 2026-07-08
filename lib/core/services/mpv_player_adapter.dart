@@ -525,9 +525,9 @@ class MpvPlayerAdapter implements PlayerAdapter {
         _logger.i('MpvAdapter', '已应用图形字幕(PGS/SUP)配置: scale=$_subtitleScale, pos=100, ass=no');
       } else if (_currentSubIsAss) {
         await np.setProperty('sub-ass', 'yes');
-        // 使用 'scale' 模式：允许 sub-scale/sub-pos 覆盖ASS内联样式中的位置和大小
-        // 但保留颜色、字体等原始样式，确保特效不完全丢失
-        await np.setProperty('sub-ass-override', 'scale');
+        // 使用 'no' 模式：完全保留 ASS 原始样式（包括位置、字体、特效）
+        // 这对双语字幕至关重要，避免覆盖导致文字重叠或消失
+        await np.setProperty('sub-ass-override', 'no');
         await np.setProperty('sub-scale', _subtitleScale.toStringAsFixed(2));
         await np.setProperty('sub-pos', _subtitlePosition.toStringAsFixed(1));
         if (_subtitleFont != null && _subtitleFont!.isNotEmpty && _subtitleFont != '默认') {
