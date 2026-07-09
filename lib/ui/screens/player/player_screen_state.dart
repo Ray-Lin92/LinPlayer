@@ -1492,6 +1492,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     unawaited(PrefetchProxy.instance.stop());
     _playerService.dispose();
     _longPressTimer?.cancel();
+    _speedRampTimer?.cancel();
     _skipButtonTimer?.cancel();
     _sleepTimer?.cancel();
 
@@ -1705,14 +1706,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               ),
               if (_playerService.showControls && !_playerService.isLocked)
                 Positioned.fill(child: _buildControlsOverlay(item)),
-              if (_playerService.isLocked)
+              // 锁定态：解锁按钮与未锁定时的锁定按钮同位置（左侧居中），且随控制栏计时自动隐藏，不再长驻。
+              if (_playerService.isLocked && _playerService.showControls)
                 Positioned(
-                  top: 40,
-                  left: 16,
-                  child: IconButton(
-                    icon: const Icon(Icons.lock, color: Colors.white),
-                    onPressed: _playerService.toggleLock,
-                  ),
+                  left: 4,
+                  top: 0,
+                  bottom: 0,
+                  child: SafeArea(child: Center(child: _lockButton())),
                 ),
               // 网盘转码源（夸克等）清晰度切换：仅源直链播放且有多档时显示。
               if (widget.sourcePlay != null &&
@@ -2047,69 +2047,116 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     ).animate().fadeIn(duration: AppMotion.fast);
   }
 
+  /// 锁定/解锁按钮：未锁定与锁定态复用同一样式与位置（左侧居中），避免两颗按钮跑到不同角落。
+  Widget _lockButton() {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.35),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: IconButton(
+        icon: Icon(_playerService.isLocked ? Icons.lock : Icons.lock_open,
+            color: Colors.white),
+        iconSize: 20,
+        tooltip: _playerService.isLocked ? '解锁' : '锁定',
+        onPressed: _playerService.toggleLock,
+      ),
+    );
+  }
+
   /// 左侧竖排功能：锁定 + 截屏（随控制栏显隐）。
   Widget _buildSideButtons() {
-    Widget btn(IconData icon, String tooltip, VoidCallback onTap) {
-      return Material(
-        color: Colors.black.withValues(alpha: 0.35),
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: IconButton(
-          icon: Icon(icon, color: Colors.white),
-          iconSize: 20,
-          tooltip: tooltip,
-          onPressed: onTap,
-        ),
-      );
-    }
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        btn(_playerService.isLocked ? Icons.lock : Icons.lock_open, '锁定',
-            _playerService.toggleLock),
+        _lockButton(),
         const SizedBox(height: 12),
-        btn(Icons.camera_alt_outlined, '截图', _takeScreenshot),
+        Material(
+          color: Colors.black.withValues(alpha: 0.35),
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: IconButton(
+            icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
+            iconSize: 20,
+            tooltip: '截图',
+            onPressed: _takeScreenshot,
+          ),
+        ),
       ],
     );
   }
 
-  /// 右侧倍速条：竖排常见倍速，当前档高亮，随控制栏显隐。
+  static const double _kSpeedMin = 0.25;
+  static const double _kSpeedMax = 10.0;
+  static const double _kSpeedStep = 0.25;
+  Timer? _speedRampTimer;
+
+  /// 按 0.25 档对齐步进倍速（单点用），并夹在 [0.25, 4.0]。
+  void _stepSpeed(double delta) {
+    final next =
+        ((_playerService.speed + delta) / _kSpeedStep).round() * _kSpeedStep;
+    final clamped = next.clamp(_kSpeedMin, _kSpeedMax);
+    if ((clamped - _playerService.speed).abs() < 0.001) return;
+    _playerService.setSpeed(clamped);
+    setState(() {});
+  }
+
+  /// 长按连续线性加/减速：每 120ms 步进一档，松手停在当前速度。
+  void _startSpeedRamp(double delta) {
+    _stepSpeed(delta);
+    _speedRampTimer?.cancel();
+    _speedRampTimer =
+        Timer.periodic(const Duration(milliseconds: 120), (_) => _stepSpeed(delta));
+  }
+
+  void _stopSpeedRamp() {
+    _speedRampTimer?.cancel();
+    _speedRampTimer = null;
+  }
+
+  String _formatSpeed(double s) {
+    final str = s.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+    return '${str}x';
+  }
+
+  /// 右侧倍速条：上「＋」下「－」，中间显示当前倍速。单点 ±0.25，长按线性连续加/减速。
+  /// 竖排居中显示，做得小巧，避开底部总时长进度条。
   Widget _buildSpeedBar() {
-    const speeds = [3.0, 2.0, 1.5, 1.25, 1.0, 0.75, 0.5];
-    final current = _playerService.speed;
+    Widget stepBtn(IconData icon, double delta) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _stepSpeed(delta),
+        onLongPressStart: (_) => _startSpeedRamp(delta),
+        onLongPressEnd: (_) => _stopSpeedRamp(),
+        onLongPressCancel: _stopSpeedRamp,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (final s in speeds)
-            InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                _playerService.setSpeed(s);
-                setState(() {});
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Text(
-                  s == 1.0 ? '1x' : '${s}x',
-                  style: TextStyle(
-                    color: (current - s).abs() < 0.01
-                        ? const Color(0xFF5B8DEF)
-                        : Colors.white,
-                    fontSize: 13,
-                    fontWeight: (current - s).abs() < 0.01
-                        ? FontWeight.w700
-                        : FontWeight.w500,
-                  ),
-                ),
+          stepBtn(Icons.add, _kSpeedStep),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+            child: Text(
+              _formatSpeed(_playerService.speed),
+              style: const TextStyle(
+                color: Color(0xFF5B8DEF),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
             ),
+          ),
+          stepBtn(Icons.remove, -_kSpeedStep),
         ],
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -33,7 +34,6 @@ import '../core/sources/source_playback.dart';
 import '../core/sources/source_kind.dart';
 import '../ui/utils/image_size_helper.dart';
 import '../ui/utils/media_helpers.dart';
-import '../ui/widgets/common/double_back_exit.dart';
 import '../ui/widgets/common/media_widgets.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -82,11 +82,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/',
                 pageBuilder: (context, state) => _buildHorizontalPage(
-                  // 服务器列表是分支根：系统返回先回首页，无服务器才两次退出。
-                  child: const PopToHome(
-                    guardServer: true,
-                    child: ServerListScreen(),
-                  ),
+                  // 服务器列表是唯一的退出锚点；返回逻辑统一由 MainShell 的 PopScope 处理。
+                  child: const ServerListScreen(),
                   state: state,
                 ),
                 routes: [
@@ -169,8 +166,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/settings',
                 pageBuilder: (context, state) => _buildBranchRootPage(
-                  // 设置是分支根：系统返回/手势返回先回首页，而非退出应用。
-                  child: const PopToHome(child: SettingsScreen()),
+                  // 设置是分支根：返回由 MainShell 的 PopScope 拦截，先回服务分支而非退出。
+                  child: const SettingsScreen(),
                   state: state,
                 ),
               ),
@@ -426,6 +423,31 @@ class _MainShellState extends State<MainShell> {
   // 性能要点：滚动时只更新 ValueNotifier，由 ValueListenableBuilder 局部重建
   // 浮动 TabBar 的透明度，避免每个滚动事件 setState 整个 shell（含 navigationShell）。
   final ValueNotifier<double> _tabOpacity = ValueNotifier<double>(1.0);
+  DateTime? _lastBackPress;
+
+  // 统一的返回栈逻辑（在 shell 根导航器上，分支根 PopScope 不可靠所以集中到这里）：
+  // 分支内 push 的页面会先被各自 Navigator 自然弹出，走到这里说明当前分支已在栈底。
+  // - 非服务分支（设置）：先切回服务分支，而不是退出应用。
+  // - 已在服务分支根（服务器列表）：两秒内连按两次返回键才退出。
+  void _handleShellPop() {
+    if (widget.navigationShell.currentIndex != 0) {
+      widget.navigationShell.goBranch(0);
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastBackPress == null ||
+        now.difference(_lastBackPress!) > const Duration(seconds: 2)) {
+      _lastBackPress = now;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('再按一次返回键退出'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    SystemNavigator.pop();
+  }
 
   bool get _isHomePage => widget.currentPath == '/home';
   bool get _isServerListPage => widget.currentPath == '/';
@@ -468,7 +490,14 @@ class _MainShellState extends State<MainShell> {
     final bottomPadding = mediaQuery.padding.bottom;
     final tabHeight = showFloatingTabBar ? 64.0 + bottomPadding : 0.0;
 
-    return NotificationListener<ScrollNotification>(
+    return PopScope(
+      // canPop:false → 拦截 go_router 冒泡到根导航器的返回（分支根/退出），交由 _handleShellPop。
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _handleShellPop();
+      },
+      child: NotificationListener<ScrollNotification>(
       onNotification: _onScrollNotification,
       child: Scaffold(
         resizeToAvoidBottomInset: true, // 显式设置以确保键盘正确处理
@@ -496,6 +525,7 @@ class _MainShellState extends State<MainShell> {
                 ),
               )
             : null,
+      ),
       ),
     );
   }

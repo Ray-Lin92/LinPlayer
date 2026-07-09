@@ -234,7 +234,9 @@ class PersistentNetworkImageProvider
   Future<HttpClientResponse> _getResponse(Uri resolved) async {
     final HttpClientRequest request = await httpClient.getUrl(resolved);
     headers?.forEach((String name, String value) {
-      request.headers.add(name, value);
+      // set 而非 add：httpClient.userAgent 已注入 kAppUserAgent，用 add 会叠成
+      // 双 User-Agent（LinPlayer/x + 浏览器UA），被不少 CDN 拒绝→图标全红。
+      request.headers.set(name, value);
     });
     final HttpClientResponse response = await request.close();
     if (timeLimit != null) {

@@ -519,26 +519,6 @@ class MediaPoster extends ConsumerWidget {
                   child: Stack(
                     children: [
                       imageWidget,
-                      if (item.userData?.playbackPositionTicks != null &&
-                          item.runTimeTicks != null)
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.vertical(
-                              bottom: Radius.circular(borderRadius.topLeft.x),
-                            ),
-                            child: LinearProgressIndicator(
-                              value: item.progress,
-                              backgroundColor: Colors.black.withValues(alpha: 0.3),
-                              valueColor: const AlwaysStoppedAnimation(
-                                Color(0xFF5B8DEF),
-                              ),
-                              minHeight: 3,
-                            ),
-                          ),
-                        ),
                       if (item.isWatched)
                         Positioned(
                           top: 8,
@@ -568,26 +548,6 @@ class MediaPoster extends ConsumerWidget {
               : Stack(
                   children: [
                     imageWidget,
-                    if (item.userData?.playbackPositionTicks != null &&
-                        item.runTimeTicks != null)
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.vertical(
-                            bottom: Radius.circular(borderRadius.topLeft.x),
-                          ),
-                          child: LinearProgressIndicator(
-                            value: item.progress,
-                            backgroundColor: Colors.black.withValues(alpha: 0.3),
-                            valueColor: const AlwaysStoppedAnimation(
-                              Color(0xFF5B8DEF),
-                            ),
-                            minHeight: 3,
-                          ),
-                        ),
-                      ),
                     if (item.isWatched)
                       Positioned(
                         top: 8,
