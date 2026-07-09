@@ -470,13 +470,16 @@ class _SubtitleSettingsContentState
             mediaSource.mediaStreams.where((s) => s.isSubtitle).toList();
         final playerService = _PlayerScreenState.activePlayerService;
         final nameMap = _buildSubtitleNameMap(subtitles, playerService);
+        // strm/网盘：服务端不探测远程文件 → Emby 字幕流为空。回退用 mpv 解出的真实字幕轨
+        // (文本 SRT/ASS + 图形 PGS)，直接按 mpv 轨道 id 选/关，不依赖 Emby 流序。
+        final playerSubtitleTracks = subtitles.isEmpty
+            ? _playerTracksOfType(const ['text', 'bitmap'])
+            : const <Map<String, dynamic>>[];
 
         return _SettingsSection(
           children: [
             const _SectionTitle('字幕轨道'),
-            if (subtitles.isEmpty)
-              const _PanelEmpty(icon: Icons.subtitles_off, label: '无可用字幕')
-            else
+            if (subtitles.isNotEmpty)
               ...subtitles.map((stream) => PanelOptionTile(
                     label: nameMap[stream.index] ??
                         stream.readableLabel(siblings: subtitles),
@@ -486,7 +489,27 @@ class _SubtitleSettingsContentState
                     selected: selectedSubtitleIndex == stream.index,
                     onTap: () => ref.read(subtitleTrackProvider.notifier).state =
                         stream.index,
+                  ))
+            else if (playerSubtitleTracks.isNotEmpty) ...[
+              PanelOptionTile(
+                label: '关闭',
+                selected:
+                    playerSubtitleTracks.every((t) => t['isSelected'] != true),
+                onTap: () =>
+                    _PlayerScreenState.activePlayerService?.deselectSubtitleTrack(),
+              ),
+              ...playerSubtitleTracks.map((t) => PanelOptionTile(
+                    label: _playerTrackLabel(t),
+                    subtitle: (t['codec']?.toString().isNotEmpty == true)
+                        ? '编码: ${t['codec']}${t['isBitmap'] == true ? ' (图形)' : ''}'
+                        : null,
+                    selected: t['isSelected'] == true,
+                    onTap: () => _PlayerScreenState.activePlayerService
+                        ?.selectSubtitleTrack(t['id'].toString()),
                   )),
+            ]
+            else
+              const _PanelEmpty(icon: Icons.subtitles_off, label: '无可用字幕'),
             const SizedBox(height: 8),
             _SettingsButton(
               icon: Icons.upload_file,
@@ -958,13 +981,16 @@ class _AudioSettingsContentState extends ConsumerState<_AudioSettingsContent> {
             : fallbackMediaSource;
         final audios =
             mediaSource.mediaStreams.where((s) => s.isAudio).toList();
+        // strm/网盘：服务端不探测远程文件 → Emby MediaStreams 为空。回退用播放器(mpv)
+        // 解封装读到的真实音轨，直接按 mpv 轨道 id 选，不依赖 Emby 流序。
+        final playerAudioTracks = audios.isEmpty
+            ? _playerTracksOfType(const ['audio'])
+            : const <Map<String, dynamic>>[];
 
         return _SettingsSection(
           children: [
             const _SectionTitle('音频轨道'),
-            if (audios.isEmpty)
-              const _PanelEmpty(icon: Icons.audiotrack, label: '无可用音轨')
-            else
+            if (audios.isNotEmpty)
               ...audios.map((stream) => PanelOptionTile(
                     label: stream.readableLabel(),
                     subtitle:
@@ -975,7 +1001,19 @@ class _AudioSettingsContentState extends ConsumerState<_AudioSettingsContent> {
                           stream.index;
                       _switchAudioTrack(audios, stream.index);
                     },
-                  )),
+                  ))
+            else if (playerAudioTracks.isNotEmpty)
+              ...playerAudioTracks.map((t) => PanelOptionTile(
+                    label: _playerTrackLabel(t),
+                    subtitle: (t['codec']?.toString().isNotEmpty == true)
+                        ? '编码: ${t['codec']}'
+                        : null,
+                    selected: t['isSelected'] == true,
+                    onTap: () => _PlayerScreenState.activePlayerService
+                        ?.selectAudioTrack(t['id'].toString()),
+                  ))
+            else
+              const _PanelEmpty(icon: Icons.audiotrack, label: '无可用音轨'),
             const _Divider(),
             const _SectionTitle('音频同步'),
             _SyncControl(
@@ -1612,4 +1650,28 @@ class _SyncControl extends StatelessWidget {
       ],
     );
   }
+}
+
+/// strm/网盘回退：从播放器(mpv)实际解出的轨道里按类型筛选（Emby 未探测远程文件、
+/// MediaStreams 为空时用）。过滤掉 auto/no 伪轨道。
+List<Map<String, dynamic>> _playerTracksOfType(List<String> types) {
+  final svc = _PlayerScreenState.activePlayerService;
+  if (svc == null) return const [];
+  return svc.tracksInfo
+      .where((t) =>
+          types.contains(t['type']) && t['id'] != 'auto' && t['id'] != 'no')
+      .toList();
+}
+
+/// strm/网盘回退：Emby 无流信息时，用 mpv 轨道自身信息拼可读标签（标题优先，
+/// 否则 语言·编码，再退回轨道号）。
+String _playerTrackLabel(Map<String, dynamic> t) {
+  final title = (t['title'] ?? t['label'])?.toString().trim() ?? '';
+  if (title.isNotEmpty) return title;
+  final parts = <String>[];
+  final lang = t['language']?.toString().trim() ?? '';
+  if (lang.isNotEmpty) parts.add(lang);
+  final codec = t['codec']?.toString().trim() ?? '';
+  if (codec.isNotEmpty) parts.add(codec.toUpperCase());
+  return parts.isEmpty ? '轨道 ${t['id']}' : parts.join(' · ');
 }
