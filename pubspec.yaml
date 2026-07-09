@@ -61,6 +61,8 @@ dependencies:
 
   # 局域网扫码遥控：生成二维码（内置 HTTP 服务用 dart:io，无需额外依赖）
   qr_flutter: ^4.1.0
+  # 配置迁移：移动端相机扫码导入设备间的服务器配置（仅 Android/iOS UI 使用）
+  mobile_scanner: ^5.2.3
 
   # 动效（统一三端动画：入场/错峰/shimmer/淡入缩放）
   flutter_animate: ^4.5.0

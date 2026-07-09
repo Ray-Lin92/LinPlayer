@@ -1,7 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- 网络权限 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 配置迁移：相机扫码导入服务器配置（mobile_scanner）。
+         camera 声明为非必需，TV 等无摄像头设备仍可安装（tools:replace 覆盖插件的必需声明）。 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false"
+        tools:replace="android:required" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false"
+        tools:replace="android:required" />
     <!-- 应用内「覆盖更新」：下载 APK 后调起系统安装器（open_filex） -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- 截图保存到相册：Android 10+ 走 MediaStore 免权限；9 及以下才需此权限 -->

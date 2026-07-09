@@ -370,6 +370,14 @@ class _TvSettingsScreenState extends ConsumerState<TvSettingsScreen> {
       ),
       _rowCard(
         m,
+        title: '配置二维码',
+        subtitle: '把本机服务器(含登录凭据)出成二维码，用手机扫码导入',
+        trailing: Icon(Icons.qr_code_scanner,
+            color: TvDesignTokens.brand, size: m.s(28)),
+        onSelect: () => context.push('/tv/config-qr'),
+      ),
+      _rowCard(
+        m,
         title: '插件',
         subtitle: '从插件市场一键安装、启用/卸载插件（TV 无需文件导入）',
         trailing: Icon(Icons.extension,

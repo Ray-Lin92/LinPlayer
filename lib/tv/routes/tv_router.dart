@@ -14,6 +14,7 @@ import '../screens/rankings/tv_rankings_screen.dart';
 import '../screens/settings/tv_cf_proxy_screen.dart';
 import '../screens/settings/tv_plugin_screen.dart';
 import '../screens/settings/tv_lan_control_screen.dart';
+import '../screens/settings/tv_config_qr_screen.dart';
 import '../screens/anirss/tv_anirss_detail_screen.dart';
 import '../../core/sources/anirss/anirss_nav_args.dart';
 import '../screens/detail/tv_detail_screen.dart';
@@ -79,6 +80,11 @@ final tvRouter = GoRouter(
     GoRoute(
       path: '/tv/lan-control',
       builder: (context, state) => const TvLanControlScreen(),
+    ),
+    // 配置二维码（出码给手机扫码导入服务器配置）
+    GoRoute(
+      path: '/tv/config-qr',
+      builder: (context, state) => const TvConfigQrScreen(),
     ),
     // CF 优选反代面板（独立页面，遥控器友好）
     GoRoute(
