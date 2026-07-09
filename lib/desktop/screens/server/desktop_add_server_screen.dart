@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/api/emby_api.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/utils/server_batch_adder.dart';
 import '../../../ui/widgets/server/batch_parse_view.dart';
 
 /// 桌面端添加服务器页
@@ -293,6 +294,7 @@ class _DesktopAddServerScreenState extends ConsumerState<DesktopAddServerScreen>
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           name: name,
           baseUrl: fullUrl,
+          iconUrl: ServerBatchAdder.buildIconUrl(fullUrl),
           lines: [ServerLine(
             id: 'default',
             name: '默认线路',
@@ -320,6 +322,7 @@ class _DesktopAddServerScreenState extends ConsumerState<DesktopAddServerScreen>
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           name: name,
           baseUrl: fullUrl,
+          iconUrl: ServerBatchAdder.buildIconUrl(fullUrl),
           lines: [ServerLine(
             id: 'default',
             name: '默认线路',

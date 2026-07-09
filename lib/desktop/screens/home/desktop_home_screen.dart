@@ -489,7 +489,7 @@ class _DesktopTopBarState extends ConsumerState<_DesktopTopBar> {
                           imageUrl: server!.iconUrl,
                           width: 28,
                           height: 28,
-                          fit: BoxFit.cover,
+                          fit: BoxFit.contain,
                           useDefaultUserAgent: true,
                         ),
                       )
@@ -881,7 +881,7 @@ class _DesktopServerMenuOverlayState extends State<_DesktopServerMenuOverlay>
                                                       imageUrl: server.iconUrl,
                                                       width: 32,
                                                       height: 32,
-                                                      fit: BoxFit.cover,
+                                                      fit: BoxFit.contain,
                                                       useDefaultUserAgent: true,
                                                     ),
                                                   )

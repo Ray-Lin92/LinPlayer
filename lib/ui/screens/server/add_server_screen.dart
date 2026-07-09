@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../core/api/emby_api.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/utils/server_batch_adder.dart';
 import '../../widgets/server/batch_parse_view.dart';
 
 /// 添加服务器页面
@@ -270,6 +271,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
           id: '${DateTime.now().millisecondsSinceEpoch}_$i',
           name: name,
           baseUrl: url,
+          iconUrl: ServerBatchAdder.buildIconUrl(url),
           lines: [ServerLine(
             id: 'default',
             name: '默认线路',
@@ -330,6 +332,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           name: serverInfo.serverName,
           baseUrl: fullUrl,
+          iconUrl: ServerBatchAdder.buildIconUrl(fullUrl),
           lines: [ServerLine(
             id: 'default',
             name: '默认线路',
@@ -352,6 +355,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> with SingleTi
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           name: serverInfo.serverName,
           baseUrl: fullUrl,
+          iconUrl: ServerBatchAdder.buildIconUrl(fullUrl),
           lines: [ServerLine(
             id: 'default',
             name: '默认线路',

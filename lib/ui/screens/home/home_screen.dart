@@ -445,7 +445,7 @@ class _ServerSelectorOverlayState extends State<_ServerSelectorOverlay>
                                                     imageUrl: server.iconUrl,
                                                     width: 32,
                                                     height: 32,
-                                                    fit: BoxFit.cover,
+                                                    fit: BoxFit.contain,
                                                     useDefaultUserAgent: true,
                                                   ),
                                                 )
@@ -603,7 +603,7 @@ class _HomeAppBarState extends ConsumerState<_HomeAppBar> {
                                 imageUrl: currentServer!.iconUrl,
                                 width: 32,
                                 height: 32,
-                                fit: BoxFit.cover,
+                                fit: BoxFit.contain,
                                 useDefaultUserAgent: true,
                               ),
                             )
