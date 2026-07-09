@@ -491,6 +491,7 @@ class _DesktopTopBarState extends ConsumerState<_DesktopTopBar> {
                           height: 28,
                           fit: BoxFit.contain,
                           useDefaultUserAgent: true,
+                          errorWidget: const EmbyDefaultIcon(),
                         ),
                       )
                     : const Icon(Icons.dns, size: 14, color: Color(0xFF5B8DEF)),
@@ -883,6 +884,8 @@ class _DesktopServerMenuOverlayState extends State<_DesktopServerMenuOverlay>
                                                       height: 32,
                                                       fit: BoxFit.contain,
                                                       useDefaultUserAgent: true,
+                                                      errorWidget:
+                                                          const EmbyDefaultIcon(),
                                                     ),
                                                   )
                                                 : Icon(

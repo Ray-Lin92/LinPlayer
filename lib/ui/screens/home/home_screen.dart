@@ -447,6 +447,8 @@ class _ServerSelectorOverlayState extends State<_ServerSelectorOverlay>
                                                     height: 32,
                                                     fit: BoxFit.contain,
                                                     useDefaultUserAgent: true,
+                                                    errorWidget:
+                                                        const EmbyDefaultIcon(),
                                                   ),
                                                 )
                                               : const Icon(
@@ -605,6 +607,7 @@ class _HomeAppBarState extends ConsumerState<_HomeAppBar> {
                                 height: 32,
                                 fit: BoxFit.contain,
                                 useDefaultUserAgent: true,
+                                errorWidget: const EmbyDefaultIcon(),
                               ),
                             )
                           : const Icon(Icons.dns,

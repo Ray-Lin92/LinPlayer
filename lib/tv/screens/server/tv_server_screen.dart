@@ -139,11 +139,7 @@ class TvServerScreen extends ConsumerWidget {
                         imageUrl: server.iconUrl,
                         fit: BoxFit.contain,
                         useDefaultUserAgent: true,
-                        errorWidget: Icon(Icons.storage,
-                            color: online
-                                ? TvDesignTokens.success
-                                : TvDesignTokens.error,
-                            size: m.s(32)),
+                        errorWidget: const EmbyDefaultIcon(),
                       )
                     : Icon(Icons.storage,
                         color: online

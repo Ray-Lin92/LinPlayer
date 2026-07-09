@@ -490,6 +490,7 @@ class _ServerGridCardState extends State<_ServerGridCard>
                               height: 34,
                               fit: BoxFit.contain,
                               useDefaultUserAgent: true,
+                              errorWidget: const EmbyDefaultIcon(),
                             ),
                           )
                         : Icon(
@@ -725,6 +726,7 @@ class _ServerListTileState extends State<_ServerListTile>
                             height: 36,
                             fit: BoxFit.contain,
                             useDefaultUserAgent: true,
+                            errorWidget: const EmbyDefaultIcon(),
                           ),
                         )
                       : Icon(
