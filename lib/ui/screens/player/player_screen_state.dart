@@ -1992,20 +1992,23 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             ),
           ),
         ),
+        // 底部控制台布局：中央画面留空（纯手势区），所有控件下沉到底部两行——
+        // 上排传输键（上一集/快退/播放/快进/下一集），下排功能键（可横滑）。
         SafeArea(
           child: Column(
             children: [
               _buildTopBar(item),
-              Expanded(child: _buildCenterControls()),
+              const Expanded(child: SizedBox.shrink()),
               _buildProgressBar(),
-              _buildBottomBar(item),
+              _buildTransportRow(),
+              _buildFeatureRow(item),
             ],
           ),
         ),
-        // 自动跳过片头/片尾按钮：左下角、底栏之上，随控制栏一并显隐。
+        // 自动跳过片头/片尾按钮：左下角、底部控制台之上，随控制栏一并显隐。
         Positioned(
           left: 16,
-          bottom: 78,
+          bottom: 172,
           child: SafeArea(
             child: ValueListenableBuilder<SkipPrompt?>(
               valueListenable: _introSkip.prompt,
@@ -2016,28 +2019,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                   onTap: () => _onIntroSkipPressed(prompt),
                 );
               },
-            ),
-          ),
-        ),
-        // 截图按钮：常驻左侧中部，方便单手点按（随控制栏显隐）。
-        Positioned(
-          left: 8,
-          top: 0,
-          bottom: 0,
-          child: SafeArea(
-            child: Center(
-              child: Material(
-                color: Colors.black.withValues(alpha: 0.35),
-                shape: const CircleBorder(),
-                clipBehavior: Clip.antiAlias,
-                child: IconButton(
-                  icon: const Icon(Icons.camera_alt_outlined,
-                      color: Colors.white),
-                  iconSize: 22,
-                  tooltip: '截图',
-                  onPressed: _takeScreenshot,
-                ),
-              ),
             ),
           ),
         ),
@@ -2067,7 +2048,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           IconButton(
             icon: Icon(
               _playerService.isLocked ? Icons.lock : Icons.lock_open,
@@ -2076,6 +2057,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
             iconSize: 20,
             tooltip: '锁定',
             onPressed: _playerService.toggleLock,
+          ),
+          // 截图从原先悬浮在左侧中部（压着中央控件、突兀）挪进顶栏操作区。
+          IconButton(
+            icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
+            iconSize: 20,
+            tooltip: '截图',
+            onPressed: _takeScreenshot,
           ),
           IconButton(
             icon: const Icon(Icons.more_horiz, color: Colors.white),
@@ -2088,46 +2076,50 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
   }
 
-  /// 中央主控件（拇指区）：上一集 · 快退 · 播放/暂停 · 快进 · 下一集。
-  Widget _buildCenterControls() {
+  /// 传输键（底部控制台上排）：上一集 · 快退 · 播放/暂停 · 快进 · 下一集。
+  /// 从原中央拇指区下沉到底部，中央画面让给手势操作。
+  Widget _buildTransportRow() {
     final isPlaying = _playerService.isPlaying;
     final step = ref.read(skipForwardStepProvider);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _CenterControlButton(
-          icon: Icons.skip_previous_rounded,
-          size: 30,
-          tooltip: '上一集',
-          onTap: _playPrevious,
-        ),
-        _CenterControlButton(
-          icon: Icons.replay_10_rounded,
-          size: 38,
-          tooltip: '快退 ${step}s',
-          onTap: () => _playerService.seekBy(Duration(seconds: -step)),
-        ),
-        _CenterControlButton(
-          icon: isPlaying
-              ? Icons.pause_circle_filled_rounded
-              : Icons.play_circle_fill_rounded,
-          size: 64,
-          tooltip: '播放/暂停',
-          onTap: _playerService.togglePlay,
-        ),
-        _CenterControlButton(
-          icon: Icons.forward_10_rounded,
-          size: 38,
-          tooltip: '快进 ${step}s',
-          onTap: () => _playerService.seekBy(Duration(seconds: step)),
-        ),
-        _CenterControlButton(
-          icon: Icons.skip_next_rounded,
-          size: 30,
-          tooltip: '下一集',
-          onTap: _playNext,
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _CenterControlButton(
+            icon: Icons.skip_previous_rounded,
+            size: 30,
+            tooltip: '上一集',
+            onTap: _playPrevious,
+          ),
+          _CenterControlButton(
+            icon: Icons.replay_10_rounded,
+            size: 34,
+            tooltip: '快退 ${step}s',
+            onTap: () => _playerService.seekBy(Duration(seconds: -step)),
+          ),
+          _CenterControlButton(
+            icon: isPlaying
+                ? Icons.pause_circle_filled_rounded
+                : Icons.play_circle_fill_rounded,
+            size: 56,
+            tooltip: '播放/暂停',
+            onTap: _playerService.togglePlay,
+          ),
+          _CenterControlButton(
+            icon: Icons.forward_10_rounded,
+            size: 34,
+            tooltip: '快进 ${step}s',
+            onTap: () => _playerService.seekBy(Duration(seconds: step)),
+          ),
+          _CenterControlButton(
+            icon: Icons.skip_next_rounded,
+            size: 30,
+            tooltip: '下一集',
+            onTap: _playNext,
+          ),
+        ],
+      ),
     );
   }
 
@@ -2266,41 +2258,46 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
     );
   }
 
-  /// 底栏：只保留**次级功能**（选集 / 字幕 / 音轨 / 弹幕）+ 全屏方向切换。
-  /// 主控件（播放、快进退、上下集）已移到中央拇指区；截图/超分/硬解等进「更多」。
-  Widget _buildBottomBar(MediaItem? item) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _BottomBarAction(
-            icon: Icons.playlist_play_rounded,
-            label: '选集',
-            onTap: () => _showEpisodeSelector(item),
-          ),
-          _BottomBarAction(
-            icon: Icons.subtitles_outlined,
-            label: '字幕',
-            onTap: _showSubtitleSettings,
-          ),
-          _BottomBarAction(
-            icon: Icons.audiotrack_rounded,
-            label: '音轨',
-            onTap: _showAudioSettings,
-          ),
-          _BottomBarAction(
-            icon: Icons.chat_bubble_outline_rounded,
-            label: '弹幕',
-            onTap: _showDanmakuSettings,
-          ),
-          _BottomBarAction(
-            icon: Icons.screen_rotation_rounded,
-            label: '旋转',
-            onTap: _toggleOrientation,
-          ),
-        ],
+  /// 功能键（底部控制台下排）：选集 / 字幕 / 音轨 / 弹幕 / 倍速 / 旋转。
+  /// 可横滑，容纳更多项而不挤压；更冷门功能（超分/硬解/线路/定时…）仍在「更多」。
+  Widget _buildFeatureRow(MediaItem? item) {
+    final actions = <Widget>[
+      _BottomBarAction(
+        icon: Icons.playlist_play_rounded,
+        label: '选集',
+        onTap: () => _showEpisodeSelector(item),
       ),
+      _BottomBarAction(
+        icon: Icons.subtitles_outlined,
+        label: '字幕',
+        onTap: _showSubtitleSettings,
+      ),
+      _BottomBarAction(
+        icon: Icons.audiotrack_rounded,
+        label: '音轨',
+        onTap: _showAudioSettings,
+      ),
+      _BottomBarAction(
+        icon: Icons.chat_bubble_outline_rounded,
+        label: '弹幕',
+        onTap: _showDanmakuSettings,
+      ),
+      _BottomBarAction(
+        icon: Icons.speed_rounded,
+        label: '倍速',
+        onTap: _showSpeedDialog,
+      ),
+      _BottomBarAction(
+        icon: Icons.screen_rotation_rounded,
+        label: '旋转',
+        onTap: _toggleOrientation,
+      ),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 6),
+      physics: const BouncingScrollPhysics(),
+      child: Row(children: actions),
     );
   }
 
