@@ -935,9 +935,10 @@ jobs:
           cp /tmp/mpv-full-macos.tgz "$MKDIR/.cache/xcframeworks/libmpv-xcframeworks-${VER}-macos-universal.tar.gz"
           ( cd "$MKDIR/.cache/xcframeworks" && ln -sf "libmpv-xcframeworks-${VER}-macos-universal.tar.gz" "libmpv-xcframeworks-macos-universal.tar.gz" )
           touch "$MKDIR"/Frameworks/*.xcframework
-          B=$(find "$MKDIR/Frameworks/Mpv.xcframework" -type f -name Mpv | head -n1)
-          echo "预置 framework 二进制: $(ls -la "$B")"
-          strings -a "$B" | grep -q pgssub && echo "✅ 预置 full libmpv 含 pgssub" || { echo "❌ 预置 framework 仍无 pgssub"; exit 1; }
+          # pgssub 在 Avcodec.xcframework(libmpv 动态链接 ffmpeg),不在 Mpv 里；grep -a 直扫。
+          B=$(find "$MKDIR/Frameworks/Avcodec.xcframework" -type f -name Avcodec | head -n1)
+          echo "预置 Avcodec 二进制: $(ls -la "$B")"
+          grep -aq pgssub "$B" && echo "✅ 预置 full Avcodec 含 pgssub" || { echo "❌ 预置 Avcodec 仍无 pgssub"; exit 1; }
 
       - name: Build macOS Release
         env:
