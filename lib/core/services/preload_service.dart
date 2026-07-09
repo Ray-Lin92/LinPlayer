@@ -114,20 +114,8 @@ class PreloadService {
         strmDirectPlay: strmDirectPlay,
       );
       final source = selection.mediaSource;
-      final req = selection.primaryRequest;
-      final serverUrl = api.playback.getVideoStreamUrl(
-        req.itemId,
-        mediaSourceId: req.mediaSourceId,
-        container: req.container,
-        playSessionId: req.playSessionId,
-        staticStream: req.staticStream,
-        allowDirectPlay: req.allowDirectPlay,
-        allowDirectStream: req.allowDirectStream,
-        allowTranscoding: req.allowTranscoding,
-        enableAutoStreamCopy: req.enableAutoStreamCopy,
-        enableAutoStreamCopyAudio: req.enableAutoStreamCopyAudio,
-        enableAutoStreamCopyVideo: req.enableAutoStreamCopyVideo,
-      );
+      final serverUrl =
+          buildStreamUrlFromRequest(api.playback, selection.primaryRequest);
       final url = (selection.directPlayUrl?.isNotEmpty ?? false)
           ? selection.directPlayUrl!
           : serverUrl;

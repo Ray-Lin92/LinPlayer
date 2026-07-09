@@ -324,39 +324,28 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
           : buildOfflinePlaybackSelection(itemId: widget.itemId);
       final mediaSource = selection.mediaSource;
 
-      final videoUrl = api.playback.getVideoStreamUrl(
-        selection.primaryRequest.itemId,
-        mediaSourceId: selection.primaryRequest.mediaSourceId,
-        container: selection.primaryRequest.container,
-        playSessionId: selection.primaryRequest.playSessionId,
-        staticStream: selection.primaryRequest.staticStream,
-        allowDirectPlay: selection.primaryRequest.allowDirectPlay,
-        allowDirectStream: selection.primaryRequest.allowDirectStream,
-        allowTranscoding: selection.primaryRequest.allowTranscoding,
-        enableAutoStreamCopy: selection.primaryRequest.enableAutoStreamCopy,
-        enableAutoStreamCopyAudio:
-            selection.primaryRequest.enableAutoStreamCopyAudio,
-        enableAutoStreamCopyVideo:
-            selection.primaryRequest.enableAutoStreamCopyVideo,
-      );
+      final videoUrl =
+          buildStreamUrlFromRequest(api.playback, selection.primaryRequest);
       final fallbackVideoUrl = selection.fallbackRequest == null
           ? null
-          : api.playback.getVideoStreamUrl(
-              selection.fallbackRequest!.itemId,
-              mediaSourceId: selection.fallbackRequest!.mediaSourceId,
-              container: selection.fallbackRequest!.container,
-              playSessionId: selection.fallbackRequest!.playSessionId,
-              staticStream: selection.fallbackRequest!.staticStream,
-              allowDirectPlay: selection.fallbackRequest!.allowDirectPlay,
-              allowDirectStream: selection.fallbackRequest!.allowDirectStream,
-              allowTranscoding: selection.fallbackRequest!.allowTranscoding,
-              enableAutoStreamCopy:
-                  selection.fallbackRequest!.enableAutoStreamCopy,
-              enableAutoStreamCopyAudio:
-                  selection.fallbackRequest!.enableAutoStreamCopyAudio,
-              enableAutoStreamCopyVideo:
-                  selection.fallbackRequest!.enableAutoStreamCopyVideo,
-            );
+          : buildStreamUrlFromRequest(api.playback, selection.fallbackRequest!);
+
+      // 预取代理上游重签：短效签名的服务端直传流到期时，重走 PlaybackInfo 拿新地址，
+      // 代理换 URL 续拉，不断流。仅在走代理（非直链/本地）时用得上。
+      Future<String?> reResolveDirectStreamUrl() async {
+        final pi = await api.playback.getPlaybackInfo(widget.itemId);
+        final sel = buildPlaybackSelection(
+          playbackInfo: pi,
+          itemId: widget.itemId,
+          preferredMediaSourceId:
+              widget.mediaSourceId ?? ref.read(selectedMediaSourceProvider),
+          versionRegex: ref.read(preferredVersionRegexProvider),
+          playSessionId:
+              '${widget.itemId}-${DateTime.now().microsecondsSinceEpoch}',
+          strmDirectPlay: ref.read(strmDirectPlayProvider),
+        );
+        return buildStreamUrlFromRequest(api.playback, sel.primaryRequest);
+      }
 
       // STRM 直链：开启且解析出可用直链时优先用直链，服务端直传流作为回退。
       final directUrl = selection.directPlayUrl;
@@ -372,7 +361,8 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
       // 转码流/HLS 无固定大小，代理探测拿不到 size 会自动放弃 → 回退在线直链。
       final proxiedUrl = (localFileSource != null || hasDirect)
           ? null
-          : await _maybeStartPrefetch(onlineUrl);
+          : await _maybeStartPrefetch(onlineUrl,
+              onExpired: reResolveDirectStreamUrl);
 
       final effectiveVideoUrl = localFileSource ?? proxiedUrl ?? onlineUrl;
       final effectiveFallbackUrl = localFileSource != null
@@ -2788,7 +2778,8 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
 
   /// 多线程加载预取代理：仅在「开关开 + 已确认服主允许 + 在线 http 源」时启动，
   /// 返回本地播放 URL（失败/不满足条件返回 null，调用方回退在线直链）。
-  Future<String?> _maybeStartPrefetch(String onlineUrl) async {
+  Future<String?> _maybeStartPrefetch(String onlineUrl,
+      {Future<String?> Function()? onExpired}) async {
     try {
       if (!onlineUrl.startsWith('http')) return null;
       // 仅对用户加入「多线程加载」白名单（已确认获服主允许）的当前服务器启用。
@@ -2802,6 +2793,7 @@ class _DesktopPlayerScreenState extends ConsumerState<DesktopPlayerScreen>
         upstreamUrl: onlineUrl,
         threads: ref.read(multiThreadLoadingThreadsProvider),
         cacheLimitBytes: limitMb * 1024 * 1024,
+        onUpstreamInvalid: onExpired,
       );
     } catch (_) {
       return null;

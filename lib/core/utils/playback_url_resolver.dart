@@ -81,6 +81,25 @@ class PlaybackSelection {
   });
 }
 
+/// 由 [PlaybackUrlRequest] 构建服务端直传流 URL。
+///
+/// 三端播放页与预取代理重签共用此函数，取代散落各处的 11 参数 `getVideoStreamUrl`
+/// 重复调用，避免参数漏传导致的行为漂移。
+String buildStreamUrlFromRequest(PlaybackApi playback, PlaybackUrlRequest req) =>
+    playback.getVideoStreamUrl(
+      req.itemId,
+      mediaSourceId: req.mediaSourceId,
+      container: req.container,
+      playSessionId: req.playSessionId,
+      staticStream: req.staticStream,
+      allowDirectPlay: req.allowDirectPlay,
+      allowDirectStream: req.allowDirectStream,
+      allowTranscoding: req.allowTranscoding,
+      enableAutoStreamCopy: req.enableAutoStreamCopy,
+      enableAutoStreamCopyAudio: req.enableAutoStreamCopyAudio,
+      enableAutoStreamCopyVideo: req.enableAutoStreamCopyVideo,
+    );
+
 /// 从媒体源解析 STRM 直链地址：仅当其为远端源（`IsRemote` / `Protocol==Http`）且
 /// `Path` 是合法的 http(s) 链接时返回该链接，否则返回 null（交回服务端直传）。
 String? resolveStrmDirectUrl(MediaSource? source) {
