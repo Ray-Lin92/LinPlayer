@@ -8,9 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_interfaces.dart';
 import '../../../core/api/danmaku/danmaku_service.dart';
 import '../../../core/providers/app_providers.dart';
-import '../../../core/utils/danmaku_filter.dart';
 import '../../../core/utils/danmaku_local_parser.dart';
 import '../../../core/utils/danmaku_matcher.dart';
+import '../../../core/utils/danmaku_postprocess.dart';
 
 /// 弹幕搜索/选择面板（移动端右侧面板、桌面端弹层复用）。
 ///
@@ -35,6 +35,8 @@ class _DanmakuSearchContentState extends ConsumerState<DanmakuSearchContent> {
   bool _isAutoMatching = false;
   String? _autoMatchStatus;
   List<DanmakuMatchCandidate> _autoCandidates = [];
+  // 是否放行官方弹弹Play（动漫专库）：非动漫内容不用它，避免乱匹配。
+  bool _allowOfficial = true;
 
   bool _isSearching = false;
   bool _isBgmtvSearching = false;
@@ -81,8 +83,15 @@ class _DanmakuSearchContentState extends ConsumerState<DanmakuSearchContent> {
       _autoCandidates = [];
     });
 
+    _allowOfficial = await DanmakuMatcher.resolveIsAnime(
+      item,
+      fetchItem: (id) => ref.read(apiClientProvider).media.getItemDetails(id),
+    );
+    if (!mounted) return;
+
     try {
-      final candidates = await DanmakuMatcher.matchAll(service, item);
+      final candidates =
+          await DanmakuMatcher.matchAll(service, item, allowOfficial: _allowOfficial);
       if (!mounted) return;
       if (candidates.isNotEmpty) {
         setState(() {
@@ -119,7 +128,8 @@ class _DanmakuSearchContentState extends ConsumerState<DanmakuSearchContent> {
       }
     });
     final service = ref.read(danmakuServiceProvider);
-    _searchSub = service.searchAllStreamed(kw).listen(
+    _searchSub =
+        service.searchAllStreamed(kw, allowOfficial: _allowOfficial).listen(
       (group) {
         if (!mounted) return;
         if (group.animes.isEmpty) return;
@@ -277,49 +287,12 @@ class _DanmakuSearchContentState extends ConsumerState<DanmakuSearchContent> {
   }
 
   List<DanmakuItem> _applyFilterAndDedup(List<DanmakuItem> input) {
-    var items = input;
-    final blockwords = ref.read(danmakuBlockwordsProvider);
-    if (blockwords.isNotEmpty) {
-      final filter = DanmakuFilter()..importBlockwords(blockwords);
-      items = items
-          .where((it) => !filter.shouldFilter(it.text, userId: it.userId))
-          .toList();
-    }
-    if (ref.read(danmakuDedupProvider)) {
-      items = _deduplicateDanmaku(items, ref.read(danmakuDedupWindowProvider));
-    }
-    return items;
-  }
-
-  List<DanmakuItem> _deduplicateDanmaku(
-      List<DanmakuItem> items, double windowSeconds) {
-    items.sort((a, b) => a.time.compareTo(b.time));
-    final result = <DanmakuItem>[];
-    final used = List<bool>.filled(items.length, false);
-    for (var i = 0; i < items.length; i++) {
-      if (used[i]) continue;
-      var count = 1;
-      for (var j = i + 1; j < items.length; j++) {
-        if (used[j]) continue;
-        if (items[j].time - items[i].time > windowSeconds) break;
-        if (items[j].text == items[i].text && items[j].type == items[i].type) {
-          count++;
-          used[j] = true;
-        }
-      }
-      result.add(DanmakuItem(
-        time: items[i].time,
-        text: items[i].text,
-        type: items[i].type,
-        color: items[i].color,
-        size: items[i].size,
-        source: items[i].source,
-        cid: items[i].cid,
-        userId: items[i].userId,
-        count: count,
-      ));
-    }
-    return result;
+    return applyDanmakuFilterAndDedup(
+      input,
+      blockwords: ref.read(danmakuBlockwordsProvider),
+      dedup: ref.read(danmakuDedupProvider),
+      dedupWindow: ref.read(danmakuDedupWindowProvider),
+    );
   }
 
   void _toast(String msg) {

@@ -16,6 +16,7 @@ import '../../../core/providers/download_providers.dart';
 import '../../../core/network/prefetch_proxy/prefetch_proxy.dart';
 import '../../../core/services/app_logger.dart';
 import '../../../core/services/cache_service.dart';
+import '../../../core/services/danmaku_auto_loader.dart';
 import '../../../core/services/download/download_helper.dart';
 import '../../../core/services/font_service.dart';
 import '../../../core/services/mpv_player_adapter.dart';
